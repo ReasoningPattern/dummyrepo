@@ -1,0 +1,60 @@
+import time
+from collections import defaultdict
+
+def lfu_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Frequently Used (LFU)
+    algorithm.
+    """
+    def decorator(func):
+        class LFUCacheWrapper:
+            def __init__(self, func):
+                self.func = func
+                self.cache = {}
+                self.freq = defaultdict(int)
+                self.last_used = {}
+                self.maxsize = maxsize
+                self.typed = typed
+
+            def _make_key(self, args, kwargs):
+                key_parts = []
+                for arg in args:
+                    if self.typed:
+                        key_parts.append((arg, type(arg)))
+                    else:
+                        key_parts.append(arg)
+                args_key = tuple(key_parts)
+                kwargs_key = []
+                for k in sorted(kwargs.keys()):
+                    v = kwargs[k]
+                    if self.typed:
+                        kwargs_key.append((k, v, type(v)))
+                    else:
+                        kwargs_key.append((k, v))
+                kwargs_key = tuple(kwargs_key)
+                return (args_key, kwargs_key)
+
+            def __call__(self, *args, **kwargs):
+                key = self._make_key(args, kwargs)
+                if key in self.cache:
+                    self.freq[key] += 1
+                    self.last_used[key] = time.time()
+                    return self.cache[key]
+                else:
+                    if self.maxsize == 0:
+                        return self.func(*args, **kwargs)
+                    value = self.func(*args, **kwargs)
+                    self.cache[key] = value
+                    self.freq[key] = 1
+                    self.last_used[key] = time.time()
+                    if len(self.cache) > self.maxsize:
+                        min_freq = min(self.freq.values())
+                        candidates = [k for k in self.cache if self.freq[k] == min_freq]
+                        evict_key = min(candidates, key=lambda k: self.last_used[k])
+                        del self.cache[evict_key]
+                        del self.freq[evict_key]
+                        del self.last_used[evict_key]
+                    return value
+        return LFUCacheWrapper(func)
+    return decorator

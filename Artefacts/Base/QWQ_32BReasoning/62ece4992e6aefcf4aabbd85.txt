@@ -1,0 +1,1576 @@
+Okay, I need to write a Python function called find_roots that takes a graph, a property (like a URIRef), and an optional set of roots. The goal is to find all the root nodes in a transitive hierarchy defined by those triples. 
+
+First, the function's docstring says it assumes triples in the form (child, prop, parent). So for each node in the graph, I should check if it has any parents via that property. If a node doesn't have any parents, it's a root. But if it does, we need to follow up the hierarchy until we find the topmost ones.
+
+Wait, but how do I find all the roots? Maybe start by collecting all possible nodes that could be roots. Then, for each node, check if there's any triple where it is the child. If a node isn't a child of any other node via prop, then it's a root.
+
+Alternatively, perhaps the roots are those nodes that don't have any outgoing prop triples pointing to a parent. So, for every node in the graph, if there are no triples (node, prop, ?parent), then it's a root. But maybe the hierarchy is more complex, so we need to traverse until there are no more parents?
+
+Hmm, the function's example uses RDFS.subClassOf, which is transitive. So maybe the roots are the nodes that have no superclasses (or super nodes) in the hierarchy. So the approach could be to iterate through all the nodes in the graph and check if they have any parents. Those without are the roots.
+
+Wait, but how do I get all the nodes in the graph? The graph might have multiple nodes, but not all of them are part of the hierarchy. Maybe I should consider all the subjects that are not the object in any triple with the given property. Because if a node is an object in a triple with prop, that means it has a child, so it's not a root. The roots are those nodes that are never the object in such a triple.
+
+Alternatively, perhaps the roots are the nodes for which there is no ancestor when following the property upwards. So for each node, we can check if it has any parents. If it does, then we continue up until we reach a node with no parent. But the function is supposed to return all the roots, which are the topmost nodes in the hierarchy.
+
+Wait, the function's purpose is to find all the roots, which are nodes that have no parent in the hierarchy. So the steps could be:
+
+1. Find all nodes that are subjects in triples with the given property. These are the children, so their parents are the objects. But to find roots, we need nodes that are not the object in any such triple.
+
+2. So the roots are all the nodes that are never the object of any (child, prop, parent) triple. But how to get all possible nodes in the graph?
+
+Alternatively, perhaps the roots are those nodes that have no incoming edges via the inverse of the property. Wait, the triples are in the direction (child, prop, parent), so the parents are the objects. So a root would be a node that is never an object in any such triple. So the roots are all the nodes in the graph that are not the object of any triple with that property.
+
+Wait, but the graph might have other nodes not part of the hierarchy. So maybe the roots are the ones that are in the graph but not the object of any such triple. So first, collect all possible nodes that are part of the hierarchy. But how?
+
+Alternatively, maybe all the nodes in the graph that are not the object of any (s, prop, node) triple. So the roots are the nodes for which there are no triples where they are the parent. So to find all roots, iterate over all possible nodes, and check if any triple has that node as the object with the given predicate.
+
+Wait, let me think again. Suppose we have a hierarchy like A -> B -> C (using prop as the relation), then the root is A. Because A has no parent (there is no triple where A is the object of prop), but B has a parent (A?), no, wait. Let me clarify: the triples are (child, prop, parent). So for A to be a root, there should be no triples where A is the object. So the parent of B is A, so there's a triple (B, prop, A). So A is the object here, but in that case, A would have a parent only if there's another triple where A is the subject. Wait, no. To find if A has a parent, we would look for a triple (A, prop, ?parent). If there are none, then A is a root.
+
+Ah, right! So each node's parent is found by looking at (node, prop, parent). So a root is a node that has no such triples. So to find all roots, I need to go through all possible nodes in the graph, and collect those that have no (node, prop, ?) triples.
+
+Wait, but how do I get all the possible nodes in the graph? The graph's nodes can be obtained by all subjects and objects in all triples. So maybe first, get all the nodes in the graph. Then, for each node, check if there are any triples where that node is the subject with the given property. If there are none, then it's a root.
+
+Alternatively, perhaps the nodes in the hierarchy are those that are either the subject or object in a triple with the given property. So first, collect all the nodes involved in the hierarchy (since other nodes not part of the hierarchy might not be considered). Then, among those, find the ones with no parents (i.e., no triples where they are the subject with the given prop pointing to a parent).
+
+Hmm. Let's think of the example given. find_roots(graph, RDFS.subClassOf) would return all classes that are not a subclass of anything else. So those classes that have no (subclass, subClassOf, ?) triples. 
+
+So the steps are:
+
+- Iterate over all the nodes in the graph. Wait, but which nodes are part of the hierarchy? Maybe all nodes that are either a subject or object in a triple with the given property. Or perhaps all the nodes in the entire graph. The function's description says "in some sort of transitive hierarchy", so perhaps the hierarchy is defined by all triples with that property. 
+
+So to find all roots, first, collect all nodes that are part of the hierarchy (i.e., any node that is the subject or object in a triple with prop as the predicate). Then, among those nodes, the roots are those for which there is no triple (node, prop, ?) — because that would mean they have no parent. 
+
+Wait, but maybe a node is part of the hierarchy but has no parent. So that's exactly a root. 
+
+So here's the plan:
+
+1. Find all nodes that are involved in the hierarchy. These are all the nodes that are either the subject or the object in any triple where the predicate is prop. 
+
+2. For each of these nodes, check if they have any parent (i.e., any triples where they are the subject and the predicate is prop). If not, they are a root. 
+
+Alternatively, perhaps the roots are all nodes that are not the object of any such triple. 
+
+Wait, let's think again. Suppose a node is an object in some triple (s, prop, node). Then that node has a child (s), but it could still have a parent. So being an object doesn't mean it's not a root. 
+
+The root is a node that has no parent, so the triples where it's the subject with prop as predicate must be zero. 
+
+So the correct approach is:
+
+Collect all the nodes that are either the subject or object of any triple with the given property. 
+
+Then, among those nodes, the roots are the ones for which there are no triples (node, prop, ?) in the graph. 
+
+Wait, but maybe there are nodes not in the hierarchy but still in the graph. So perhaps we can collect all the nodes that are part of the hierarchy first. 
+
+Alternatively, perhaps the roots could be any node in the graph that has no parent. So even if a node is not part of the hierarchy, but has no parent, it's a root. 
+
+Hmm, but the function's example uses subClassOf. So in that case, the roots would be the classes that aren't subclasses of anything else. So their parent would be none. 
+
+So here's the approach:
+
+Loop through all the nodes in the graph. For each node, check if there are any triples where the node is the subject and the predicate is prop. If there are none, then add it to the roots set.
+
+Wait, but how do I get all the nodes in the graph? The graph has all the subjects and objects. So perhaps:
+
+all_nodes = set(graph.subjects()) | set(graph.objects())
+
+Wait, but in rdflib, the subjects() and objects() methods return generators. So maybe:
+
+nodes = set(graph.subjects()) | set(graph.objects())
+
+But I need to make sure that all nodes are considered. Alternatively, perhaps the nodes involved in the hierarchy are only those that are subjects or objects in the triples with the given property. 
+
+Alternatively, maybe the roots are those nodes for which there are no triples (node, prop, ?). 
+
+So, the steps are:
+
+Initialize the roots set as empty.
+
+For each node in the graph (maybe all nodes in the graph):
+
+Check if the graph has any triples where the subject is node and the predicate is prop. 
+
+If not, then node is a root. 
+
+Wait, but this would include nodes that are not part of the hierarchy. Like, a node that is only an object in some other property's triple. But according to the problem statement, the roots are for the hierarchy defined by the given prop. 
+
+Hmm. Alternatively, maybe the nodes in the hierarchy are those that have at least one parent or child. But perhaps it's okay to consider all nodes in the graph, but the roots are those with no parents. 
+
+Wait, the problem says "in some sort of transitive hierarchy". So maybe the hierarchy is the collection of all nodes connected via the prop. So the roots would be the starting points of the hierarchy. 
+
+Alternatively, maybe the function is supposed to find all nodes that are not reachable via the prop in the reverse direction. 
+
+Hmm, perhaps I should approach it this way:
+
+For each node in the graph, if there are no (node, prop, parent) triples, then it's a root. 
+
+So the code would be something like:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    # get all nodes in the graph
+    all_nodes = set(graph.subjects()) | set(graph.objects())
+    for node in all_nodes:
+        # check if there are any triples where node is the subject and prop is the predicate
+        if not any(graph.triples((node, prop, parent)) for parent in graph.objects()):
+            # or maybe check if the graph has any (node, prop, ?) triples
+            if not list(graph.triples((node, prop, None))):
+                roots.add(node)
+    return roots
+
+Wait, but in rdflib, the way to check if a node has any outgoing prop edges would be to check if there are any triples where the subject is the node and the predicate is prop. So the correct way would be to loop through all the nodes and check if there are any triples (node, prop, ...). If none, then it's a root. 
+
+Wait, but how do I get all the nodes in the graph? Because in rdflib, the graph.subjects() and graph.objects() can be called with no arguments to get all subjects or objects. So:
+
+subjects = graph.subjects()
+objects = graph.objects()
+
+all_nodes = set(subjects) | set(objects)
+
+Wait, but in rdflib, the subjects() method without arguments returns all the subjects in all triples. Similarly for objects(). 
+
+So, for each node in all_nodes:
+
+Check if any triples exist where (node, prop, ?parent) is present. 
+
+If not, then it's a root. 
+
+Wait, but this would include nodes that are not part of the hierarchy but are in the graph. For example, a node that is only an object in a different predicate's triple. But according to the problem's example, when using subClassOf, we only want the classes that are not subclasses of anything else. 
+
+Hmm, perhaps the all_nodes is overkill. Alternatively, maybe the nodes in the hierarchy are all the nodes that are either the subject or object of a triple with the given prop. 
+
+So first, collect all nodes that are involved in the hierarchy. 
+
+hierarchy_nodes = set()
+for s, p, o in graph.triples((None, prop, None)):
+    hierarchy_nodes.add(s)
+    hierarchy_nodes.add(o)
+
+Then, for each node in hierarchy_nodes, check if there are any triples (node, prop, ?parent). If not, then it's a root. 
+
+Wait, because a node could be part of the hierarchy as a parent but also have its own parent. So the roots are those nodes in the hierarchy that have no parent (i.e., no triples where they are the subject with the given prop). 
+
+So that's better. Because otherwise, a node not in any triples with prop would not be part of the hierarchy and thus not considered a root here. 
+
+Wait, the problem says "find the roots in some sort of transitive hierarchy". So the hierarchy is defined by the prop. So any node that is part of the hierarchy (i.e., in any of the triples with prop) must be considered. 
+
+Therefore, the correct approach is to first collect all nodes that are either a subject or object in a triple with the given prop. Then, among those nodes, find those that have no parent (i.e., no triples (node, prop, parent)).
+
+Wait, but even if a node is part of the hierarchy as an object (parent of someone else) but doesn't have its own parent, it's a root. 
+
+So the hierarchy_nodes would be all the nodes involved in the prop's triples. 
+
+Then, for each node in hierarchy_nodes:
+
+if there are no triples (node, prop, ?parent), then it is a root. 
+
+So the code would look like:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    hierarchy_nodes = set()
+    for s, p, o in graph.triples((None, prop, None)):
+        hierarchy_nodes.add(s)
+        hierarchy_nodes.add(o)
+    for node in hierarchy_nodes:
+        # check if there are any parents for this node
+        if not list(graph.triples((node, prop, None))):
+            roots.add(node)
+    return roots
+
+Wait, but maybe there are nodes that are in the hierarchy but not in the hierarchy_nodes? Like, a node that is a parent but not part of any triples? No, because if a node is a parent, then it must be the object in a triple (child, prop, parent). 
+
+So this approach should work. 
+
+Wait, let me test this with an example. 
+
+Suppose graph has triples:
+
+A subClassOf B
+
+B subClassOf C
+
+C subClassOf None (so C has no parent)
+
+Then hierarchy_nodes would include A, B, C (since each is part of a triple with subClassOf). 
+
+Now, for each node:
+
+A has (A, prop, B) → so it has a parent → not a root.
+
+B has (B, prop, C) → so parent exists → not a root.
+
+C has no triples where it's the subject with prop → so it's a root. 
+
+Another example: D is a node not part of any subClassOf triples. So it wouldn't be in hierarchy_nodes, so not considered. But if a node E has no parent but is part of the hierarchy (like in a triple (F, prop, E)), then E is a root because it has no parent. 
+
+Hmm, that seems correct. 
+
+Wait, but what about a node that's part of the hierarchy but has a parent outside of the hierarchy? Like, suppose there's a triple (E, prop, F), but F is not part of any triples with prop. Then F would be a root. But according to the code, F would be in hierarchy_nodes because it's the object of the triple (E, prop, F). So when checking F, there are no triples where F is the subject with prop → so it's a root. 
+
+Yes, that works. 
+
+So this code should work. 
+
+Wait, but what about nodes that are part of the hierarchy but have their parent not in the hierarchy? Like, the parent is not part of any other triples. But in that case, the parent is still part of the hierarchy as an object, so it would be considered. 
+
+So the code seems correct. 
+
+Alternatively, maybe there's a better way. 
+
+Another approach: for each node in the graph, check if it has any parent via the property. 
+
+But how do I get all nodes? 
+
+In the first approach, hierarchy_nodes is the set of all nodes that are in any triple with the given property. 
+
+But the problem's example is about RDFS.subClassOf, so in that case, all the nodes in the hierarchy are the ones in the triples with that property. 
+
+Therefore, the code should work. 
+
+Wait, but in the first step, when collecting hierarchy_nodes, we can also collect all the nodes that are either a subject or object in a triple with the given prop. 
+
+Yes. 
+
+Now, in the code, the roots are initialized as an empty set if not provided. 
+
+Wait, the parameters have roots as an Optional[Set[Node]], so the function can be given an existing set to add roots to, but by default, it creates a new set. 
+
+Wait, in the function signature, the default is roots=None. So the code should handle that. 
+
+So, in the code, if roots is None, we create a new set. Otherwise, we add to it. 
+
+Wait, but the function returns a set, so the initial roots parameter is a set that can be passed in. 
+
+Wait, perhaps the code is okay. 
+
+Wait, but in the code above, the roots is a set passed in. So the function adds to that set. 
+
+Wait, but in the code I wrote, for each node in hierarchy_nodes that has no parent (i.e., no triples (node, prop, ?)), add to roots. 
+
+Yes. 
+
+Wait, but in the example given, if someone calls find_roots(graph, prop, roots={some_node}), then that some_node would also be in the set. 
+
+Wait, but maybe the roots parameter is for a starting set, but the code is supposed to find all roots. So perhaps the roots parameter is optional, and if provided, the function adds to it? Or maybe it's the initial roots, but the function should find all roots regardless. 
+
+Hmm, the function's docstring says:
+
+Args:
+    graph: Graph Class Object
+    prop: URIRef Class Object
+    roots: Optional list with set type
+
+Wait, maybe the roots parameter is a set of nodes to start with, and the function can extend that? Not sure. The docstring says "Assumes triple of the form (child, prop, parent)", so perhaps the roots are the nodes that are not the object of any triple with the given prop. 
+
+Wait, maybe the roots are the nodes that have no incoming edges. Wait no, the roots are those that have no parents. 
+
+Alternatively, another approach is that the roots are the nodes that are not the object of any triple with the given prop. 
+
+Wait, let me think again. 
+
+Suppose the hierarchy is such that each node's parent is another node. So the root is a node that has no parent. 
+
+A node has a parent if there exists a triple (node, prop, parent). 
+
+Therefore, the roots are all nodes for which there is no such triple. 
+
+But to find all such nodes, you can iterate through all possible nodes in the graph and check if they have any such triples. 
+
+The problem is how to get all possible nodes in the graph. 
+
+In rdflib, the Graph has methods like subjects() and objects(). 
+
+So, the code can be written as:
+
+all_nodes = set(graph.subjects()) | set(graph.objects())
+
+Then, for each node in all_nodes, check if any triples (node, prop, ?) exist. 
+
+If not, then it is a root. 
+
+Wait, but the example given in the docstring says that when using subClassOf, the roots are the topmost classes. So in that case, a class without any subClassOf triples (as the subject) is a root. 
+
+So perhaps the correct way is to not restrict to hierarchy_nodes, but check all nodes in the entire graph. 
+
+Wait, but if a node is not part of the hierarchy (i.e., it's not involved in any triples with that prop), then it's a root? 
+
+Hmm, maybe the function is supposed to return all nodes in the graph that are not children of any other node in the hierarchy. 
+
+So even if a node is not part of any triples with the given prop, it would be considered a root. 
+
+Wait, but according to the problem's example, when using subClassOf, those nodes not in the hierarchy (like a class that is not a subclass of anything else) would indeed be roots. 
+
+So maybe the first approach is better. 
+
+Let me see the first approach code again:
+
+all_nodes = set(graph.subjects()) | set(graph.objects())
+
+roots = set()
+for node in all_nodes:
+    if not any(graph.triples((node, prop, parent)) for parent in graph.objects()):
+        # wait, no, that's not the right way. 
+
+Alternatively, to check if there exists any triple where the subject is node and predicate is prop. 
+
+The correct way would be to check if there are any triples (node, prop, ?). 
+
+In rdflib, to get all the parents of a node, you can do something like:
+
+parents = list(graph.triples((node, prop, None)))
+
+If the length is zero, then it has no parents, so it's a root. 
+
+Therefore, the code can be written as:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    # Get all nodes in the graph that are subjects or objects of any triples
+    all_nodes = set(graph.subjects()) | set(graph.objects())
+    for node in all_nodes:
+        if not list(graph.triples((node, prop, None))):
+            roots.add(node)
+    return roots
+
+Wait, but that might include nodes that are not part of the hierarchy but are in the graph. For instance, a node that's an object in another predicate's triple. 
+
+But according to the problem statement, the hierarchy is defined by the given property. So those nodes not part of any triples with that property are not part of the hierarchy. So are they considered roots? 
+
+The function's docstring says "find the roots in some sort of transitive hierarchy", so maybe the roots are only the ones in the hierarchy. 
+
+Hmm, so perhaps the first approach of using hierarchy_nodes is better. 
+
+Wait, let's think of a node that's not part of any triples with prop. 
+
+Then, in the hierarchy, it's not connected. So perhaps it's considered a root of its own singleton hierarchy. 
+
+Alternatively, maybe the function is only considering nodes that are part of the hierarchy (i.e., involved in at least one triple with the given prop). 
+
+The problem's example says that when you call find_roots with subClassOf, it returns all roots of the sub-class hierarchy. So a class that isn't part of any subClassOf triples would be its own root. 
+
+So in that case, the code that uses all_nodes (all nodes in the graph) is correct. 
+
+Wait, but the graph may have many nodes not related to the hierarchy. 
+
+For instance, a graph with nodes like A, B, C (in the hierarchy), and D which is part of a different triple (like (D, rdf.type, Literal)). 
+
+Then D is a node in the graph, so it would be considered in all_nodes. 
+
+Since there are no triples (D, prop, ?), then D would be added as a root. 
+
+But according to the function's purpose, D is not part of the hierarchy, so maybe it shouldn't be included. 
+
+Hmm, this is a bit ambiguous. 
+
+The function's description says "find the roots in some sort of transitive hierarchy". So perhaps the hierarchy is only those nodes connected via the given property. 
+
+Therefore, any node not part of the hierarchy (i.e., not in any triples with the property) would not be considered part of the hierarchy, so not included in roots. 
+
+Wait, but the problem's example uses subClassOf. Suppose there's a class that isn't a subclass of anything, but is a class itself. That class would be a root, even if it's not part of any triples (except maybe rdf:type). 
+
+Hmm, maybe the function should include all nodes that have no parent via the prop, even if they are not part of any child relationship. 
+
+Because in the subClassOf example, a class that is not a child (i.e., not a subject in any subClassOf triples) is a root. 
+
+So the correct approach is to check all nodes in the graph, because any node in the graph could be a root if it has no parent. 
+
+Therefore, the code using all_nodes is correct. 
+
+Wait, but how do I get all nodes in the graph? 
+
+In rdflib, the nodes in the graph are all the subjects and objects. 
+
+So, the code:
+
+all_nodes = set(graph.subjects()) | set(graph.objects())
+
+Then, for each node in all_nodes, check if there are any triples (node, prop, ?). 
+
+If not, then add to roots. 
+
+Yes. 
+
+Wait, but in the first approach, the code loops through all nodes in the graph, which can be a lot if the graph is big. 
+
+But perhaps that's the way it has to be. 
+
+Another possible optimization: collect all nodes that are objects in any triples with the given property. Those nodes can't be roots because they have at least one child. Wait no, because the roots are those without a parent. 
+
+Wait, the roots are those nodes with no parent, so their parent is none. 
+
+So the roots are the nodes for which there are no triples (node, prop, parent). 
+
+Therefore, the code is correct. 
+
+Wait, but let me think of another example. Suppose there's a node that is the object in a triple but never the subject. Like in the hierarchy A → B (prop is the relation from child to parent). 
+
+Then B is the parent of A. 
+
+B has no parent, so it is a root. 
+
+But according to the code, B would be part of all_nodes (as an object of the triple). 
+
+Then when checking B, there are no triples (B, prop, ?) so it would be added to roots. 
+
+Yes. 
+
+Another case: C is a node that is not part of any triples. 
+
+Then, in all_nodes, it's not present (since it's neither subject nor object). 
+
+So it won't be considered. 
+
+Wait, but if a node is not part of any triples, then it's not in all_nodes. 
+
+So in that case, such a node would not be added to roots. 
+
+Hmm. 
+
+Wait, in the problem's example, the function is called with the prop as subClassOf, and the roots are the top of the hierarchy. So any class that isn't a subclass of anything is a root, even if it's not part of any triples except maybe its own instances. 
+
+So, in that case, the code would include such a node. 
+
+Wait, no. Let me see: 
+
+Suppose there's a class E that has no subClassOf triples. So it is not the subject in any such triple. 
+
+But E is a subject in some other triple, like (E, rdf.type, owl.Class). 
+
+Then E is in all_nodes (as a subject), so it would be considered. 
+
+Therefore, the code would add E to roots because there are no triples (E, prop, ?). 
+
+Which is correct. 
+
+Another example: a node F is only an object in a triple with another predicate. 
+
+Like, (G, someOtherProp, F). 
+
+Then F is part of the graph's objects, so included in all_nodes. 
+
+But when checking for (F, prop, ?), there are none, so F would be a root. 
+
+But in the hierarchy defined by prop, F is not part of it. So the function's description says "in some sort of transitive hierarchy", so maybe F shouldn't be considered a root here. 
+
+Hmm, perhaps the problem is that the roots are only those nodes that are part of the hierarchy and have no parents. 
+
+So the hierarchy_nodes approach would be better. 
+
+So let me adjust the code. 
+
+First, collect all the nodes involved in the hierarchy. 
+
+hierarchy_nodes = set()
+
+for s, p, o in graph.triples((None, prop, None)):
+    hierarchy_nodes.add(s)
+    hierarchy_nodes.add(o)
+
+Then, for each node in hierarchy_nodes, check if they have any parents (i.e., if there exists a triple (node, prop, ?parent)). 
+
+Wait, but how to check that? 
+
+The parent triples are exactly the ones where the node is the subject and the predicate is prop. 
+
+So for node in hierarchy_nodes:
+
+if not any( (trip for trip in graph.triples((node, prop, None))) )
+
+then it's a root. 
+
+Therefore, the code would be:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    hierarchy_nodes = set()
+    for s, p, o in graph.triples((None, prop, None)):
+        hierarchy_nodes.add(s)
+        hierarchy_nodes.add(o)
+    for node in hierarchy_nodes:
+        if not list(graph.triples((node, prop, None))):
+            roots.add(node)
+    return roots
+
+Wait, but in this case, nodes that are part of the hierarchy but have no parent (like the top node) would be added. 
+
+But what about nodes that are part of the hierarchy as parents but have their own parents? 
+
+No, because they would have a triple (their_node, prop, ...) so they wouldn't be added as roots. 
+
+Wait, let's take an example where the hierarchy has A → B → C (so each has a parent except A). 
+
+The triples are (B, prop, A), (C, prop, B). 
+
+So hierarchy_nodes would be {B, A, C}. 
+
+Then, for each node in hierarchy_nodes:
+
+A: there are no triples (A, prop, ...), so it's a root.
+
+B: there is a triple (B, prop, A) → so it has a parent → not a root.
+
+C: has a parent (B) → not a root. 
+
+So the roots would be {A}, which is correct. 
+
+Another case: D is a node that is the object of a triple with prop but not the subject. Like (E, prop, D). 
+
+Then D is in hierarchy_nodes (as an object of the triple). 
+
+But D has no triples where it is the subject with prop → so it is a root. 
+
+Wait, but D has a child (E), so D is a parent but not a root. Wait, no. 
+
+Wait, in the hierarchy, D is a parent of E, but D's own parent is determined by whether there's a triple (D, prop, ?). 
+
+If there is no such triple, then D is a root. 
+
+So in the example with (E, prop, D), D is a root. 
+
+Yes. 
+
+So the code works. 
+
+Another example where a node is part of the hierarchy but has a parent. 
+
+Suppose there's a triple (A, prop, B), and also (B, prop, C). 
+
+Then hierarchy_nodes includes A, B, C. 
+
+When checking A: does it have any triples (A, prop, ?). Yes, the first triple → so not a root. 
+
+B has (B, prop, C) → so it has a parent (C?), wait no. 
+
+Wait, the parent of B is the o in (B, prop, o). Wait, the direction is (child, prop, parent). So in the triple (B, prop, C), C is the parent. So B has a parent, so B is not a root. 
+
+Then, checking C: does it have any triples where it is the subject with prop? 
+
+Only if there is a triple (C, prop, ...). 
+
+If there are none, then C is a root. 
+
+So that's correct. 
+
+Hmm, so the code using hierarchy_nodes is better because it only considers nodes involved in the hierarchy. 
+
+But what about a node that is part of the hierarchy but not in any triples? Like if there's a triple (s, prop, o) where s is in hierarchy, but then there's another node that's not in any triples with prop, but is a subject in some other triples. 
+
+Wait, but in the hierarchy_nodes, we only include nodes that are part of a triple with the given prop. 
+
+So any node not in hierarchy_nodes is not part of the hierarchy, so the function doesn't consider it as a root of the hierarchy. 
+
+Therefore, the code using hierarchy_nodes is correct. 
+
+So the code should be structured as such. 
+
+Wait, but the problem's example says that when using subClassOf, it will return all roots. 
+
+Suppose there are two separate hierarchies, like A → B, and C → D. 
+
+Then the roots would be A and C. 
+
+The code would collect all nodes involved in subClassOf triples (A, B, C, D). 
+
+Then, checking each node: 
+
+A has no triples (A, prop, ?), so it's a root. 
+
+C also has no such triples → so added as a root. 
+
+B has (B, prop, A) → so has a parent → not a root. 
+
+D has (D, prop, C) → so has a parent → not a root. 
+
+Wait, no, the triple is (C, prop, ?parent?), or (C, prop, D)? 
+
+Wait in the example, if C is the parent of D, then the triple would be (D, prop, C). 
+
+So in that case, C would not have any outgoing prop triples, so it is a root. 
+
+Yes. 
+
+Therefore, this code works. 
+
+Now, the function signature has the roots as an optional parameter. 
+
+So, the function can be called with an existing set, and the roots will be added to it. 
+
+Wait, but the docstring says "roots: Optional list with set type". So the parameter is called roots and it's an optional set. 
+
+The function should return a set of nodes. 
+
+In the code above, if roots is provided, we add to it. 
+
+Wait, but the problem says "roots: Optional[Set["Node"]] = None". So the function can be called with an existing set. 
+
+But in the example, the user can pass in an existing set, perhaps to accumulate roots from different properties? Not sure. 
+
+But the code is okay. 
+
+Wait, but in the code, the roots is initialized as set() if None. 
+
+Wait, the code says if roots is None: then create a new set. 
+
+Yes, that's correct. 
+
+Now, in the code, the loop for hierarchy_nodes: 
+
+for s, p, o in graph.triples((None, prop, None)):
+
+But this will iterate over all triples where the predicate is prop. 
+
+Each such triple contributes its subject and object to the hierarchy_nodes. 
+
+Therefore, hierarchy_nodes contains all the nodes involved in the hierarchy. 
+
+Then, for each node in hierarchy_nodes, check if there are any triples where it is the subject with prop as the predicate. 
+
+Wait, how do I check that? 
+
+We can check if the list of triples (node, prop, None) is empty. 
+
+So, if not list(graph.triples((node, prop, None))): 
+
+Then, that node has no parents (since there are no triples where it is the child pointing to a parent), so it's a root. 
+
+Yes. 
+
+Therefore, that code should work. 
+
+Wait, but in the first approach, using all_nodes, nodes not in the hierarchy (but in the graph) would also be considered as roots. 
+
+The second approach (using hierarchy_nodes) only considers nodes in the hierarchy. 
+
+Which is correct? 
+
+The problem's example says that for subClassOf, the roots are the top of the hierarchy. So if a node is not part of any subClassOf triples, but is a class, then is it considered a root here? 
+
+Like, if a class E is not a subclass of anything, but also isn't a parent of any other class (since no triples have E as the object of subClassOf), then according to the hierarchy_nodes approach, E is not part of the hierarchy, so not added to the roots. 
+
+But according to the first approach, since E is a subject in some other triples, like (E, rdf.type, ...), then it's in all_nodes and would be considered a root. 
+
+Hmm, that's conflicting. 
+
+The function's docstring says: "find_roots(graph, rdflib.RDFS.subClassOf) will return a set of all roots of the sub-class hierarchy". 
+
+So in that case, a class that is not part of any subClassOf triples would be a root. 
+
+Even if it's not part of any hierarchy, it's considered a root of its own hierarchy (since it has no parent). 
+
+Therefore, the first approach is correct. 
+
+Wait, because in the first approach, all_nodes includes all nodes in the graph, so even if a node is not part of any subClassOf triples but is part of the graph (as a subject or object in another triple), it would be considered. 
+
+So in the example where E is a class not part of any subClassOf triples, but exists as a subject in another triple, then it would be considered as a root. 
+
+But according to the problem's example, that's correct. 
+
+Hmm, so the code using all_nodes would be better. 
+
+Wait, but in the problem's example, the roots are the top of the sub-class hierarchy. So E is a root only if it's part of the hierarchy (i.e., has some subClassOf triples as parent?), but if it's not part of the hierarchy, then it's not part of the sub-class hierarchy. 
+
+Wait, maybe the sub-class hierarchy includes all classes, even those not in any triples. 
+
+But in RDF, a class can exist without being part of any triples. So in that case, E would be a root of its own hierarchy. 
+
+Therefore, the first approach (using all_nodes) is correct. 
+
+Hmm, this is a bit tricky. 
+
+Let me think of a scenario where the hierarchy is RDFS.subClassOf. 
+
+Suppose the graph has a class E that is not a subclass of anything (so no triples with (E, subClassOf, ?)), and also not a superclass of anything (so no triples with (s, subClassOf, E)). 
+
+Then, in the hierarchy, it's a singleton. So it's a root. 
+
+So according to the first approach, since E is a subject in a triple (maybe (E, rdf.type, owl.Class)), it would be in all_nodes. 
+
+Then, since there are no triples (E, prop, ?), it would be added to roots. 
+
+Which is correct. 
+
+So the first approach is correct. 
+
+The second approach would miss E if it's not part of any triples with the given prop. 
+
+Therefore, the correct code is to use all_nodes. 
+
+Hmm. 
+
+So the code would be:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    all_nodes = set(graph.subjects()) | set(graph.objects())
+    for node in all_nodes:
+        if not list(graph.triples((node, prop, None))):
+            roots.add(node)
+    return roots
+
+Wait, but in rdflib, the triples method returns an iterator over (s,p,o). 
+
+Wait, when you do graph.triples((node, prop, None)), the third parameter is None. 
+
+Wait, in rdflib, you can pass a wildcard for the object. 
+
+So, the code is correct here. 
+
+Wait, but maybe the way to check is to see if there are any triples where the subject is node and the predicate is prop. 
+
+So, the list would have any (node, prop, o) triples. 
+
+If the list is empty, then node has no parent, so it's a root. 
+
+Yes. 
+
+Now, the problem's function returns a set of nodes. 
+
+Wait, but maybe the roots parameter is supposed to be a starting point? 
+
+The docstring says "roots: Optional[Set["Node"]] = None". 
+
+So perhaps the roots is a set of possible roots to start with, but the function's job is to find all roots. 
+
+Alternatively, maybe the roots parameter is for specifying a set of possible roots to consider, but I think the function's job is to compute the roots from scratch. 
+
+The default is None, so in that case, it creates a new set. 
+
+Therefore, the code is okay. 
+
+Wait, but in the code, if roots is provided, it adds to that set. 
+
+But maybe the function should replace the roots? 
+
+The docstring says "Assumes triple of the form (child, prop, parent)", and the example shows that when called without roots, it returns the correct roots. 
+
+So the code is correct. 
+
+Wait, but in the code above, for each node in all_nodes, if it has no parent (no triples with (node, prop, ?)), then it is a root. 
+
+So that should work. 
+
+Now, let me think of possible errors. 
+
+Suppose a node is an object in a triple with prop, but also has a triple where it is the subject with prop. 
+
+Like, (A, prop, B) and (B, prop, C). 
+
+Then, B is an object in the first triple, but a subject in the second. 
+
+So B has a parent (C?), no. 
+
+Wait, in the triple (B, prop, C), the parent is C. 
+
+So B has a parent, so it's not a root. 
+
+The code would correctly not add it. 
+
+Another test case: a node that's only an object. 
+
+Suppose there's a triple (X, prop, Y), and no other triples with prop. 
+
+Then Y is an object in the hierarchy. 
+
+Y would be in all_nodes (as an object of the triple). 
+
+When checking Y: there are no triples (Y, prop, ?), so Y is a root. 
+
+Yes, that's correct. 
+
+So, the code seems okay. 
+
+Wait, but in the code, the line all_nodes = set(graph.subjects()) | set(graph.objects()). 
+
+Wait, the graph's subjects() and objects() methods return generators. 
+
+Converting them to sets may be inefficient for large graphs, but in Python, it's necessary to collect all elements. 
+
+Alternatively, maybe using a set comprehension or a generator expression. 
+
+But for the code, that's acceptable. 
+
+Now, the function is supposed to return a set of nodes. 
+
+Wait, but what if the graph has no triples? Then all_nodes would be empty, and roots would also be empty. 
+
+But that's okay. 
+
+Another possible case: a node is both a subject and object in a triple with prop. 
+
+Like in a loop. 
+
+Suppose (A, prop, A). 
+
+Then, when checking A, the triples (A, prop, A) exists → so it has a parent (itself?), so it's not a root. 
+
+So the loop would not add it. 
+
+But in that case, the hierarchy has a loop, so there's no root. 
+
+Hmm. 
+
+Alternatively, if a node has a parent that is itself, then it is not a root. 
+
+Yes. 
+
+So the code handles that. 
+
+Therefore, the code is correct. 
+
+Wait, but maybe I should also check if the node is part of the graph. 
+
+Wait, the all_nodes is already all subjects and objects, so they are in the graph. 
+
+Therefore, no problem. 
+
+Another possible optimization: instead of collecting all the nodes, maybe collect only those that are subjects or objects in the prop's triples. 
+
+Wait, but in the first approach, all nodes are considered, including those not involved in the prop. 
+
+But that's necessary, because a node not in any prop triples but is part of the graph could be a root. 
+
+Hmm, the example in the docstring says that the function returns all roots of the hierarchy. 
+
+Wait, perhaps the roots are only those nodes that are part of the hierarchy (i.e., are in the hierarchy's triples) and have no parents. 
+
+Alternatively, perhaps the roots are all nodes in the graph that have no parents in the hierarchy. 
+
+The problem says "the roots in some sort of transitive hierarchy", so probably the second interpretation is correct. 
+
+So the code that uses all_nodes is correct. 
+
+Therefore, the code I wrote first (using all_nodes) is the right approach. 
+
+Wait, but in the problem's example, when you call find_roots(graph, prop), the roots are all the nodes that are not the subject of any triples with prop. 
+
+Yes. 
+
+Therefore, the code should work. 
+
+Wait, but let me check the code again. 
+
+Wait, in the code:
+
+all_nodes is the union of all subjects and objects in the graph. 
+
+Then for each node in that set:
+
+if there are no triples where the node is the subject and the predicate is prop → then it's a root. 
+
+So, all such nodes are considered. 
+
+Therefore, that's the right approach. 
+
+Another point: the graph may have multiple triples with the same subject and predicate, but different objects. 
+
+But the code just checks if there's any such triple, so it's okay. 
+
+Now, the code uses graph.triples((node, prop, None)). 
+
+In rdflib, the triples method returns all triples matching the pattern. 
+
+So, if there is even one such triple, then the list will have elements, so the condition is false. 
+
+Thus, only nodes with zero such triples are added to roots. 
+
+Yes. 
+
+Therefore, this code should work. 
+
+Wait, but what about the direction of the property? 
+
+The problem says "the direction of RDFS.subClassOf or SKOS.broader", which are both child to parent. 
+
+So the code is correct. 
+
+Thus, the code is:
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+    if roots is None:
+        roots = set()
+    all_nodes = set(graph.subjects()) | set(graph.objects())
+    for node in all_nodes:
+        if not list(graph.triples((node, prop, None))):
+            roots.add(node)
+    return roots
+
+Wait, but in rdflib, the Node type is not exactly a class. The nodes are URIRef, BNode, or Literal. But the function's parameters specify roots as a set of "Node". 
+
+But perhaps in the problem's context, the hierarchy is only between resources (URIRef or BNode?), but literals might not be part of the hierarchy. 
+
+But the code as written includes all nodes, including literals. 
+
+Is that a problem? 
+
+Probably not, since the function is generic. 
+
+Now, testing for the case where a node has a parent but the parent is not in the graph. 
+
+Wait, but if the node is in the graph, but the parent is not, then that parent would not be in all_nodes. 
+
+Wait, the triple (s, prop, o) exists in the graph. 
+
+So, s is in subjects, o is in objects. 
+
+Therefore, all_nodes includes o even if o is not part of any other triples. 
+
+So, if a node's parent is not in the graph, then the node's parent is not part of the graph. 
+
+But in the graph's triples, the parent o is present as an object. 
+
+Thus, the node s would have a parent (o) even if o is not part of any other triples. 
+
+Therefore, the code would correctly not add s as a root. 
+
+Hmm, okay. 
+
+Another thing to consider: the roots parameter is a set. 
+
+So when we call the function, if roots is provided, we add the new roots to it. 
+
+But maybe the function is supposed to return the union of the provided roots and the computed ones? 
+
+Not sure. The docstring says "roots: Optional list with set type" and the return is "roots: a set with nodes". 
+
+Probably, the roots parameter is there in case the user wants to provide an initial set of roots. But in the example, it's called without roots. 
+
+Maybe the parameter is for passing in a set of known roots to avoid recomputing. 
+
+Alternatively, perhaps the roots is an optional starting set, but the function's code should ignore it and compute all roots. 
+
+Wait, the docstring says "Assumes triple of the form (child, prop, parent)", but the roots parameter is optional. 
+
+Hmm, perhaps the roots parameter is for specifying the possible roots to consider, but in the code, it's better to ignore it unless it's provided. 
+
+Wait, looking back at the function signature: 
+
+def find_roots(graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None) -> Set["Node"]:
+
+The docstring says "roots: Optional list with set type". 
+
+Wait, maybe the roots is a set of possible root candidates, and the function returns those that are actual roots. 
+
+Wait, the docstring's Args section says "roots: Optional list with set type". 
+
+Hmm, maybe the roots is a set that the function uses to start from, and then follows the prop in the reverse direction? 
+
+Wait, maybe I misunderstood the problem. 
+
+Let me re-read the problem's description. 
+
+The function should "find the roots in some sort of transitive hierarchy". 
+
+The example says that find_roots(graph, RDFS.subClassOf) returns the roots of the sub-class hierarchy. 
+
+The function assumes triples in the direction of RDFS.subClassOf or SKOS.broader. 
+
+Wait, perhaps the roots are those nodes that are not reachable from any other node by following the prop in the reverse direction. 
+
+Wait, maybe the function is supposed to find all nodes for which there is no ancestor (i.e., no path upwards via the prop). 
+
+Because in a transitive hierarchy, the root is the one that no one is above it. 
+
+In that case, the previous approach might not work because it only checks immediate parents. 
+
+Wait, for example, if the hierarchy is A → B → C (A is parent of B, B parent of C). 
+
+Then the roots are A, since A has no parent. 
+
+But according to the previous approach, B has a parent (A?), so not a root. 
+
+Yes. 
+
+Wait, but the code correctly identifies A as the root. 
+
+But what about a case where a node has a parent that is not its immediate parent? 
+
+Wait, the code's approach only checks for direct parents. 
+
+Wait, the function's task is to find the roots of the hierarchy, which are the nodes that have no parents (direct or indirect?), or just no direct parents? 
+
+The problem says "transitive hierarchy", so maybe the hierarchy is built using transitive closure. 
+
+But the roots are the nodes that have no parent at all. 
+
+Because in a transitive hierarchy, the root is the one that has no parent. 
+
+So the previous approach is correct. 
+
+Because even if a node has a parent further up, the root is the topmost node. 
+
+Thus, the code that checks for direct parents is sufficient. 
+
+Hmm, okay. 
+
+Therefore, the code should be as written. 
+
+Wait, but in the example given, the function's code may have a problem. 
+
+Suppose the graph has a triple (B, prop, A), but no triple (A, prop, ...). 
+
+Then A is a root. 
+
+The code will include A in all_nodes as an object of the triple. 
+
+Then when checking A's triples (A, prop, ...), there are none, so added to roots. 
+
+Yes. 
+
+Another scenario: a node D has a triple (D, prop, E), but E has a triple (E, prop, F), and F has no parent. 
+
+Then F is a root, but D and E are not. 
+
+The code will check each node. 
+
+F is in all_nodes (as an object of E's triple), so when checking F, it has no triples (F, prop, ...), so is a root. 
+
+E has a triple (E, prop, F) → so it has a parent → not a root. 
+
+D has a triple (D, prop, E) → so has a parent → not a root. 
+
+Thus, correct. 
+
+Therefore, the code is correct. 
+
+Wait, but the code is using all_nodes, which is the set of all subjects and objects in the entire graph. 
+
+So if the graph has other triples not related to the hierarchy, those nodes will also be considered. 
+
+But according to the problem's example, that's correct. 
+
+Because in the subClassOf case, any class not part of any subClassOf triples would be a root. 
+
+So even if they are only in other triples, they are considered roots. 
+
+Therefore, the code is correct. 
+
+Hmm. 
+
+Alternatively, perhaps the roots should only be those nodes that are part of the hierarchy (i.e., involved in the prop's triples). 
+
+Wait, but in the example, a node that's not part of any subClassOf triples but is a class (so part of the graph) would still be a root of its own hierarchy. 
+
+Therefore, including it makes sense. 
+
+So the code is correct. 
+
+Wait, but in the code, when you do list(graph.triples((node, prop, None))), that's checking for any triples where the node is the subject with the given prop. 
+
+Therefore, the code works. 
+
+Now, the code may have an issue with the way it's collecting all_nodes. 
+
+Wait, in rdflib, the subjects() and objects() methods can take parameters. 
+
+The code uses graph.subjects() with no parameters, which returns all subjects in all triples. 
+
+Similarly for objects(). 
+
+So that's correct. 
+
+Yes. 
+
+Therefore, the code I wrote is correct. 
+
+Wait, but what about the case where a node is in the graph as a subject but not in any triples with the given prop? 
+
+Like, (X, other_prop, Y) → X is in all_nodes. 
+
+But since there are no triples (X, prop, ?), then X is a root. 
+
+But according to the problem's description, that's correct because it's part of the graph but not part of any parent relationships in the hierarchy, so it's a root. 
+
+Hmm, maybe that's the intended behavior. 
+
+Alternatively, perhaps the roots are only those nodes that are in the hierarchy (i.e., part of some triples with the prop) and have no parents. 
+
+In that case, the code using hierarchy_nodes would be better. 
+
+The problem's example is ambiguous here. 
+
+Suppose the graph contains a node E that is not part of any subClassOf triples but is a class. 
+
+Is E considered a root of the sub-class hierarchy? 
+
+Yes. Because it's a class that isn't a subclass of anything. 
+
+So the code's first approach is correct. 
+
+Therefore, the code should be the first approach. 
+
+Wait, but how to collect all_nodes correctly in rdflib? 
+
+The subjects() method returns a generator of all subjects in the graph. 
+
+Same with objects(). 
+
+So, converting those to sets is okay. 
+
+But in a large graph, this could be memory intensive. 
+
+But the problem doesn't specify performance considerations. 
+
+Therefore, the code is acceptable. 
+
+So the final code is as written above. 
+
+Wait, but in the code, the line:
+
+all_nodes = set(graph.subjects()) | set(graph.objects())
+
+But in Python, the | operator is for set union, so that's correct. 
+
+Now, in the function's return, it says "roots: a set with nodes", but the code returns roots, which is a set. 
+
+Wait, but the function is supposed to return the roots, so the code is correct. 
+
+Wait, but the parameter roots is optional. 
+
+So when called with roots=None, it creates a new set and adds the roots to it. 
+
+But if the user passes in a roots set, then the function adds the computed roots to that set. 
+
+Is that the intended behavior? 
+
+The docstring says that the roots parameter is optional, but the example doesn't use it. 
+
+Perhaps the roots parameter is for accumulating roots from different properties or something else. 
+
+But according to the code's logic, if roots is provided, then it adds to it, which may not be what the user wants. 
+
+Wait, maybe the function is supposed to return all roots regardless of the initial roots set. 
+
+Therefore, perhaps the code should replace the roots set instead of adding to it. 
+
+Wait, the docstring says:
+
+Args:
+    graph: Graph Class Object
+    prop: URIRef Class Object
+    roots: Optional list with set type
+
+Return:
+    roots: a set with nodes
+
+Hmm, the parameter roots is optional and perhaps is a starting set. 
+
+Wait, perhaps the function is designed to allow users to specify a subset of possible roots and then find the actual roots from there. 
+
+Wait, maybe the function is supposed to start from the provided roots and find their ancestors until no more are found, but that's not what the code does. 
+
+Alternatively, the roots parameter is a set of nodes that are already considered roots, and the function adds to them. 
+
+But the example doesn't use it, so perhaps the function is intended to compute all roots from scratch, ignoring the provided roots. 
+
+Wait, the problem says "roots: Optional[Set["Node"]] = None". 
+
+So perhaps the code should first check if roots is provided, and then use that as a starting point? 
+
+Hmm, maybe I misunderstood the parameter's purpose. 
+
+Wait the docstring says "roots: Optional list with set type". 
+
+Wait, maybe the roots is an optional set of possible roots, and the function can use those as a starting point. 
+
+Wait, perhaps the function is supposed to find all roots reachable from the given roots? 
+
+No, the description says "find the roots in some sort of transitive hierarchy". 
+
+Hmm, maybe the roots parameter is a set of nodes to exclude, but that's unlikely. 
+
+Alternatively, maybe the roots parameter is a set of nodes that are already known roots, and the function is supposed to find all roots that are not in that set. 
+
+But the example shows that when roots is not provided, it starts from scratch. 
+
+The function's code as written adds all roots (nodes with no parents) to the roots set. 
+
+So if the user provides a roots set, they might be adding to it, but that could be a problem. 
+
+Wait, the function's docstring doesn't specify what the roots parameter is for. 
+
+The Args section says "roots: Optional list with set type". 
+
+Wait, perhaps the roots parameter is the initial set of roots to start with, and then the function finds all roots by checking if they have any parents. 
+
+Wait, maybe the function is supposed to return all nodes that are roots, i.e., have no parents, so the roots parameter is there in case the user wants to provide some existing roots (maybe to avoid recomputing). 
+
+But in that case, the function should return the union of the provided roots and the computed ones. 
+
+But no, because the provided roots may not be actual roots. 
+
+Alternatively, perhaps the function is supposed to take an initial set of nodes (roots) and then find their ancestors? 
+
+No, that doesn't make sense. 
+
+Hmm. 
+
+The problem's function signature has roots as an optional parameter, but the docstring doesn't explain its purpose. 
+
+Looking at the example, it's called without roots. 
+
+The function's code should work as intended. 
+
+Perhaps the roots parameter is there for the sake of efficiency, so that if the user already has some roots computed, they can pass them in. 
+
+But in the code I wrote, if roots is passed, it adds to it. 
+
+Wait, but in the code, the roots set is being built by adding all nodes that have no parents. 
+
+So if the user passes a roots set, then the function would add all those nodes to it. 
+
+But that's probably not what they want. 
+
+Wait, perhaps the roots parameter is actually unused and the function should ignore it? 
+
+No, the function's signature includes it. 
+
+Alternatively, maybe the roots parameter is the set of possible candidates, and the function checks those. 
+
+Wait, maybe the function is supposed to return the intersection between the roots and the computed roots? 
+
+But that's unclear. 
+
+Alternatively, perhaps the roots parameter is a starting set, and the function finds the roots by traversing upwards from those roots. 
+
+Wait, perhaps the function is designed to find all roots that are ancestors of the given roots? 
+
+No, the example shows that when roots is not provided, it returns all roots of the hierarchy. 
+
+The problem's function signature may have a mistake. 
+
+Alternatively, perhaps the roots parameter is a set of possible nodes to exclude, but that's not clear. 
+
+Hmm, given the ambiguity, perhaps the roots parameter is there to allow the user to provide an initial set of nodes to consider as roots, but the function should ignore it and compute all roots. 
+
+But then why is it there? 
+
+Alternatively, maybe the roots parameter is for specifying a set of possible roots that the function should consider. 
+
+Wait, perhaps the function is supposed to find all nodes that are in roots and have no parents. 
+
+Wait, but that would not make sense. 
+
+The function's docstring says the return is a set of nodes. 
+
+The description says "find the roots in some sort of transitive hierarchy". 
+
+So, the roots parameter might not be needed. 
+
+Perhaps it's a mistake in the problem's function signature. 
+
+Alternatively, maybe the roots parameter is for specifying the possible starting points, and the function returns the minimal roots. 
+
+Wait, perhaps the function is supposed to start from the roots provided and find their roots? 
+
+But that's unclear. 
+
+The example given does not use roots, so perhaps the parameter is optional and can be ignored. 
+
+The function's code as written earlier works when roots is None, but if the user provides roots, the function adds the computed roots to that set. 
+
+But maybe that's not the intended behavior. 
+
+Alternatively, maybe the roots parameter is a set of nodes to exclude from the results? 
+
+But the code adds to it, so that would not be the case. 
+
+Hmm, perhaps the roots parameter is not used, but the function is supposed to return all roots. 
+
+Wait, maybe the parameter is a mistake, but since the problem requires using it, I should include it. 
+
+Alternatively, perhaps the roots parameter is for a set of nodes to check if they are roots. 
+
+Wait, perhaps the function is supposed to return the roots that are also in the provided roots set. 
+
+But that would require checking each node in roots and seeing if they have no parents. 
+
+Alternatively, maybe the roots parameter is for the starting nodes, and the function finds all the roots by traversing the hierarchy from those nodes. 
+
+Wait, but that's not clear. 
+
+The problem's function signature and docstring are a bit unclear about the roots parameter. 
+
+The example shows that it's not needed. 
+
+Perhaps the roots parameter is for specifying a set of possible nodes to check, but the function should return all roots regardless. 
+
+Wait, maybe the code should first check if roots is provided, and then return those nodes in roots that are actual roots. 
+
+But that's not what the example shows. 
+
+The example says "find_roots(graph, rdflib.RDFS.subClassOf)" returns all roots. 
+
+Therefore, the roots parameter is optional and when not provided, the function finds all possible roots. 
+
+When provided, perhaps the function only considers those roots as possible roots and checks if they are indeed roots. 
+
+Wait, but that's not clear. 
+
+Alternatively, perhaps the roots parameter is a set of nodes to exclude from the results. 
+
+But that also isn't clear. 
+
+Alternatively, perhaps the roots parameter is a set of possible roots, and the function returns the intersection between those and the actual roots. 
+
+But without knowing, perhaps the parameter is not required for the function and can be ignored. 
+
+But since the problem requires including it, I have to handle it. 
+
+The code I wrote earlier adds to the roots set. 
+
+But maybe the function is supposed to return the roots parameter's nodes that are indeed roots. 
+
+Alternatively, maybe the function is supposed to start from the roots and find their children. 
+
+No, that doesn't make sense. 
+
+Alternatively, perhaps the roots parameter is for specifying a set of nodes to consider as roots, and the function returns that set. 
+
+But that would ignore the computation, so that can't be. 
+
+Hmm, perhaps the roots parameter is the initial set of roots to start with. 
+
+Wait, maybe the function is supposed to find all nodes that are roots, but if the user provides roots, then it only returns those roots that are indeed roots (i.e., have no parents). 
+
+So the function would return the intersection between roots and the computed roots. 
+
+But how would that work? 
+
+Alternatively, perhaps the roots parameter is to provide a starting set of nodes, and the function returns those nodes that are roots in the hierarchy. 
+
+Wait, but the function's docstring says "returns a set of all roots". 
+
+So the parameter may not be used, but the problem requires including it. 
+
+Perhaps the roots parameter is for specifying the possible roots to consider. 
+
+Wait, maybe the function is supposed to find the minimal set of roots that are the top of the hierarchy, and the roots parameter allows the user to pass in a set of candidate roots. 
+
+Hmm, but the code I wrote earlier does not use the roots parameter except to add to it. 
+
+Wait, the function's code adds to the roots set passed in. 
+
+That might not be the correct approach. 
+
+Wait, perhaps the roots parameter is an optional starting set. 
+
+Wait, maybe the function is supposed to return the union of the provided roots and the computed ones. 
+
+But then, if the user provides a roots set with some nodes that are not actually roots, they would still be included. 
+
+Hmm, perhaps the function is supposed to find all roots, and the roots parameter is for the case where the user already has some roots and wants to add the computed ones to it. 
+
+So the function returns the provided roots plus the computed ones. 
+
+But in that case, the code is okay. 
+
+Alternatively, the roots parameter is for the case where the user wants to specify a set of possible roots, and the function checks if they are indeed roots. 
+
+Wait, but in that case, the code would need to process the roots parameter. 
+
+But the current code adds to it regardless. 
+
+Hmm, perhaps the parameter is for the user to provide a set of nodes that they consider roots, and the function returns all roots (including those provided, but only if they are indeed roots). 
+
+Wait, but that would require checking each node in the roots parameter, and adding only those that are roots. 
+
+Alternatively, maybe the roots parameter is for specifying a set of nodes to exclude. 
+
+But I'm not sure. 
+
+Given the ambiguity, perhaps the parameter is not used except to initialize the return set. 
+
+Wait, looking at the problem's function signature again: 
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+
+The docstring says that the roots parameter is an optional list with set type. 
+
+Wait, "list with set type" might be a typo, since roots is a set. 
+
+Perhaps the function's purpose is to allow the user to provide an initial set of roots, and the function will check if those are indeed roots, but also find any others. 
+
+Alternatively, perhaps the roots parameter is a set of nodes to exclude from being considered as roots. 
+
+But without more info, I think the best approach is to proceed with the code that computes all nodes with no parent (using the prop) and return them. 
+
+The roots parameter is perhaps a way to have the function add to an existing set. 
+
+So the code I wrote earlier is okay. 
+
+Therefore, the code is as follows. 
+
+Wait, but in the code, the function returns the roots set. 
+
+If the user provides a roots set, then the function adds all computed roots to it. 
+
+But if the user wanted to pass in their own roots, perhaps they want to append. 
+
+Alternatively, maybe the roots parameter is for specifying the starting nodes, and the function returns the minimal roots among them. 
+
+But that would be different. 
+
+Hmm, given that the problem's example doesn't use the roots parameter, and the function is supposed to find all roots, perhaps the roots parameter is for an initial set of nodes to consider as roots, but the function's job is to find all roots regardless. 
+
+Wait, perhaps the code should first check the provided roots, then compute the rest. 
+
+Wait, maybe the roots parameter is a set of nodes that are already known to be roots, and the function should return that set plus any other roots found. 
+
+In that case, the code is correct. 
+
+Alternatively, perhaps the roots parameter is to specify the nodes to check for being roots. 
+
+In that case, the function would return the intersection between roots and the nodes that have no parents. 
+
+But that's not what the example shows. 
+
+The example shows that when not provided, it returns all roots. 
+
+Therefore, the roots parameter is probably an optional set to start with. 
+
+The function should return the roots (the set of nodes with no parents) whether or not roots was provided. 
+
+Wait, but in the code, if roots is provided, it adds to it, so the return set would include those nodes. 
+
+Hmm, perhaps the parameter is a mistake, but given the problem's requirement, I have to include it. 
+
+Alternatively, maybe the roots parameter is for specifying the nodes to exclude. 
+
+But that's not clear. 
+
+The function's docstring says "roots: Optional list with set type". 
+
+Wait, maybe the roots parameter is for specifying the possible candidates to check. 
+
+So the function would iterate over the roots parameter and check if they have parents, then return those that don't. 
+
+But that would require a different approach. 
+
+Wait, perhaps the function is supposed to return the roots parameter's nodes that are indeed roots. 
+
+But that would not make sense with the example. 
+
+The example says that when not passing roots, it returns all roots. 
+
+So the parameter is optional, and when provided, perhaps it's used to limit the search to those nodes. 
+
+Alternatively, maybe the function is supposed to start with the given roots and find their parents until no more. 
+
+Wait, but that's unclear. 
+
+Given the ambiguity, perhaps the best way is to ignore the roots parameter and compute all roots. 
+
+But the problem requires the function signature to include it, so we must handle it. 
+
+Alternatively, perhaps the roots parameter is for the case where the hierarchy is rooted at those nodes, so the function returns the roots provided plus any other roots found. 
+
+Hmm, perhaps the function's code should first check the provided roots, and then also add any nodes not in roots that are also roots. 
+
+Wait, but that's not clear. 
+
+The problem's example doesn't use roots, so perhaps the parameter is unused except for the default case. 
+
+Wait, the code as I wrote earlier initializes roots as set() if None. 
+
+Then, computes all roots and adds them to roots. 
+
+Therefore, the roots parameter is for providing an existing set to add to. 
+
+Like, if the user has multiple properties and wants to combine the roots, they can pass in a set. 
+
+But that's a possible use case. 
+
+Therefore, the code is correct. 
+
+Now, let me think about possible errors. 
+
+Wait, in the code, the all_nodes is set(graph.subjects()) | set(graph.objects()). 
+
+But in rdflib, the subjects() and objects() methods without arguments return all subjects and objects of all triples, not just those with prop. 
+
+Therefore, all_nodes includes all nodes in the graph, not just those in the hierarchy. 
+
+But as discussed earlier, that's correct because a node not in any hierarchy triples can still be a root if it has no parent. 
+
+So the code is correct. 
+
+Therefore, the code should be as written. 
+
+Wait, but in the code, the line:
+
+if not list(graph.triples((node, prop, None))):
+
+Is that the correct way to check for any triples where node is the subject and the predicate is prop? 
+
+Yes, because if there are any such triples, the list will not be empty. 
+
+Therefore, that's correct. 
+
+Thus, the final code is as written. 
+
+Wait, but in the function signature, the roots parameter is an Optional[Set[Node]], so the user can pass in a set. 
+
+The code is correct in handling that. 
+
+Therefore, the code is okay. 
+
+Now, I need to make sure that the code uses the right imports and types. 
+
+Wait, the function is using "Node" as the type. 
+
+But in rdflib, the nodes can be URIRef, BNode, or Literal. 
+
+But the problem's function signature says "Node" in quotes, probably indicating that it's a type from the rdflib module. 
+
+The code uses "Node" as the type in the set, but in Python, since it's in quotes, maybe it's just a placeholder. 
+
+The code should work as long as the graph contains nodes that are instances of the rdflib's Node (like URIRef or BNode). 
+
+But perhaps the user expects the roots to be only those nodes that are part of the hierarchy (i.e., they are either a subject or object in a triple with the given prop). 
+
+Because otherwise, if a node is not in any such triples, it's not part of the hierarchy, but would still be considered a root. 
+
+But according to the problem's example, that's correct. 
+
+So the code is okay. 
+
+Another possible point: the function returns the roots set, which could be modified in-place. 
+
+But the function is designed to add to the roots set. 
+
+So that's okay. 
+
+Therefore, the code should be as written. 
+
+Wait, but in the code, the line for all_nodes is a set of all subjects and objects in the graph. 
+
+But in rdflib, the subjects() and objects() methods return all subjects/objects of all triples, not just those with the given prop. 
+
+So that's correct. 
+
+Therefore, the code is correct. 
+
+Hmm. 
+
+Okay, I think I've thought through it enough. The code should be:
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+    if roots is None:
+        roots = set()
+    all_nodes = set(graph.subjects()) | set(graph.objects())
+    for node in all_nodes:
+        if not list(graph.triples((node, prop, None))):
+            roots.add(node)
+    return roots

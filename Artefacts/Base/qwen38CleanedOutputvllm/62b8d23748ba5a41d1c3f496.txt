@@ -1,0 +1,40 @@
+def lfu_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Frequently Used (LFU)
+    algorithm.
+    """
+    class LFUCache:
+        def __init__(self, maxsize, typed):
+            self.maxsize = maxsize
+            self.typed = typed
+            self.cache = {}
+            self.freq = {}
+            self.order = []
+
+        def __call__(self, func):
+            def wrapper(*args, **kwargs):
+                if self.typed:
+                    key = (args, tuple(sorted(kwargs.items())))
+                else:
+                    normalized_args = tuple(str(arg) for arg in args)
+                    normalized_kwargs = tuple((k, str(v)) for k, v in kwargs.items())
+                    key = (normalized_args, normalized_kwargs)
+                if key in self.cache:
+                    self.freq[key] += 1
+                    return self.cache[key]
+                if len(self.cache) >= self.maxsize:
+                    min_freq = min(self.freq.values())
+                    candidates = [k for k in self.cache if self.freq[k] == min_freq]
+                    for k in self.order:
+                        if k in candidates:
+                            del self.cache[k]
+                            del self.freq[k]
+                            self.order.remove(k)
+                            break
+                self.cache[key] = func(*args, **kwargs)
+                self.freq[key] = 1
+                self.order.append(key)
+                return self.cache[key]
+            return wrapper
+    return LFUCache(maxsize, typed)

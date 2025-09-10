@@ -1,0 +1,772 @@
+
+Okay, I need to create a Python decorator called ttl_cache that memoizes function results with an LRU algorithm and a TTL. Let me think about how to approach this.
+
+First, the parameters: maxsize is the maximum number of entries in the cache, ttl is the time each entry stays, timer is a function to get the current time (defaulting to time.monotonic), and typed determines if different types of arguments are considered distinct.
+
+The standard way to implement an LRU cache is using an OrderedDict or a similar structure that keeps track of the order of insertion. But since we also need to handle TTL, I'll need to track the time each entry was added and check if it's expired.
+
+Wait, but the built-in functools.lru_cache doesn't support TTL. So I need to implement a custom cache. Maybe I can use a dictionary to store the cached values along with their timestamps. Then, before returning a cached value, check if it's still within the TTL.
+
+But how to manage the LRU aspect? The OrderedDict can help by moving accessed items to the end, so that the least recently used items are at the front. When the cache exceeds maxsize, we can remove the oldest items, but also check if they are expired.
+
+Hmm, but when a key is accessed, it should be marked as recently used. So, every time a key is retrieved, it's moved to the end of the OrderedDict. When adding a new key, if the cache is full, we remove the first item (the least recently used) unless it's expired. Wait, no, maybe I should check for expired items when the cache is full, but also periodically clean up expired items.
+
+Alternatively, maybe I can use a separate thread to clean up expired items, but that might complicate things. For simplicity, perhaps I'll check the TTL each time a value is accessed and remove expired entries when necessary.
+
+Wait, but the decorator needs to be efficient. So maybe I should have a way to track the expiration times. Let me think about the structure. The cache can be a dictionary where each key maps to a tuple of (value, timestamp). Then, whenever a key is accessed, I check if the current time minus the timestamp is greater than ttl. If so, remove it from the cache.
+
+But for the LRU part, I need to track the order of access. So combining an OrderedDict with the timestamps. However, OrderedDict's move_to_end method can be used to mark an item as recently used. So, when a key is accessed, move it to the end. When adding a new key, if the cache is over maxsize, pop the first item (the least recently used) and check if it's expired. Wait, but maybe some items in the cache are already expired. So perhaps I should clean up expired items before adding a new one, or during access.
+
+Another approach is to have a background thread that periodically cleans up expired items. But that might be overkill for a decorator. Maybe better to handle it during access or when adding new items.
+
+So, the steps for the decorator:
+
+1. When the function is called, check if the arguments are in the cache.
+2. If they are, check if the entry is still valid (current time - timestamp <= ttl).
+3. If valid, return the value and move the key to the end of the OrderedDict (to mark as recently used).
+4. If not valid, remove the entry and proceed to compute the value.
+5. If the arguments are not in the cache, compute the value, store it in the cache with the current timestamp, and add to the OrderedDict.
+6. If the cache exceeds maxsize, remove the least recently used items, but only if they are expired. Wait, no—LRU is about the order of access, regardless of TTL. So even if an item is expired, it's still part of the LRU order. But when we add a new item, we might need to evict the least recently used, which could be expired. However, the TTL is a per-item thing, so even if an item is not the least recently used, it might have expired and should be removed.
+
+This suggests that the cache needs to be cleaned up regularly. But how to do that without a separate thread? Maybe each time a function is called, before checking the cache, we first remove all expired entries. That could be inefficient if there are many expired items, but for a decorator, it's manageable.
+
+Wait, but if the cache is large and many items are expired, this could slow down the function calls. However, given that the user is using a cache with TTL, it's a trade-off. Alternatively, we can check the TTL only when accessing the cache, and during eviction, check if the items are expired.
+
+So, here's a plan:
+
+- Use a dictionary (cache) to store the arguments as keys and their (value, timestamp) as values.
+- Use an OrderedDict (or a regular dict with a list to track order) to maintain the LRU order.
+- When a function is called, first check if the arguments are in the cache. If they are, check their timestamp. If expired, remove them from the cache and OrderedDict.
+- If the arguments are not in the cache, compute the value, add it to the cache with the current timestamp, and add to the OrderedDict.
+- When adding a new item, if the cache size exceeds maxsize, remove the least recently used items (from the front of the OrderedDict) until the size is within maxsize. However, during this process, if an item is expired, it can be removed immediately.
+
+Wait, but the OrderedDict's order is based on access time. So, when an item is accessed, it's moved to the end. When adding new items, if the cache is full, we remove the first item (the least recently used). However, that first item might have expired. So during the eviction process, we need to check if it's expired and remove it if so. But how to handle that?
+
+Alternatively, when checking the cache, we first clean up any expired entries. That way, the OrderedDict only contains valid entries. But then, when adding new entries, we can just check the size and evict the LRU if needed.
+
+So, the steps could be:
+
+Each time the function is called:
+
+- Clean up the cache by removing all expired entries. This can be done by iterating through the OrderedDict and checking each entry's timestamp. But that's O(n) each time, which might be slow for large caches. However, given that the maxsize is 128 by default, it's acceptable.
+
+Wait, but if we clean up every time the function is called, that might be expensive. Maybe a better approach is to check for expiration when accessing the cache, and during eviction.
+
+Alternatively, we can have a separate list to track the order, and when checking the cache, first check if the entry is expired. If it is, remove it from both the cache and the order list.
+
+So, here's an outline of the code:
+
+Use a dictionary (cache) and a list (order) to track the order. But maintaining the order list could be tricky. Alternatively, use an OrderedDict where each entry is (args, (value, timestamp)), but the OrderedDict's order is based on the last access time.
+
+Wait, maybe using an OrderedDict is better. Each time a key is accessed, move it to the end. When adding a new key, if the size exceeds maxsize, pop the first item (LRU). However, during that process, we need to check if the popped item is expired. But if we clean up expired items before adding new ones, that might help.
+
+But how to handle the case where an item is not the LRU but has expired? For example, if the cache is full and there's an item in the middle that's expired. That item would still be in the cache, but when it's accessed, it would be checked and removed.
+
+So perhaps, during each function call, before checking the cache, we first remove all expired items. That way, the cache only contains valid entries, and the LRU order is maintained correctly.
+
+But how to efficiently do that? Let's think:
+
+The OrderedDict can be used to track the order. When we add an entry, we append it to the end. When we access an entry, we move it to the end. When we need to evict, we check the first item and remove it if it's expired. However, this might not be sufficient because there might be expired items further in the list. So, during each function call, before checking the cache, we need to scan the OrderedDict and remove any expired entries.
+
+But scanning the entire OrderedDict each time could be slow. However, with a small maxsize, it's manageable.
+
+So, the plan is:
+
+- The decorator will have a cache (a dictionary) and an OrderedDict to track the order of insertion/access.
+- For each function call, generate a key based on the arguments (considering typed if needed).
+- Check if the key is in the cache. If it is, check if it's expired. If expired, remove it from the cache and OrderedDict.
+- If the key is not in the cache or is expired, compute the value, add it to the cache with the current timestamp, and add to the OrderedDict.
+- If the cache size exceeds maxsize, remove the least recently used items (from the front of the OrderedDict) until the size is within maxsize. However, during this process, if an item is expired, it can be removed immediately, which might allow us to evict more than one item if needed.
+
+Wait, but the OrderedDict's order is based on insertion/access order. So, when evicting, we need to check the first items in the OrderedDict and remove them if they are expired. However, if the first item is not expired, we can't evict it. So, the eviction process might not be able to remove all expired items, but that's okay because they will be removed when accessed.
+
+Alternatively, when adding a new item, we first check if the cache is full. If it is, we loop through the OrderedDict and remove the first item (LRU) if it's expired. If not, we can't evict it, so we need to add the new item and maybe not evict anything, which would exceed the maxsize. That's not correct.
+
+Hmm, this seems tricky. Maybe the correct approach is to have a background process that periodically checks and removes expired items. But that's not straightforward in a decorator. Alternatively, during each function call, before adding a new item, check for expired items and remove them first. Then, if the cache is still full, proceed with LRU eviction.
+
+But how to implement this? Let's think about the steps again.
+
+The decorator needs to wrap the function. Let's create a class-based decorator that uses an OrderedDict to track the order and a dictionary to track the values and timestamps.
+
+Wait, maybe using a class with __call__ method would be better. The decorator can be a class instance that holds the cache and order.
+
+So, the code structure would be:
+
+import time
+from functools import wraps
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Generate key based on args and kwargs
+            key = (args, tuple(sorted(kwargs.items())))
+            if typed:
+                key = (tuple(type(arg) for arg in args), key)
+            # Check if key is in cache and not expired
+            now = timer()
+            if key in cache:
+                value, timestamp = cache[key]
+                if now - timestamp <= ttl:
+                    # Move to end to mark as recently used
+                    order.move_to_end(key)
+                    return value
+                else:
+                    # Expired, remove from cache and order
+                    del cache[key]
+                    order.pop(key)
+            # Compute the value
+            value = func(*args, **kwargs)
+            # Add to cache
+            cache[key] = (value, now)
+            order[key] = None  # Just to keep the order, the value doesn't matter
+            # If cache exceeds maxsize, evict LRU items
+            while len(cache) > maxsize:
+                # Get the first item (LRU)
+                lru_key = order.popitem(last=False)
+                # Check if it's expired, if not, maybe we can't evict it?
+                # Wait, but if we have to evict, even if it's not expired, but that's not right.
+                # So, perhaps during eviction, we can only remove expired items, but if there are none, then we can't evict. But that would cause the cache to exceed maxsize. So that's not acceptable.
+
+                # So, perhaps the eviction is done based on LRU, regardless of TTL. But then, the TTL is just a way to invalidate entries, but the LRU is still maintained.
+
+                # Wait, the LRU eviction is based on the order, not on TTL. So even if an item is not expired, it's evicted if it's the LRU. But that's not correct because the TTL is a time-based eviction. So the LRU and TTL are two separate eviction mechanisms.
+
+                # So, when the cache is full, we need to evict the LRU item, regardless of its TTL. But that's not right, because if that item is still valid, we shouldn't evict it. However, the TTL is per-item, so even if it's not the LRU, it might have expired. But the LRU eviction is only when the cache is full. So perhaps during eviction, we check if the LRU item is expired. If it is, remove it. If not, then we can't evict it, but that would mean the cache is full. Hmm, that's a problem.
+
+                # Maybe the correct approach is to allow the cache to grow beyond maxsize if there are expired items. But that's not efficient.
+
+                # Alternatively, when adding a new item, first check for expired items and remove them. Then, if the cache is still over maxsize, evict LRU items. But this would ensure that the cache is cleaned up before adding new items.
+
+                # So, during the wrapper function:
+
+            # So, before adding the new item, clean up expired entries
+            # But how to do that?
+
+            # Let me think again. Maybe during each function call, first clean up the cache by removing all expired entries. Then proceed with checking the cache.
+
+            # So, inside the wrapper, before anything else, we clean up expired entries.
+
+            # But how to do that? Iterate through the order and check each entry's timestamp.
+
+            # Let's adjust the code:
+
+            # Clean up expired entries
+            now = timer()
+            to_remove = []
+            for key in order:
+                if now - cache[key][1] > ttl:
+                    to_remove.append(key)
+            for key in to_remove:
+                del cache[key]
+                order.pop(key)
+            # Now, check if the key is in cache
+            if key in cache:
+                value, timestamp = cache[key]
+                order.move_to_end(key)
+                return value
+            # Compute value and add to cache
+            value = func(*args, **kwargs)
+            cache[key] = (value, now)
+            order[key] = None
+            # Now, check if cache exceeds maxsize
+            while len(cache) > maxsize:
+                # Evict the LRU item
+                lru_key = order.popitem(last=False)
+                del cache[lru_key]
+            return value
+        # Initialize the cache and order
+        cache = {}
+        order = OrderedDict()
+        return wrapper
+    return decorator
+
+Wait, but in this approach, when we clean up expired entries, we iterate through the order. However, the order may have keys that are not in the cache anymore. Because when we remove from the cache, we also need to remove from the order. But in the code above, during the cleanup, we check for keys in order and see if they are in cache. Wait, no. The order is maintained in sync with the cache. So when a key is removed from the cache, it's also removed from the order. So the for loop over order would only include keys that are in the cache.
+
+But in the code above, the 'to_remove' list is built by checking each key in order. But if during the cleanup, we remove some keys from the cache and order, then the order will be updated accordingly.
+
+But this approach may not be efficient because it's scanning the entire order every time. However, with small maxsize, it's acceptable.
+
+Another problem: the key generation. The original lru_cache uses a tuple of args and kwargs, but with typed=False, different types are considered same. Wait, the docstring says that the 'typed' parameter determines if different types of arguments are considered distinct. So, for example, if the function is called with 1 and 1.0, and typed is True, they are considered different keys. If False, same.
+
+So, the key generation should take into account the typed parameter. How to generate the key?
+
+In the standard lru_cache, the key is generated by converting the arguments into a tuple, and for typed, the types are considered. So, for the key, if typed is True, then the types of the arguments are part of the key. Otherwise, they are not.
+
+So, the code for generating the key would be:
+
+if typed:
+    key = (tuple(type(arg) for arg in args), args, tuple(sorted(kwargs.items())))
+else:
+    key = (args, tuple(sorted(kwargs.items())))
+
+Wait, but the standard approach is to use the arguments as part of the key, and for typed, include the types. So, perhaps:
+
+key = (args, tuple(sorted(kwargs.items())))
+if typed:
+    key = (tuple(type(arg) for arg in args), key)
+
+But I need to make sure that the key is unique for different types. For example, if the function is called with (1, 2) and (1.0, 2.0), then with typed=True, these are different keys.
+
+So, the key generation should be similar to how functools.lru_cache does it, but with the typed parameter.
+
+But how to handle the key generation correctly. Let's think about the standard lru_cache's key generation. It uses the parameters, and if typed is True, it includes the type of each argument.
+
+So, perhaps the key should be generated as follows:
+
+key = (args, tuple(sorted(kwargs.items())))
+if typed:
+    key = (tuple(type(arg) for arg in args), key)
+
+But this may not be correct. Wait, the standard lru_cache's key is a tuple of the arguments, with each argument's type considered if typed is True. So for example, if the function is called with (1, 2) and (1.0, 2.0), then with typed=True, the keys are different.
+
+But how to implement that. Let me think: for the args, we can create a tuple of the arguments, and if typed is True, we also include the types. For kwargs, we can create a tuple of sorted items, and if typed is True, include the types of the values.
+
+Wait, no. The typed parameter in lru_cache affects whether different types of arguments are considered distinct. So, for example, if the function is called with (1, 2) and (1.0, 2.0), then with typed=True, these are different keys. But if typed=False, they are considered the same.
+
+So, for args, when typed is True, each argument's type is part of the key. For kwargs, the same applies to the values. So, the key for the arguments would be a tuple of (arg, type(arg)) for each arg, and for kwargs, (key, value, type(value))?
+
+Wait, no. The standard lru_cache's typed parameter is for the function's parameters. So, for example, if the function is called with different types for the same value, and typed is True, they are considered different. So, for args, the key includes the type of each argument. For kwargs, the same applies to the values.
+
+So, in code, to generate the key:
+
+if typed:
+    args_key = tuple((arg, type(arg)) for arg in args)
+    kwargs_key = tuple(sorted((k, v, type(v)) for k, v in kwargs.items()))
+else:
+    args_key = args
+    kwargs_key = tuple(sorted(kwargs.items()))
+
+Then, the key is (args_key, kwargs_key). But how to handle this properly.
+
+Alternatively, perhaps the key is generated by the same method as lru_cache, but modified to include types if needed.
+
+But I'm not sure. Let me check the functools.lru_cache source code. Well, the key is generated by converting the arguments into a tuple, and for each argument, if typed is True, the type is considered. So, for example, if the function is called with 1 and 1.0, then the keys are different.
+
+So, for the key, the code can be:
+
+key = (args, tuple(sorted(kwargs.items())))
+if typed:
+    key = (tuple(type(arg) for arg in args), key)
+
+Wait, that might not be sufficient. For example, if the args are (1, 2) and (1.0, 2.0), then the args tuple would be (1, 2) vs (1.0, 2.0). But if typed is True, the first part of the key is (int, int), and the second part is (1, 2). For the second case, the first part is (float, float), and the second part is (1.0, 2.0). So the keys are different. That's correct.
+
+But for the kwargs, the values' types are not considered. Wait, no. The typed parameter in lru_cache affects whether the types of the arguments are considered. For example, if a function is called with a=1 and a=1.0, then with typed=True, these are different keys. So in the key generation, the args and kwargs are converted into tuples that include the types.
+
+But how to generate the key correctly. Let me think: the standard way is to use the parameters as keys, and for typed, include the type of each parameter. So for args, each argument is converted into a tuple (arg, type(arg)), and for kwargs, each key-value pair is (key, value, type(value))? Or maybe just (key, value) if typed is False, and (key, value, type(value)) if typed is True?
+
+Wait, the typed parameter in lru_cache is for the parameters. So, if two calls have the same parameter names and values but different types, they are considered different. For example, if the function is f(a=1) and f(a=1.0), then with typed=True, these are different keys. But in the case of args, the types of the arguments are considered. For kwargs, the types of the values are considered.
+
+So, for the key generation, when typed is True, the key is a tuple of (arg, type(arg)) for each positional argument, and (key, value, type(value)) for each keyword argument. Then, the key is the combination of these.
+
+But how to implement that. Maybe:
+
+def make_key(args, kwargs, typed):
+    key = args
+    if typed:
+        key = tuple((arg, type(arg)) for arg in args)
+    else:
+        key = args
+    # For kwargs, similar approach
+    kw_items = sorted(kwargs.items())
+    if typed:
+        kw_key = tuple((k, v, type(v)) for k, v in kw_items)
+    else:
+        kw_key = tuple((k, v) for k, v in kw_items)
+    return (key, kw_key)
+
+Wait, but in the standard lru_cache, the key is generated by combining the args and the sorted kwargs items. So, the key is (args, tuple(sorted(kwargs.items()))). If typed is True, then each argument is converted into a tuple (arg, type(arg)), and each keyword argument is (key, value, type(value))? Or is it (key, value) with types considered?
+
+Actually, the functools.lru_cache's key is generated by using the parameters, and if typed is True, then different types are considered different. For example, if the function is called with (1, 2) and (1.0, 2.0), then with typed=True, these are different keys. But for keyword arguments, the same applies. So, for a keyword argument, the value's type is considered if typed is True.
+
+So, to generate the key, for each argument, if typed is True, we need to include the type. For positional arguments, that's straightforward. For keyword arguments, the values' types are considered.
+
+So, perhaps the code for generating the key is:
+
+key = args
+if typed:
+    key = tuple((arg, type(arg)) for arg in args)
+else:
+    key = args
+
+kw_items = sorted(kwargs.items())
+if typed:
+    kw_key = tuple((k, v, type(v)) for k, v in kw_items)
+else:
+    kw_key = tuple((k, v) for k, v in kw_items)
+
+full_key = (key, kw_key)
+
+But in Python, tuples are hashable, so this can be used as the key in the cache.
+
+But this might be a bit complicated. Alternatively, using the same approach as lru_cache, which uses the parameters and their types if typed is True. So, perhaps using the same method as in the lru_cache source code.
+
+But I'm not sure. Let me think of an example. Suppose the function is decorated with typed=False. Then, f(1, 2) and f(1.0, 2.0) would have the same key. But with typed=True, different keys.
+
+So, in the code, the key should be generated as:
+
+key = (args, tuple(sorted(kwargs.items())))
+if typed:
+    key = (tuple(type(arg) for arg in args), key)
+
+Wait, but that would make the key a tuple of (types of args, (args, sorted kwargs)), which would be different if the types of args are different. But for the kwargs, the values' types are not considered. Hmm, maybe not. Because in the standard lru_cache, the typed parameter affects whether the types of the arguments are considered. So for the args, if typed is True, the type is part of the key. For kwargs, the same applies to the values.
+
+So, perhaps the code should generate the key by combining the args and kwargs with their types if typed is True. So:
+
+def get_key(args, kwargs, typed):
+    key_parts = []
+    for arg in args:
+        if typed:
+            key_parts.append((arg, type(arg)))
+        else:
+            key_parts.append(arg)
+    key_args = tuple(key_parts)
+    key_kwargs = []
+    for k, v in sorted(kwargs.items()):
+        if typed:
+            key_kwargs.append((k, v, type(v)))
+        else:
+            key_kwargs.append((k, v))
+    return (key_args, tuple(key_kwargs))
+
+But then, the key is a tuple of (key_args, key_kwargs). However, this might not be the same as the standard lru_cache. Let me check.
+
+In the standard lru_cache, the key is generated by:
+
+key = (args, tuple(sorted(kwargs.items())))
+
+But with typed=True, the key is generated by including the type of each argument. So, for args, each element is (arg, type(arg)), and for kwargs, each (k, v, type(v))?
+
+Not sure. Maybe the best way is to refer to how lru_cache does it. But since I can't look it up, I need to think carefully.
+
+Alternatively, the code can use the same key generation as lru_cache, but with the typed parameter. For example, the key is a tuple of the arguments and the sorted kwargs items, but when typed is True, the types are part of the key.
+
+So, for the key:
+
+key = (args, tuple(sorted(kwargs.items())))
+if typed:
+    key = (tuple(type(arg) for arg in args), key)
+
+But this may not capture the types of the keyword arguments. For example, if a keyword argument has a value of different type, but same name and value, then with typed=True, they should be considered different. However, in this code, the keyword arguments are stored as (k, v) in the tuple, but not the type. So, this approach is incorrect.
+
+Therefore, the correct way is to generate the key by including the types of all parameters, both positional and keyword.
+
+So, for positional arguments, each arg is converted into (arg, type(arg)) if typed is True. For keyword arguments, each (k, v, type(v)) if typed is True. Then, the key is a tuple of these processed args and kwargs.
+
+But how to handle that in code. Let me think:
+
+args_key = args
+if typed:
+    args_key = tuple((arg, type(arg)) for arg in args)
+else:
+    args_key = args
+
+kwargs_key = tuple(sorted(kwargs.items()))
+if typed:
+    kwargs_key = tuple((k, v, type(v)) for k, v in kwargs_key)
+else:
+    kwargs_key = tuple((k, v) for k, v in kwargs_key)
+
+full_key = (args_key, kwargs_key)
+
+But this may not be correct. Because the original lru_cache uses the parameters as-is, but with typed=True, the types are considered. So, for example, if the function is called with (1, 2) and (1.0, 2.0), the args_key would be ( (1, int), (2, int) ) and ( (1.0, float), (2.0, float) ), which are different.
+
+For keyword arguments, if the function is called with a=1 and a=1.0, then the kwargs_key would be ( ('a', 1, int) ) vs ( ('a', 1.0, float) ), which are different. That's correct.
+
+So, the key generation would be:
+
+key = (args, tuple(sorted(kwargs.items())))
+if typed:
+    key = (tuple(type(arg) for arg in args), key)
+else:
+    key = (args, tuple(sorted(kwargs.items())))
+
+Wait, no. That would not be correct. Because the args are part of the key, but if typed is True, we need to include their types. So, the code should generate a key that is a tuple of (args with types if typed, kwargs with types if typed).
+
+So, perhaps:
+
+key_parts = list(args)
+if typed:
+    key_parts = [(arg, type(arg)) for arg in args]
+else:
+    key_parts = list(args)
+
+kw_parts = sorted(kwargs.items())
+if typed:
+    kw_parts = [(k, v, type(v)) for k, v in kw_parts]
+else:
+    kw_parts = [(k, v) for k, v in kw_parts]
+
+key = (tuple(key_parts), tuple(kw_parts))
+
+But this is getting complicated. Maybe I can use the same approach as the lru_cache's key generation, but with a modification for the typed parameter.
+
+Alternatively, use the same method as in the lru_cache's source code. For example, the key is generated by converting the arguments into a tuple, and if typed is True, then the types are considered.
+
+But I think the correct way is to generate the key as a tuple of the arguments, with each argument's type included if typed is True, and similarly for the keyword arguments.
+
+So, in code, the key can be generated as follows:
+
+key = ()
+if typed:
+    key = tuple(type(arg) for arg in args)
+else:
+    key = args
+key += tuple(sorted(kwargs.items()))
+if typed:
+    key = (key, tuple(type(v) for v in kwargs.values()))
+else:
+    key = (key, tuple(kwargs.values()))
+
+Wait, no. That's not right. Maybe the key is a tuple of the arguments, with each argument being (arg, type(arg)) if typed is True. For keyword arguments, each (k, v, type(v)) if typed is True.
+
+But how to combine them. Let me think of the code:
+
+key = []
+for arg in args:
+    if typed:
+        key.append( (arg, type(arg)) )
+    else:
+        key.append( arg )
+key = tuple(key)
+
+kw_key = []
+for k, v in sorted(kwargs.items()):
+    if typed:
+        kw_key.append( (k, v, type(v)) )
+    else:
+        kw_key.append( (k, v) )
+kw_key = tuple(kw_key)
+
+full_key = (key, kw_key)
+
+Yes, that would work. So, in the code, the key is generated by processing each argument and keyword argument with their types if typed is True.
+
+But how to implement this in Python. Let's code that.
+
+Now, back to the main problem: the cache and order.
+
+So, the code for the decorator would need to:
+
+- Maintain an OrderedDict to track the order of insertion/access.
+- Maintain a dictionary (cache) that maps the key to (value, timestamp).
+
+Each time the function is called:
+
+1. Generate the key based on args and kwargs, considering the typed parameter.
+2. Clean up the cache by removing all expired entries. To do this, iterate through the OrderedDict and check each entry's timestamp. If expired, remove from cache and order.
+3. Check if the key is in the cache. If yes, return the value and move it to the end of the OrderedDict.
+4. If not, compute the value, add to the cache with current timestamp, and add to the OrderedDict.
+5. If the cache size exceeds maxsize, evict the LRU items (from the front of the OrderedDict) until the size is within maxsize.
+
+But during the cleanup step, we need to check all entries in the OrderedDict. However, if we have a large number of entries, this could be slow. But given that the maxsize is 128, it's manageable.
+
+Now, implementing this.
+
+Wait, but the OrderedDict may have keys that are not in the cache anymore. Because when we remove from the cache, we also need to remove from the OrderedDict. So, during the cleanup, we need to check each key in the OrderedDict and see if it's present in the cache. But that's redundant. Alternatively, the OrderedDict is kept in sync with the cache. So, when a key is removed from the cache, it's also removed from the OrderedDict.
+
+But in the code above, during the cleanup, we loop through the order, and for each key, check if it's in the cache. If it's not, skip. Wait, but the order and cache are in sync. So, when a key is removed from the cache, it's also removed from the order. Therefore, during the cleanup, the order contains only keys present in the cache.
+
+But how to ensure that. Let's think: when a key is added to the cache, it's also added to the order. When a key is removed from the cache, it's also removed from the order. So, the order is a subset of the cache's keys. Therefore, during the cleanup, we can iterate through the order and check if the entry is expired.
+
+Wait, but the order is an OrderedDict. So, during the cleanup, we can iterate through the order's keys and check their timestamps in the cache. If expired, remove them from both.
+
+But this would require that the order and cache are in sync. So, during the cleanup, for each key in order, check if it's in cache. If it is, check the timestamp. If expired, remove from both.
+
+But this could be done as:
+
+now = timer()
+to_remove = []
+for key in list(order.keys()):
+    if now - cache[key][1] > ttl:
+        to_remove.append(key)
+for key in to_remove:
+    del cache[key]
+    del order[key]
+
+But then, after removing those keys, the order is updated. Then, after that, proceed to check if the current key is in the cache.
+
+But this approach would clean up all expired entries each time the function is called. That might be inefficient, but acceptable for small maxsize.
+
+So, integrating this into the code.
+
+Now, the code:
+
+import time
+from functools import wraps
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Generate key
+            key = []
+            for arg in args:
+                if typed:
+                    key.append( (arg, type(arg)) )
+                else:
+                    key.append( arg )
+            key = tuple(key)
+            kw_key = []
+            for k, v in sorted(kwargs.items()):
+                if typed:
+                    kw_key.append( (k, v, type(v)) )
+                else:
+                    kw_key.append( (k, v) )
+            kw_key = tuple(kw_key)
+            full_key = (key, kw_key)
+            
+            # Clean up expired entries
+            now = timer()
+            to_remove = []
+            for k in list(order.keys()):
+                if now - cache[k][1] > ttl:
+                    to_remove.append(k)
+            for k in to_remove:
+                del cache[k]
+                del order[k]
+            
+            # Check if key is in cache
+            if full_key in cache:
+                value, timestamp = cache[full_key]
+                # Move to end to mark as recently used
+                order.move_to_end(full_key)
+                return value
+            # Compute value
+            value = func(*args, **kwargs)
+            # Add to cache
+            cache[full_key] = (value, now)
+            order[full_key] = None  # Just to keep the order, the value doesn't matter
+            # Evict LRU if needed
+            while len(cache) > maxsize:
+                # Get the first item (LRU)
+                lru_key = order.popitem(last=False)
+                del cache[lru_key]
+            return value
+        # Initialize cache and order
+        cache = {}
+        order = OrderedDict()
+        return wrapper
+    return decorator
+
+Wait, but this code has a problem. The 'order' and 'cache' variables are inside the decorator function, which is called once per decorated function. So, each decorated function will have its own cache and order. That's correct.
+
+But the key generation might be incorrect. For example, in the code above, for the args, if typed is True, each arg is converted into a tuple (arg, type(arg)), but the key is a tuple of those. Similarly for the kwargs.
+
+But in Python, the tuple of (arg, type(arg)) for each arg would be different for different types. For example, (1, int) vs (1.0, float).
+
+Yes, that should work.
+
+But what about when the function has mutable arguments? Well, the standard lru_cache doesn't handle that, but the user is probably aware of that. So, the same applies here.
+
+Now, testing the code.
+
+But what about when the cache is full, and there are expired items. For example, if the cache is full, but some items are expired. The cleanup step would have removed them, so the cache would be under maxsize. Then, when adding a new item, it's added without evicting anything. But if the cleanup didn't remove all expired items, then the eviction step would proceed.
+
+But the cleanup step is done every time the wrapper is called. So, when a new item is added, the cache may have some expired items that were not cleaned up yet. Wait, no. Because during the cleanup step, all expired items are removed. So, after that, the cache is clean. Then, adding a new item may cause the cache to exceed maxsize, leading to eviction of LRU items.
+
+But the LRU items may not be expired. So, the code would evict them even if they are still valid. That's not correct. Because the TTL is a time-based eviction, and LRU is a different mechanism. The LRU eviction should only happen when the cache is full, regardless of TTL. However, if an item is expired, it should be removed from the cache, but that's handled during the cleanup step.
+
+Wait, no. The cleanup step is done before checking the cache. So, when the wrapper is called, first all expired items are removed. Then, the key is checked. If not present, compute and add. Then, check if the cache is over maxsize and evict LRU items. But since the cleanup step has already removed expired items, the evict step is only for LRU items that are not expired.
+
+But in that case, the evict step may remove items that are still valid, which is correct for LRU.
+
+So, the code seems to handle both TTL and LRU eviction correctly.
+
+But wait, the eviction is based on LRU, regardless of TTL. So, even if an item is not expired, it can be evicted if it's the LRU. That's correct.
+
+Another thing: the order is an OrderedDict, and when adding a new key, we add it to the end. When the key is accessed, we move it to the end. So, the LRU is maintained correctly.
+
+But when we add the new key to the order, we set order[full_key] = None. That's okay because the OrderedDict just tracks the order, not the value.
+
+Now, possible issues:
+
+- The key generation for the wrapper. The code uses a tuple of (key, kw_key), but the way it's generated may not be correct. For example, in the standard lru_cache, the key is generated using the parameters, but with typed=True, the types are considered. So, the code here may not be exactly the same as the standard lru_cache, but it's a custom implementation.
+
+Another thing: in the code, the 'order' is an OrderedDict that holds the keys. Each time a key is accessed, it's moved to the end. When adding a new key, it's added to the end. When evicting, we pop the first item (LRU).
+
+But the code for the key generation is:
+
+key = []
+for arg in args:
+    if typed:
+        key.append( (arg, type(arg)) )
+    else:
+        key.append( arg )
+key = tuple(key)
+kw_key = []
+for k, v in sorted(kwargs.items()):
+    if typed:
+        kw_key.append( (k, v, type(v)) )
+    else:
+        kw_key.append( (k, v) )
+kw_key = tuple(kw_key)
+full_key = (key, kw_key)
+
+But this may not be the same as the standard lru_cache. For example, in the standard, the key for args is a tuple of the arguments, and for kwargs, a tuple of sorted items. However, when typed is True, the standard lru_cache includes the type of each argument. So, the key here is correct.
+
+Another possible issue: when the function is called with keyword arguments, the code sorts the items. That's to ensure that the same parameters in different order are considered the same key. For example, f(a=1, b=2) and f(b=2, a=1) would generate the same key if sorted. That's correct.
+
+Now, testing the code.
+
+But what about when the function is called with no arguments? The key would be ((), ()), which is correct.
+
+Another thing: the 'timer' function is passed as a parameter. The default is time.monotonic, which is correct.
+
+But in the code, during the cleanup, we check for each key in order, and if it's expired, remove it. However, the order may have keys that are not in the cache anymore. Wait, no. Because the order is maintained in sync with the cache. For example, when a key is added to the cache, it's added to the order. When it's removed from the cache, it's removed from the order. So during the cleanup, the order contains only keys present in the cache.
+
+But in the code, during the cleanup, we loop through list(order.keys()), which is a list of keys in the order. For each key in that list, we check if it's in the cache. But since the order is maintained in sync with the cache, this check is redundant. However, during the cleanup, when we remove a key from the cache, we also remove it from the order. Therefore, the code for the cleanup is okay.
+
+But in the code, during the cleanup, the 'to_remove' list is built by checking each key in order. Then, for each key in to_remove, we delete from both cache and order. That's correct.
+
+Another possible issue: the code uses 'order' and 'cache' as variables inside the wrapper function. But since the wrapper is a closure, these variables are captured from the decorator's scope. However, in Python, if the decorator is called once per function, then each decorated function will have its own cache and order. That's correct.
+
+But in the code above, the 'cache' and 'order' are initialized inside the decorator function, which is called once when the decorator is applied. So, each decorated function will have its own cache and order. That's correct.
+
+Now, putting it all together.
+
+But I need to make sure that the code is properly indented and uses the correct variables.
+
+Another thing: the 'order' is an OrderedDict, and when a key is accessed, it's moved to the end. When a new key is added, it's added to the end. When evicting, we pop the first item.
+
+But in the code, when adding a new key, we do order[full_key] = None. However, OrderedDict's __setitem__ will add the key to the end if it's already present. Wait, no. If the key is already present, then assigning a value to it would move it to the end. But in our case, when adding a new key, we are not checking if it's already present. Because the key is generated based on args and kwargs, and during the cleanup, any expired entries are removed. So, when adding a new key, it's either not present (so added to the end) or it's present but not expired (so we move it to the end). Wait, no. Because during the cleanup, expired entries are removed. So, if the key is already present in the cache, then it's not expired. Therefore, when we add a new key, it's not in the cache (since the previous entry would have been removed during cleanup if expired). So, when we add the new key, it's added to the end of the order. But if the key was already in the cache (and not expired), then the code would have returned the value earlier, so this code path is only for when the key is not in the cache.
+
+Wait, no. The code first cleans up expired entries. Then, checks if the key is in the cache. If not, then compute the value, add to the cache, and add to the order. So, during the addition, the key is not in the cache. Therefore, adding to the order would append it to the end.
+
+But when the key is in the cache (and not expired), then the code moves it to the end of the order. So, the order is maintained correctly.
+
+Now, the code for the decorator.
+
+But in the code above, the 'order' is an OrderedDict, and when adding a new key, we set order[full_key] = None. However, if the key is already present in the order, this would overwrite it and move it to the end. But during the cleanup, the key is already in the cache, so it's not expired. Therefore, the code for adding the key to the order is correct.
+
+But during the cleanup, the code removes all expired keys. Then, when the key is added, the order is updated.
+
+Now, the code for the wrapper function.
+
+But in the code above, after cleaning up, the code checks if full_key is in cache. If yes, returns the value. Otherwise, computes and adds to the cache and order.
+
+But when adding to the order, the code uses order[full_key] = None. But OrderedDict's __setitem__ will move the key to the end if it's already present. However, since we have already cleaned up expired entries, and the key is not in the cache, it's not in the order. So, adding it to the order would append it to the end.
+
+But during the cleanup, the code may have removed some keys, so the order is updated accordingly.
+
+Now, the eviction step. After adding the new key, the code checks if the cache is over maxsize. If so, it pops the first item (LRU) from the order and deletes it from the cache.
+
+But in the code, the order is an OrderedDict. So, order.popitem(last=False) removes the first item (LRU). Then, del cache[lru_key] removes it from the cache.
+
+Yes.
+
+But what about when the cache is not full, but there are expired items? The cleanup step would have removed them, so the cache is clean.
+
+Another thing: the 'timer' function is called each time, so the current time is used for checking expiration and storing the timestamp.
+
+Now, putting all together.
+
+But I need to make sure that the code is properly structured. Also, the code may have some issues with the key generation. For example, when typed is False, the key is (args, sorted kwargs). But in the code, when typed is False, the args are stored as a tuple of args, and the kwargs are stored as a tuple of (k, v) sorted.
+
+Yes.
+
+Now, code:
+
+import time
+from functools import wraps
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Generate key
+            key_args = []
+            for arg in args:
+                if typed:
+                    key_args.append( (arg, type(arg)) )
+                else:
+                    key_args.append( arg )
+            key_args = tuple(key_args)
+            key_kwargs = []
+            for k, v in sorted(kwargs.items()):
+                if typed:
+                    key_kwargs.append( (k, v, type(v)) )
+                else:
+                    key_kwargs.append( (k, v) )
+            key_kwargs = tuple(key_kwargs)
+            full_key = (key_args, key_kwargs)
+            
+            # Clean up expired entries
+            now = timer()
+            to_remove = []
+            for key in list(order.keys()):
+                if now - cache[key][1] > ttl:
+                    to_remove.append(key)
+            for key in to_remove:
+                del cache[key]
+                del order[key]
+            
+            # Check if key is in cache
+            if full_key in cache:
+                value, timestamp = cache[full_key]
+                order.move_to_end(full_key)
+                return value
+            # Compute value
+            value = func(*args, **kwargs)
+            # Add to cache
+            cache[full_key] = (value, now)
+            order[full_key] = None  # Append to the end of the OrderedDict
+            # Evict LRU if needed
+            while len(cache) > maxsize:
+                lru_key = order.popitem(last=False)
+                del cache[lru_key]
+            return value
+        # Initialize cache and order
+        cache = {}
+        order = OrderedDict()
+        return wrapper
+    return decorator
+
+Wait, but in the code, when adding the new key to the order, we set order[full_key] = None. But OrderedDict's __setitem__ will add the key to the end. So, that's correct.
+
+But what if the key is already in the order? Well, during the cleanup, any expired entries would have been removed. So, if the key is already in the cache, then it would have been moved to the end during the check. But in this code path, the key is not in the cache, so adding it to the order would append it.
+
+But during the check, if the key is in the cache, then after returning the value, we move it to the end of the order. So, that's correct.
+
+Another possible issue: the order may have keys that are not in the cache anymore. But during the cleanup, we remove them from both. So, after cleanup, the order contains only keys that are in the cache.
+
+But during the cleanup, we loop through list(order.keys()), which is a snapshot of the keys at that moment. Then, for each key in that list, check if it's in the cache. Wait, but the cache and order are in sync. So, when we add a key to the cache, we add it to the order. When we remove from the cache, we remove from the order. Therefore, during the cleanup, all keys in the order are present in the cache. So, the check if now - cache[key][1] > ttl is valid.
+
+But in the code, during the cleanup, we loop through the order's keys. For each key, we check if it's expired. If yes, we add to to_remove. Then, for each key in to_remove, we delete from cache and order.
+
+Yes.
+
+But what about when the same key is added multiple times? For example, if the key is already in the cache, but not expired. Then, during the check, the key is found, and moved to the end. So, the order is maintained correctly.
+
+Now, testing this code.
+
+But there's a possible mistake in the code. The 'order' is an OrderedDict, and when we add the key to it, we do order[full_key] = None. However, when the key is already present in the order (but not in the cache?), no. Because the order is maintained in sync with the cache. So, during the cleanup, any expired keys are removed from both. So, if the key is in the order, it's also in the cache.
+
+Therefore, the code should work.
+
+Another thing: the 'order' is used to track the order, but when the key is added to the cache, it's also added to the order. When the key is accessed, it's moved to the end of the order.
+
+Now, possible edge cases:
+
+- If maxsize is 0, then the cache is not used. But the code allows maxsize=0, but in that case, the cache would be empty. However, the code would check if the key is in the cache, which is empty, so compute and add, but then check if len(cache) > maxsize (0), which would be true, so evict. But since the cache has 1 element, it would be evicted. So, the code would not cache anything. That's correct.
+
+- If the function is called with the same arguments multiple times, the cache should return the value if it's not expired.
+
+- If the cache is full, and the new key is not in the cache, then the LRU item is evicted.
+
+But what if the LRU item is not expired? Then, it's removed from the cache, which is correct for LRU.
+
+So, this code should handle that.
+
+But I need to make sure that the key generation is correct. Let me think about the key for the arguments. For example, if the function is called with args (1, 2), and typed is True, the key_args is ((1, int), (2, int)). If the function is called with (1.0, 2.0), the key_args is ((1.0, float), (2.0, float)), which is different. So, the key is different, which is correct.
+
+For keyword arguments, sorted(kwargs.items()) ensures that the order of the keyword arguments doesn't affect the key. So, for example, f(a=1, b=2) and f(b=2, a=1) would generate the same key.
+
+But in the code, for the keyword arguments, when typed is True, the key_kwargs is a tuple of (k, v, type(v)) for each sorted item. So, that's correct.
+
+Another thing: the code uses 'list(order.keys())' to get a list of keys to iterate over. But during the iteration, the order may change. However, since we are using list(order.keys()) to create a snapshot, it's safe.
+
+Now, the code seems to be okay. Let me write it properly.

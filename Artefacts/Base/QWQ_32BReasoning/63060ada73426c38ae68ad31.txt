@@ -1,0 +1,443 @@
+Okay, I need to generate Python code for the function _convert_non_cli_args based on the provided signature and docstring. Let me read the docstring again to understand what it's supposed to do. The function's purpose is to cast arguments to their correct types by modifying the values_dict parameter. By default, all values are strings, so the function should look through the values and convert them where necessary.
+
+Hmm, the parameters are parser_name and values_dict. The parser_name is the command name like main, virsh, etc. So maybe the function uses that to determine which arguments need conversion? But how? The values_dict probably contains the arguments from the CLI, which are all strings. The function needs to figure out the actual types each argument should have and cast them.
+
+Wait, I think in some CLI parsers like argparse, the arguments have a type specified. But since the function is called _convert_non_cli_args, maybe it's handling arguments that aren't parsed by the CLI tools, so their types aren't automatically set. The engineer might have a way to map argument names to their required types based on the parser_name. 
+
+So the approach could be: first, for each key in values_dict, check if there's a known type for that argument in the context of parser_name. Then, convert the string value to that type. But how to get the type information? Maybe there's a predefined dictionary or a method that returns the types for each parser. Since I don't have that info, perhaps the code should loop through the keys and apply type conversions based on common patterns?
+
+Alternatively, maybe the values_dict has some metadata indicating the types. But the docstring says the default is all strings, so perhaps the function uses some predefined rules. For example, if the argument name ends with '_int', convert to int, or similar. But without more context, maybe a generic approach is needed.
+
+Alternatively, perhaps the function checks the parser's definition for the command (parser_name) and gets the types of each argument from there. Then, for each argument in values_dict, it finds the correct type and applies it. But without knowing the structure of how the parsers are stored, I might have to make some assumptions here.
+
+Wait, maybe the values_dict has a 'type' field stored in another structure. Like, for each parser_name, there is a dictionary that maps argument names to their types. The function would need to access that mapping. Since the function is part of a class, maybe the mappings are stored as a class attribute or instance variable.
+
+Let me think of a possible structure. Suppose the class has a dictionary called _arg_types that is keyed by parser_name, and each entry is another dictionary mapping argument names to their types. Then, in this function, I can loop over each key in values_dict, check if there's a type specified in _arg_types[parser_name] for that key, and then convert the value to that type.
+
+But since I don't have the actual data structure, perhaps the code should be generic. Maybe the function checks each value and tries to convert it based on its content. Like, if it's a boolean string, convert to bool, or if it's a number, to int or float. But that might not be reliable, as the user might have a specific type in mind.
+
+Alternatively, maybe the function is supposed to look for certain keys and apply known conversions. For example, if the key is 'timeout', convert to integer. But without specifics, this might not be the right approach.
+
+Alternatively, perhaps the code uses the 'action' or 'type' attributes from the parser's configuration. But again, without knowing how the parsers are stored, maybe the code can't do that. Hmm.
+
+Alternatively, maybe the code is supposed to look for arguments that are not CLI-parsed and hence need manual conversion. Like, if the argument is from a config file or environment variables, stored as strings, and need to be converted to their actual types based on some predefined rules.
+
+Wait, the function's name is _convert_non_cli_args. So perhaps these are arguments that weren't parsed via the CLI, so their types need to be converted manually. Maybe the values_dict includes some arguments that were passed through other means, like a config file, and the CLI parser didn't handle their types.
+
+So the problem is to go through each key-value pair in values_dict, and for each, determine the correct type (maybe from a predefined mapping for the parser_name) and cast the string to that type. The function modifies the values_dict in place.
+
+Let me think of how to code that. Let's assume that the class has a method or attribute that gives the type for each argument based on the parser. For instance, maybe there's a _arg_type_map dictionary. The code would look something like this:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    for arg_name, value in values_dict.items():
+        arg_type = self._get_type(parser_name, arg_name)
+        if arg_type:
+            try:
+                values_dict[arg_name] = arg_type(value)
+            except ValueError:
+                # maybe log an error or leave as string?
+                pass
+
+But how to implement _get_type? Since I can't know that, maybe the code is supposed to use some existing structure. Alternatively, maybe the code is supposed to look for the types in the parser's arguments, but that's not possible here without more info.
+
+Alternatively, perhaps the function uses some default conversions. Like, if the value is 'True' or 'False', convert to boolean. If it looks like an integer or float, convert those. Maybe check each value and see if it can be parsed into a different type.
+
+Wait, the function's docstring says it casts to the correct types, so maybe it's based on the original definition of the arguments. For example, if an argument was defined as an integer in the parser's configuration, then the string should be converted to an integer. But again, without knowing how the parser's configuration is stored, I might have to make up a way.
+
+Alternatively, maybe the code is supposed to use the 'choices' or other attributes from the parser's setup. But without that, perhaps the code is generic.
+
+Hmm, perhaps the best approach here is to loop through the arguments and try to convert them to common types like int, float, boolean, etc., where possible. For example:
+
+for key in list(values_dict.keys()):
+    val = values_dict[key]
+    if val.lower() in ['true', 'false']:
+        values_dict[key] = val.lower() == 'true'
+    try:
+        # check if it's an integer
+        int_val = int(val)
+        values_dict[key] = int_val
+    except ValueError:
+        try:
+            # check if it's a float
+            float_val = float(val)
+            values_dict[key] = float_val
+        except ValueError:
+            pass
+
+But this might not be correct because it could convert things that shouldn't be converted. Like, if a value is "123" but it's supposed to be a string, but the function converts it to an int. But the docstring says that by default, all are strings, and the function should cast to correct types. So maybe the correct types are known, and the function has a way to look them up.
+
+Alternatively, perhaps the function is supposed to leave the CLI arguments as they were parsed and only convert non-CLI ones. But how to tell which ones are non-CLI? Maybe the values_dict includes all arguments, and the CLI ones already have their types, so the non-CLI ones need to be converted.
+
+Alternatively, maybe the code is part of a larger system where each parser (like main, virsh, etc.) has a list of arguments with their types, and the function accesses that. For example, maybe there's a dictionary called self._argument_types which has entries for each parser_name and then each argument's type.
+
+So in code:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    # Get the type mapping for the parser
+    type_map = self._argument_types.get(parser_name, {})
+    for arg, value in values_dict.items():
+        arg_type = type_map.get(arg)
+        if arg_type:
+            try:
+                values_dict[arg] = arg_type(value)
+            except ValueError:
+                # handle error, maybe log but keep as string?
+                pass
+
+But since the problem statement doesn't provide details on how the type_map is stored, maybe the code is supposed to have a way to look that up. Since I can't know the exact structure, perhaps I need to make an assumption here.
+
+Alternatively, maybe the code is supposed to use the parser's actions. Like, if the parser is an instance of ArgumentParser, then for each argument, check its type. But that might require accessing the parser's internal structure, which isn't clear here.
+
+Alternatively, perhaps the function is part of a class where each parser has a list of arguments with their types, and the code loops through those. Since the problem gives no further details, perhaps I need to code a generic approach where the function uses some predefined method to get the argument types based on the parser name.
+
+Alternatively, maybe the code is supposed to loop through the keys in the values_dict and for each key, check if it's in a list of known arguments for that parser, then convert accordingly. For example, if the parser is 'main' and an argument is 'port', then convert to integer.
+
+But without knowing the specific arguments, I can't hardcode that. So maybe the code is using a helper function or a method to get the type for each argument.
+
+Alternatively, perhaps the code is supposed to look for certain keys and apply conversions. For example, if the key is 'timeout', convert to int. But since that's arbitrary, maybe the code can't do that.
+
+Hmm, given the lack of specifics, maybe the code is supposed to use the type information from the parser's definitions. Let me think of a possible structure. Maybe the class has a dictionary for each parser, storing the argument's names and their types. For example, self.parser_types is a dictionary where the keys are the parser names and the values are another dictionary mapping argument names to their types. So in the function, we can get the type map for the given parser_name, then loop through each argument in values_dict and cast accordingly.
+
+So the code would be something like:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    type_map = self.parser_types.get(parser_name, {})
+    for arg, value in values_dict.items():
+        arg_type = type_map.get(arg)
+        if arg_type:
+            try:
+                values_dict[arg] = arg_type(value)
+            except (ValueError, TypeError):
+                pass  # or log error?
+
+But since the function's docstring says it modifies the values_dict, that's the approach. The problem is that I have to make up the parser_types structure, but since the user hasn't provided it, maybe the code is written in a way that expects that structure exists.
+
+Alternatively, maybe the code is supposed to iterate over the keys and try to convert the values to the appropriate types based on some other logic. For example, checking if the value can be converted to an integer, float, or boolean, and doing so if possible. But that might not be correct since the user's actual types could be different. But given the problem statement, perhaps that's the way to go.
+
+Wait the doc says "casts arguments to correct types", so the correct types are known. So the code must have a way to know what each argument's type should be. Since it's a method of a class, maybe the class has a method or attribute that can get the argument's type based on the parser name and the argument name.
+
+So the code would look up the type for each argument in the values_dict using the parser_name. Then cast each value to that type.
+
+Assuming that the class has a way to get the types, perhaps through a helper method like get_argument_type(parser_name, arg_name), the code would be:
+
+for arg, value in values_dict.items():
+    arg_type = self.get_argument_type(parser_name, arg)
+    if arg_type:
+        try:
+            values_dict[arg] = arg_type(value)
+        except:
+            pass
+
+But since I don't know the actual implementation, I can't write that. So maybe the code uses a predefined dictionary in the class for each parser's arguments and their types. Let's suppose that self._arg_type is a dictionary where keys are parser names and the values are dictionaries of argument name to type.
+
+So:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    type_dict = self._arg_type.get(parser_name, {})
+    for arg in values_dict:
+        if arg in type_dict:
+            t = type_dict[arg]
+            try:
+                values_dict[arg] = t(values_dict[arg])
+            except ValueError:
+                pass
+
+That's possible. But since the problem says to generate code based on the signature and docstring, maybe the function has to do it in a generic way. Alternatively, maybe the code is supposed to use the argparse's parser to get the types, but since the function is called after parsing, perhaps not.
+
+Alternatively, perhaps the values_dict is the result of parsing, and the non-CLI args are those that weren't parsed via the CLI. But that's unclear.
+
+Hmm, perhaps the function is part of a class that has a method to retrieve the argument types for each parser. Since I can't know, maybe the code is supposed to do the following: check each value in the dictionary, and if it can be converted to a boolean, integer, or float, do so. So, a generic conversion.
+
+Wait, but that's not reliable. For example, "123" would be converted to an int, but maybe the argument is supposed to be a string. But the doc says to cast to correct types. So perhaps the correct types are known and stored somewhere. Since the function is named _convert_non_cli_args, maybe it's for arguments that weren't parsed by the CLI, so their types need to be determined by some other means.
+
+Alternatively, maybe the code is supposed to process the values_dict and for each key, if the key is known to be a certain type (like, from a predefined list), convert it. But without specifics, perhaps the code is supposed to use a helper function to get the type for each argument.
+
+Alternatively, perhaps the code is supposed to use the argparse's parser to get the types. Like, if the parser is stored in the class, then for each argument in the parser, check its type and apply it.
+
+Wait, maybe the parser is an instance of an ArgumentParser, and the arguments have their types stored in the parser's _actions. For example, each action has a 'type' attribute. So the function could look up the argument's type from the parser's actions and then cast the value accordingly.
+
+So the code might be:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    # get the parser associated with parser_name
+    parser = self._get_parser(parser_name)
+    for action in parser._actions:
+        if action.dest in values_dict:
+            # get the type of the argument
+            arg_type = action.type
+            if arg_type:
+                try:
+                    values_dict[action.dest] = arg_type(values_dict[action.dest])
+                except ValueError:
+                    pass
+
+But how to get the parser? Maybe the class has a _parsers dictionary. But again, without knowing the internal structure, perhaps I need to make assumptions.
+
+Alternatively, maybe the code is supposed to use a different approach. Since the function's name is _convert_non_cli_args, perhaps the CLI arguments are already correctly parsed, and this function is for other arguments that are passed in a different way (like from a config file) which are strings, so the function needs to cast them to their actual types.
+
+In that case, the code would need to have a way to know which arguments are supposed to be of which type. Let me think of an example where the code would use a predefined mapping for each parser.
+
+Suppose the class has a dictionary like:
+
+self._arg_type_mapping = {
+    'main': {
+        'timeout': int,
+        'debug': bool,
+        'version': float
+    },
+    'virsh': {
+        'memory': int,
+        'cpu_count': int
+    },
+    # etc.
+}
+
+Then the code would look up the parser's mapping and convert each argument accordingly.
+
+So the code would be:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    type_mapping = self._arg_type_mapping.get(parser_name, {})
+    for arg, value in values_dict.items():
+        if arg in type_mapping:
+            t = type_mapping[arg]
+            try:
+                values_dict[arg] = t(value)
+            except (ValueError, TypeError):
+                pass
+
+But again, without knowing the exact structure of the class, I have to assume that there's some method or attribute that provides the type mapping. Since the problem doesn't give more details, maybe the code is supposed to be written in a way that uses a predefined type map stored in the class.
+
+Alternatively, maybe the code is supposed to use a helper function to determine the type based on the argument's name. For example, if the argument name ends with '_int', then convert to int, or similar.
+
+But that's a possible approach. Let's see:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    for key in values_dict:
+        val = values_dict[key]
+        if key.endswith('_int'):
+            try:
+                values_dict[key] = int(val)
+            except:
+                pass
+        elif key.endswith('_float'):
+            try:
+                values_dict[key] = float(val)
+            except:
+                pass
+        elif key.endswith('_bool'):
+            try:
+                values_dict[key] = val.lower() in ['true', 'yes', '1']
+            except:
+                pass
+        # other types?
+
+But this requires the argument names to have suffixes indicating their types. That might not be the case. The doc says "correct types", so the function must have a way to know the correct type for each argument.
+
+Alternatively, maybe the values_dict has a '_types' entry that maps argument names to their types. But that's probably not the case.
+
+Hmm, perhaps the code is supposed to loop through the arguments and try to convert them to the most appropriate type. For example:
+
+Check if the string can be parsed as a boolean, then as integer, then as float. If none, leave as string.
+
+So:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    for key in list(values_dict.keys()):
+        val = values_dict[key]
+        if val.lower() in ('true', 'yes', '1'):
+            values_dict[key] = True
+        elif val.lower() in ('false', 'no', '0'):
+            values_dict[key] = False
+        else:
+            try:
+                # try int first
+                values_dict[key] = int(val)
+            except ValueError:
+                try:
+                    # try float
+                    values_dict[key] = float(val)
+                except ValueError:
+                    # leave as string
+                    pass
+
+Wait, but that might be what the function is supposed to do. The problem says that by default, all are strings, so the function casts them to correct types. The correct types would be based on the actual data. But perhaps the code is supposed to do that kind of automatic conversion.
+
+Alternatively, maybe the code is supposed to leave the CLI arguments (which were parsed correctly) and only convert the non-CLI ones, which are strings. But how to tell which are non-CLI?
+
+Alternatively, maybe the code is supposed to process all arguments except those parsed by the CLI. But I'm not sure.
+
+Alternatively, maybe the function is part of a system where the values_dict includes all arguments, but the CLI ones have their types already, so the non-CLI ones (like those from config files) need to be converted. But how to know which ones are non-CLI?
+
+Hmm, given the ambiguity, perhaps the best way is to write code that uses a type mapping stored in the class. Since the function is a method of a class, I can assume that the class has a way to get the types for each parser's arguments. The code would loop through the values_dict, check each key against the type mapping for the given parser, and cast accordingly.
+
+So here's the code:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    """Casts arguments to correct types by modifying values_dict param."""
+    type_map = self._get_type_map(parser_name)
+    for arg, value in values_dict.items():
+        if arg in type_map:
+            try:
+                values_dict[arg] = type_map[arg](value)
+            except (ValueError, TypeError):
+                pass
+
+But then, the function _get_type_map is needed, which is not part of the problem's given code. The problem might expect that the code uses a predefined structure. Maybe the code is supposed to have a class attribute like _arg_types that maps parser names to argument types.
+
+Alternatively, perhaps the code is supposed to be written in a way that uses a helper function to get the type of each argument. For example, the class might have a method like get_argument_type(parser_name, arg_name) that returns the correct type. So the code would be:
+
+for arg in list(values_dict.keys()):
+    arg_type = self.get_argument_type(parser_name, arg)
+    if arg_type:
+        try:
+            values_dict[arg] = arg_type(values_dict[arg])
+        except ValueError:
+            pass
+
+But again, without knowing the helper function, perhaps the problem expects the code to assume that such a type map exists. Since I can't know, I have to make a best guess.
+
+Alternatively, perhaps the code is supposed to use a list of arguments that should be converted to specific types, but that's not indicated.
+
+Alternatively, maybe the code is supposed to loop through the arguments and try to convert them to any possible type, starting with boolean, then integer, then float, and leave as string otherwise. So:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    for key, value in values_dict.items():
+        if isinstance(value, str):
+            lower_val = value.lower()
+            if lower_val in {'true', 'yes'}:
+                values_dict[key] = True
+            elif lower_val in {'false', 'no'}:
+                values_dict[key] = False
+            else:
+                try:
+                    values_dict[key] = int(value)
+                except ValueError:
+                    try:
+                        values_dict[key] = float(value)
+                    except ValueError:
+                        pass  # remains as string
+
+Wait, that's a possible approach. Since all values are strings, iterate each, and try to convert to boolean first, then int, then float. But that's making assumptions about how the types are determined. The doc says "correct types", so maybe that's the way to go. Let's see.
+
+The function would loop through each key-value pair. For each value that's a string, check if it's a boolean string (like 'True' or 'False'), then cast to boolean. If not, try converting to integer, then float. If none work, leave as string.
+
+This approach would handle some common cases. Let me structure the code accordingly.
+
+Wait, but what about other types like lists, dictionaries, or custom types? The problem mentions "correct types" but perhaps the code is only handling basic types. Since it's a Python function, maybe the code uses the standard approach for CLI arguments, where boolean is handled with 'store_true', but for non-CLI args, they are passed as strings and need conversion.
+
+Alternatively, maybe the code is supposed to use a predefined list of arguments for each parser and their types, but without that info, the code can't proceed.
+
+Hmm, given the problem's constraints, maybe the correct approach is to look up the type for each argument in a predefined type map. So I'll proceed with that, assuming that there's a method or attribute in the class that provides the type mapping.
+
+Alternatively, perhaps the code is supposed to use the parser's action to get the type. For example, if the parser has an argument with 'type=int', then the value should be converted to an integer. So, the function would need to get the parser's arguments and their types.
+
+Assuming that the parser is stored in a dictionary called self.parsers, where each parser name maps to an ArgumentParser instance. Then, the code could loop through the parser's actions to find the type for each argument.
+
+So here's a possible code structure:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    parser = self.parsers.get(parser_name)
+    if not parser:
+        return  # or handle error
+    for action in parser._actions:
+        if action.dest in values_dict:
+            arg_type = action.type
+            if arg_type:
+                try:
+                    values_dict[action.dest] = arg_type(values_dict[action.dest])
+                except ValueError:
+                    pass
+
+But this relies on accessing the parser's _actions, which is an internal part of argparse. It might not be the best approach, but perhaps that's what the problem expects.
+
+Alternatively, maybe the problem expects the code to simply loop through the values_dict and try to convert each string to a boolean, integer, or float in that order, and leave it as string if none work. Let me see.
+
+Another approach:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    for key in list(values_dict.keys()):
+        val = values_dict[key]
+        if isinstance(val, str):
+            if val.lower() == 'true':
+                values_dict[key] = True
+            elif val.lower() == 'false':
+                values_dict[key] = False
+            else:
+                try:
+                    values_dict[key] = int(val)
+                except ValueError:
+                    try:
+                        values_dict[key] = float(val)
+                    except ValueError:
+                        # check for other types like lists? Maybe not
+                        pass
+
+Wait, but that would convert "0" to False, which might not be intended. For example, if the value is "0" but the argument is supposed to be an integer, that's okay, but converting to boolean would be wrong. So perhaps the order should be first check for int, then float, then boolean.
+
+Alternatively, maybe the boolean check is only for explicit 'true'/'false' strings, and others are converted to their numerical types first. Let's think:
+
+First, try to convert to an integer. If that works, keep it. Else, try float. Else, check for boolean.
+
+Wait, but that's a possible way. For example, if the string is "123", it becomes an int. "123.45" becomes float. "true" becomes boolean, "yes" becomes True, etc.
+
+So the code would be:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    for key, value in values_dict.items():
+        if isinstance(value, str):
+            lower_val = value.lower()
+            if lower_val in ('true', 'yes'):
+                values_dict[key] = True
+            elif lower_val in ('false', 'no'):
+                values_dict[key] = False
+            else:
+                try:
+                    values_dict[key] = int(value)
+                except ValueError:
+                    try:
+                        values_dict[key] = float(value)
+                    except ValueError:
+                        pass  # remains as string
+
+Wait, but what about other types? Like lists or other objects? The problem mentions "correct types", so maybe there's a more comprehensive way. But given the info, perhaps this is acceptable.
+
+Alternatively, maybe the code is supposed to use the type from the parser's definition. So the function needs to get the type for each argument in the parser.
+
+Assuming that the class has a method to get the argument type, like:
+
+def get_type(self, parser_name, arg_name):
+    # some logic to find the type of arg_name in the parser parser_name
+    return the_type
+
+Then the code would loop through each key in values_dict, get the type via this method, and cast.
+
+But since I can't write that without knowing the internal structure, perhaps the code is written using a generic approach.
+
+Alternatively, maybe the code is supposed to look for certain keys, but the problem doesn't specify, so that's not possible.
+
+Hmm. The problem states that the function is part of a Python software engineer's code, so perhaps the correct approach is to use the parser's argument definitions to find their types.
+
+Assuming that the class has a way to get the parser's argument types, like stored in a dictionary. Let's say for each parser_name, there is a dictionary in self._arg_types that maps argument names to their types.
+
+So the code would be:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    type_map = self._arg_types.get(parser_name, {})
+    for arg, value in values_dict.items():
+        if arg in type_map:
+            t = type_map[arg]
+            try:
+                values_dict[arg] = t(value)
+            except (ValueError, TypeError):
+                pass
+
+This way, it uses the predefined type_map for each parser. The problem's docstring says that the function modifies values_dict, so this approach works.
+
+But how to structure the _arg_types? Maybe it's a class variable or instance variable. The code as written would require that the class has such a mapping.
+
+Since the problem doesn't give more details, perhaps this is the way to go. The code uses a type_map obtained from self._arg_types[parser_name], then converts each argument's value to that type if possible.
+
+Alternatively, maybe the code is supposed to use a different structure, but given the information, this is a possible solution.
+
+I think this is the best approach I can come up with based on the given info. Let me write the code accordingly.

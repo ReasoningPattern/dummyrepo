@@ -1,0 +1,65 @@
+import time
+from functools import wraps
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Generate key based on arguments and keyword arguments
+            key_args = []
+            for arg in args:
+                if typed:
+                    key_args.append((arg, type(arg)))
+                else:
+                    key_args.append(arg)
+            key_args = tuple(key_args)
+            key_kwargs = []
+            for k, v in sorted(kwargs.items()):
+                if typed:
+                    key_kwargs.append((k, v, type(v)))
+                else:
+                    key_kwargs.append((k, v))
+            key_kwargs = tuple(key_kwargs)
+            full_key = (key_args, key_kwargs)
+
+            # Clean up expired entries
+            now = timer()
+            to_remove = []
+            for key in list(order.keys()):
+                if now - cache[key][1] > ttl:
+                    to_remove.append(key)
+            for key in to_remove:
+                del cache[key]
+                del order[key]
+
+            # Check if key is in cache
+            if full_key in cache:
+                value, timestamp = cache[full_key]
+                order.move_to_end(full_key)
+                return value
+
+            # Compute value
+            value = func(*args, **kwargs)
+
+            # Add to cache
+            cache[full_key] = (value, now)
+            order[full_key] = None  # Append to the end of the OrderedDict
+
+            # Evict LRU if needed
+            while len(cache) > maxsize:
+                lru_key = order.popitem(last=False)
+                del cache[lru_key]
+
+            return value
+
+        # Initialize cache and order
+        cache = {}
+        order = OrderedDict()
+        return wrapper
+    return decorator

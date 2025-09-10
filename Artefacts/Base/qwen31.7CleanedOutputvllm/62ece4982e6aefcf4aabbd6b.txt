@@ -1,0 +1,6 @@
+def subclasses(cls):
+    result = []
+    for subclass in cls.__subclasses__():
+        result.append(subclass)
+        result.extend(subclasses(subclass))
+    return result

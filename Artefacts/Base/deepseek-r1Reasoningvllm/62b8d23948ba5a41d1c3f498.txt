@@ -1,0 +1,729 @@
+Okay, I need to generate Python code for an LRU cache decorator based on the given function signature and docstring. Let me think about how to approach this.
+
+First, I remember that Python's functools module has a decorator called lru_cache. But since the user wants me to generate the code from scratch, I can't just use the built-in one. I'll have to create my own.
+
+The function signature is def lru_cache(maxsize=128, typed=False):. So, it takes two arguments: maxsize and typed, both with default values.
+
+The docstring explains that it's a decorator for wrapping functions with a memoizing callable using an LRU algorithm, saving up to maxsize results.
+
+I need to create a class or another function to handle the caching. Let's go with a class because it's easier to manage state like cache hits and misses, and the order of usage.
+
+The class will have an __init__ method that initializes the cache as a dictionary. The maxsize determines how many items to keep. If maxsize is 0 or negative, the cache should be unbounded.
+
+I'll need a method to add an item to the cache. Each time an item is added, it should be moved to the end of the cache to mark it as least recently used. So, when the cache is full, the least recently used item is removed.
+
+The __call__ method will be triggered when the decorated function is called. It will check if the arguments are in the cache. If they are, it returns the value and updates the usage. If not, it adds the new item and returns the new value.
+
+Wait, how do I handle the arguments? The arguments should be hashed, but if the function has mutable default arguments, that could cause issues. Oh, but in the decorator, we're using the __call__ method, which will capture the arguments as they are passed to the function. So, the hash is based on the actual arguments passed, not the default values.
+
+I should also consider that the cache should only store hashable arguments. So, in the __init__, I'll check if maxsize is positive. If not, the cache is unbounded, but I still need to handle the case where maxsize is zero or negative.
+
+Wait, in the __init__, if maxsize is 0 or negative, the cache should be unbounded, meaning it doesn't expire. So, in that case, the cache is just a dictionary without a size limit.
+
+Now, the __call__ method: when the decorated function is called, it will create a key based on the arguments. If the key is already in the cache, it's a hit, so we move it to the end. If not, it's a miss, so we add it to the cache.
+
+But how to handle the order? I think using a list alongside the dictionary can help. The dictionary holds the key-value pairs, and the list keeps track of the order of insertion. Every time an item is accessed (hit), it's moved to the end of the list. When a new item is added, it's inserted at the beginning of the list.
+
+Wait, no. For LRU, the least recently used is the one at the front of the list. So, when a new item is added, it's placed at the end (most recently used). When a hit occurs, the item is moved to the end. When the cache is full and a new item is added, the first item (oldest) is removed.
+
+So, the list represents the order of least recently used to most recently used. The cache dictionary is just for quick lookups.
+
+Putting it all together, the LRU class will have:
+
+- __init__: initializes the cache dict and order list, and checks maxsize.
+- __call__: handles adding and updating the cache based on arguments.
+
+Wait, but in the decorator, the function is wrapped, and when it's called, the __call__ method is invoked. So, the decorated function's __call__ will trigger the LRU's __call__ with the arguments.
+
+I also need to handle the case where the function has no arguments. So, the arguments passed can be any number, including zero.
+
+Testing the code: when the decorated function is called, the arguments are converted into a hashable key. If the key is in the cache, it's a hit, and the item is moved to the end. If not, it's a miss, and the item is added to the beginning. If the cache exceeds maxsize, the oldest item is removed.
+
+Wait, but in the __call__ method, after checking if the key is in the cache, if it is, we update the usage by moving it to the end. If not, we add the new key-value pair to the front of the order list.
+
+But wait, the order list is a list, so when we add a new item, it's at the front. Then, when a hit occurs, we remove the key from its current position in the order list and append it to the end.
+
+So, in the __call__ method:
+
+1. Generate the key from the arguments.
+2. If the key is in the cache:
+   a. Remove it from the order list.
+   b. Append it to the end.
+   c. Return the value.
+3. Else:
+   a. If the cache size is at maxsize, remove the first item in the order list (oldest).
+   b. Add the new key-value pair to the front of the order list.
+   c. Return the new value (or the function's value if it's a closure or something, but in this case, it's a function, so we call it).
+
+Wait, but in Python, functions are objects, so when we call the function, it's like calling self.func(*args, **kwargs). So, in the __call__ method, self is the cache instance, and the arguments are passed to the function.
+
+But in the code, when we do cache(self.func)(args, kwargs), the __call__ method will handle the arguments.
+
+Wait, no. The decorator is applied as a function that takes the function to decorate. So, the code would be something like:
+
+@lru_cache(maxsize=128)
+def my_func(*args, **kwargs):
+    # code
+
+Inside the decorator, the function is wrapped into an instance of the LRU class. So, when the decorated function is called, the __call__ method of the LRU instance is invoked, which takes *args and **kwargs, converts them into a key, and proceeds as above.
+
+But how to handle the arguments? The key needs to be a hashable type, but if the function's arguments are mutable, like lists, converting them directly into a key would cause issues. However, in Python, when you pass mutable objects as arguments, they are passed by reference, but in the decorator, the key is based on the arguments as they are passed, not their default values.
+
+Wait, but the key is created using the args and kwargs, so for mutable objects, the key would be based on their identity. But that's not good because two different mutable objects with the same contents would be considered different keys, which is not what we want.
+
+Hmm, that's a problem. The decorator's __call__ method would create a key based on the arguments, but if the arguments are mutable, like lists, the key would be based on their identity, not their contents. That's incorrect because two different mutable objects with the same content should be considered the same key.
+
+Wait, but the function's arguments are passed as they are, so the key is based on the actual arguments, including their identity. That might not be desirable, but it's how it is. Alternatively, we could serialize the arguments into a hashable type, but that's more complex.
+
+Alternatively, perhaps the decorator should handle the arguments by converting them into a tuple, which is hashable. But wait, for mutable objects like lists, the tuple would contain the same objects, which would lead to the same key only if the objects are the same. So, that's not solving the problem.
+
+Wait, maybe the key should be based on the arguments in a way that two functions called with the same arguments (in terms of their values, not references) are considered the same. But that's difficult because in Python, functions can't easily serialize arguments into a hashable type that captures their contents, especially for mutable objects.
+
+This is a known limitation of simple memoization decorators. For the purpose of this code, perhaps we can proceed under the assumption that the arguments are hashable or that the user is aware of this limitation.
+
+So, moving forward, the key can be created using the args and kwargs as they are passed, and the decorator will treat them as hashable. If the arguments are not hashable, the decorator will raise an error when trying to create the key.
+
+So, in the code, the key is generated as:
+
+key = args + (kwargs,) if kwargs else args
+
+Wait, no. Because args is a tuple, and kwargs is a dictionary. So, to create a single tuple that includes all the arguments, including both positional and keyword, we can do:
+
+args_tuple = args if args is not None else ()
+kwargs_tuple = tuple(kwargs.items()) if kwargs else ()
+key = args_tuple + kwargs_tuple
+
+Wait, no. Because args is a tuple, and kwargs is a dict. So, to combine them into a single hashable key, we can create a tuple that includes all the positional arguments followed by the keyword arguments as (key, value) pairs.
+
+So, the key would be:
+
+key = args + tuple(kwargs.items())
+
+But wait, that would include the keyword arguments as tuples of (name, value), which is not hashable because each (name, value) is a tuple, and the entire key would be a tuple of tuples. Wait, no, each element is a tuple, but the entire key is a tuple, which is hashable.
+
+Wait, but in Python, when you create a tuple, each element can be any hashable type. So, the key can be a tuple that starts with the positional arguments as individual elements, followed by the keyword arguments as tuples of (name, value).
+
+But wait, that might not be the best approach. Alternatively, we can create a single tuple that combines all the arguments into a single sequence, but for mutable objects, this would not be reliable.
+
+Alternatively, perhaps we can use the inspect module to get the arguments in a way that is more reliable, but that's complicating things.
+
+For the sake of this problem, perhaps we can proceed with the initial approach, knowing that for mutable arguments, the key might not be unique, but it's beyond the scope of this code.
+
+So, moving forward, the key is created as a tuple of args followed by the items of kwargs.
+
+Wait, but in Python, when you pass multiple arguments, they are passed as a tuple. So, the key can be created as:
+
+key = args if args is not None else () + tuple(kwargs.items())
+
+Wait, but args is a tuple, and kwargs.items() is a view object, which is not hashable. So, we need to convert it into a tuple.
+
+So, key = args + tuple(kwargs.items())
+
+Wait, no, because args is a tuple, and kwargs.items() is a view, so converting it to a tuple would give a tuple of (key, value) pairs. So, the key would be a tuple that starts with the positional arguments, followed by the keyword arguments as (key, value) tuples.
+
+But wait, that would make the key a tuple like (arg1, arg2, ..., ('key1', value1), ('key2', value2), ...), which is hashable.
+
+But when reconstructing the function call, how do we get the correct arguments back? Because when the function is called again with the same arguments, the key would be the same, but when reconstructing, we need to separate the positional and keyword arguments.
+
+Hmm, this is getting complicated. Maybe it's better to handle the arguments as a single tuple, but that's not feasible because positional and keyword arguments are different.
+
+Alternatively, perhaps we can use the functools.WRAPPER_ASSIGNMENTS and WRAPPER_UPDATES, but that's part of the functools module and might complicate things.
+
+Alternatively, perhaps the decorator can accept *args and **kwargs, and the key is created as a tuple that includes all the arguments, but that's not possible because the same arguments can be passed in different ways (e.g., positional vs keyword) leading to the same function call but different keys.
+
+Wait, but in the LRU cache, the key is used to determine if the result is fresh. So, if two different calls to the function have the same arguments but one is passed positionally and the other via keyword, they would be considered the same key, which is correct.
+
+Wait, no. Because the key would be the same only if the arguments are the same. So, if you call the function with the same arguments but different ways (positional vs keyword), the key would be the same, which is correct.
+
+Wait, no. Because the key is created based on the args and kwargs. So, if you call the function with the same arguments, regardless of how they are passed, the key would be the same. So, that's correct.
+
+Wait, but in Python, when you pass the same arguments via positional and keyword, the tuple of args and kwargs would be the same. For example:
+
+def f(a, b, c=3):
+    pass
+
+f(1,2,3) and f(a=1, b=2, c=3) would both have args=(1,2,3) and kwargs=None, so the key would be (1,2,3), which is the same. So, that's correct.
+
+But what about mutable arguments? For example:
+
+def f(l):
+    pass
+
+l = [1]
+f(l)
+
+l = [1]
+f(l)
+
+In both cases, the args would be ([1], ), and kwargs would be None, so the key would be ([1], ), which is the same. So, the cache would treat them as the same key, which is correct.
+
+Wait, but in reality, the list [1] is the same object, so the key is the same. But if in one case, the list is created in a different way, but has the same contents, the key would be different because the object's identity is different. For example:
+
+a = [1]
+b = [1]
+f(a)
+f(b)
+
+In this case, the args would be (a, ) and (b, ), which are different objects, so the keys would be different, and the cache would treat them as different keys. But that's incorrect because the function is called with the same arguments in terms of their contents, but the keys are different because the objects are different.
+
+This is a problem because the LRU cache would treat them as separate calls, even though the arguments are the same in terms of their contents.
+
+So, this is a limitation of the approach. To handle this, we would need to serialize the arguments into a hashable type that captures their contents, not their identity. But that's more complex and would require using a serialization method, which is not trivial.
+
+Given that, perhaps the code can proceed under the assumption that the arguments are hashable and that this limitation is acceptable, or that the user is aware of it.
+
+So, moving forward, the code would be:
+
+Create a class LRU:
+
+class LRU:
+    def __init__(self, maxsize=128, typed=False):
+        self.cache = {}
+        self.maxsize = maxsize
+        self.typed = typed
+
+    def __call__(self, func):
+        # Need to handle the case where func is a closure or another decorated function
+        # So, we can create a wrapper that captures the function and the arguments
+        # Alternatively, since the decorator is applied to the function, the __call__ method
+        # will be called with the arguments as *args and **kwargs
+        # So, the wrapper function will be stored in self.func
+        # Then, when __call__ is invoked, it will call self.func(*args, **kwargs)
+        # But wait, that's not correct because the __call__ method is part of the decorator's class
+        # So, perhaps the decorator is a function that returns an instance of LRU, which wraps the function.
+        # Alternatively, perhaps the decorator should return a function that is wrapped by the LRU's __call__ method.
+
+        # Hmm, perhaps the initial approach is not correct. Maybe the decorator should return a function that is wrapped by the LRU's __call__.
+
+        # Alternatively, perhaps the LRU class should be a decorator factory that returns a wrapped function.
+
+        # Wait, perhaps the initial approach is incorrect. Let me think again.
+
+        # The decorator is a function that takes a function as input and returns a wrapped function. The wrapped function is then wrapped by the LRU's __call__ method.
+
+        # So, perhaps the LRU class should be a decorator factory that returns a wrapped function.
+
+        # Alternatively, perhaps the LRU class is a wrapper that, when called, triggers the __call__ method which handles the caching.
+
+        # I think I'm getting confused here. Let me try to structure it.
+
+        # The decorator is a function that takes a function and returns a wrapped function. The wrapped function is then decorated with LRU.
+
+        # Wait, perhaps the correct approach is to have the LRU class be the decorator. So, the decorator function returns an instance of the LRU class, which wraps the function.
+
+        # So, the code would be:
+
+        # def lru_cache(...):
+        #     class LRU:
+        #         def __init__(self, maxsize, typed):
+        #             self.cache = {}
+        #             self.maxsize = maxsize
+        #             self.typed = typed
+        #         def __call__(self, func):
+        #             # create a wrapper that holds the function
+        #             # then, when __call__ is called, it calls the wrapper
+        #             # but how to handle the arguments?
+
+        # Alternatively, perhaps the LRU class should be a function that takes the function and returns a wrapped function.
+
+        # Maybe a better approach is to use a closure to capture the function and then manage the cache.
+
+        # But perhaps the initial approach with a class is better.
+
+        # So, perhaps the LRU class should have a __init__ that takes the maxsize and typed, and a __call__ method that wraps the function.
+
+        # Wait, but in Python, the __call__ method is what allows instances to be called like functions. So, perhaps the LRU class is the decorator, and when you do @lru_cache, it's equivalent to wrapping the function with an instance of LRU.
+
+        # So, the __call__ method of the LRU instance will handle the function wrapping and caching.
+
+        # So, the code would be:
+
+        # class LRU:
+        #     def __init__(self, maxsize=128, typed=False):
+        #         self.cache = {}
+        #         self.maxsize = maxsize
+        #         self.typed = typed
+        #         self.func = None  # to store the wrapped function
+
+        #     def __call__(self, func):
+        #         self.func = func
+        #         return self
+
+        #     def __set_name__(self, owner, name):
+        #         # This method is called when the decorated object is assigned an attribute name
+        #         # So, we can use this to store the name in the cache
+        #         # But I'm not sure if this is necessary here
+
+        #     def __call__(self, *args, **kwargs):
+        #         # Generate the key
+        #         key = args + tuple(kwargs.items())
+        #         # Check if the key is already in the cache
+        #         if key in self.cache:
+        #             # Move to the end of the list
+        #             self.cache.move_to_end(key)
+        #         else:
+        #             # If maxsize is reached, remove the least recently used item
+        #             if self.maxsize and len(self.cache) >= self.maxsize:
+        #                 self.cache.popitem(last=False)
+        #             # Add the new key-value pair to the front
+        #             self.cache[key] = (args, kwargs, func.__name__)
+        #         # Return the function's result
+        #         return self.func(*args, **kwargs)
+
+        # Wait, but this approach has issues. For example, when the function is decorated, the __set_name__ method is called, which is used to store the name of the attribute being decorated. But in this case, since the function is being decorated, perhaps this is not necessary.
+
+        # Also, the key is created as args + tuple(kwargs.items()), which is a tuple containing the positional arguments followed by the keyword arguments as (key, value) tuples. This would make the key unique for each function call with the same arguments, regardless of whether they are passed positionally or via keyword.
+
+        # However, the problem is that when the function is called again with the same arguments, the key would be the same, which is correct.
+
+        # But when the arguments are mutable, the key might not be unique. For example, if two different lists have the same contents, the key would be the same, leading to incorrect cache behavior.
+
+        # But perhaps that's beyond the scope of this code, and the user is expected to handle that.
+
+        # Another issue is that the cache uses the function's name as part of the key. So, if two different functions have the same name, they would be treated as the same key, which is incorrect. But perhaps the decorator is intended to use the function's identity, not the name.
+
+        # So, perhaps the key should be based solely on the arguments, not including the function's name.
+
+        # So, the key should be args + tuple(kwargs.items()), but without including the function's name.
+
+        # So, in the __call__ method, the key is created as:
+
+        # key = args + tuple(kwargs.items())
+
+        # Then, the cache is a dictionary where keys are these tuples, and the value is the result.
+
+        # Wait, but the cache is supposed to store the function's result for each key. So, the value should be the result of the function call.
+
+        # So, the cache is a dictionary where each key maps to the function's result.
+
+        # So, the __call__ method would look like this:
+
+        # def __call__(self, *args, **kwargs):
+        #     key = args + tuple(kwargs.items())
+        #     if key in self.cache:
+        #         # Hit, return the cached value
+        #         return self.cache[key]
+        #     else:
+        #         # Miss, add to cache
+        #         if self.maxsize and len(self.cache) >= self.maxsize:
+        #             removed_key = self.cache.popitem(last=False)
+        #             # Remove the corresponding entry from the cache
+        #             # Wait, but the cache is a dictionary, so we can just delete the key
+        #             del self.cache[removed_key]
+        #         # Add the new key-value pair
+        #         self.cache[key] = self.func(*args, **kwargs)
+        #         return self.cache[key]
+
+        # Wait, but in this approach, the cache is a dictionary that stores the function's results. So, when the function is called, it's wrapped by the LRU instance, which checks the cache based on the key derived from the arguments.
+
+        # However, the problem is that the key is based on the arguments, which may not be unique enough, leading to incorrect cache behavior. But that's a limitation of the approach.
+
+        # Also, the initial code I wrote earlier had the cache as a dictionary, but in the __call__ method, it's checking if the key is in the cache. If it is, it's a hit, else a miss.
+
+        # But in the code above, when a miss occurs, it adds the key-value pair to the cache, but the cache is a dictionary, which doesn't maintain order. So, the order of insertion is lost.
+
+        # Therefore, the LRU algorithm requires maintaining the order of insertion to determine the least recently used item.
+
+        # So, perhaps the cache should be a list instead of a dictionary, where each item is a tuple of (key, result). Then, when a hit occurs, the item is moved to the end of the list. When a miss occurs, a new item is added to the front, and if the list exceeds maxsize, the oldest item (at the front) is removed.
+
+        # So, the cache is a list of tuples (key, result).
+
+        # So, the __call__ method should:
+
+        # 1. Generate the key from args and kwargs.
+        # 2. If the key is in the cache, remove it from its current position and append it to the end (move to end).
+        # 3. If not, add a new tuple (key, result) to the front of the cache.
+        # 4. If maxsize is reached, remove the first item (oldest).
+
+        # So, the code would be:
+
+        # class LRU:
+        #     def __init__(self, maxsize=128, typed=False):
+        #         self.cache = []
+        #         self.maxsize = maxsize
+        #         self.typed = typed
+
+        #     def __call__(self, func):
+        #         # Wrap the function to capture the arguments
+        #         # The wrapper will be called with *args, **kwargs
+        #         # We need to store the function in a way that it can be called again
+        #         # So, the wrapper returns the result of func(*args, **kwargs)
+        #         # But the wrapper needs to be able to access func, which is tricky
+        #         # Alternatively, perhaps the wrapper is a closure that captures func
+        #         # But in this case, the LRU instance holds the function, and the __call__ method handles the arguments
+        #         # So, perhaps the __call__ method should return the result of func(*args, **kwargs)
+        #         # But how to handle the cache key?
+        #         # The wrapper needs to generate the key based on args and kwargs
+        #         # So, perhaps the __call__ method should return the result, but also manage the cache
+        #         # Wait, no. The __call__ method is what allows the instance to be called like a function.
+        #         # So, when the decorated function is called, the __call__ method is invoked on the LRU instance, passing *args, **kwargs.
+        #         # The __call__ method will process the arguments, manage the cache, and then call the function.
+        #         # So, the __call__ method should return the function's result, but also update the cache.
+        #         # So, the code inside __call__ is:
+        #         # 1. Generate key
+        #         # 2. Check if key is in cache
+        #         # 3. If yes, move to end
+        #         # 4. Else, add to front
+        #         # 5. Call func and store result
+        #         # 6. Return result
+        #         # Wait, but this would cause the function to be called before the cache is updated, which is incorrect.
+
+        #         # So, the correct order is:
+        #         # 1. Generate key
+        #         # 2. Check if key is in cache
+        #         # 3. If yes, move to end
+        #         # 4. Else, add to front
+        #         # 5. Call func and store result
+        #         # 6. Return result
+
+        #         # But wait, the function call is part of the process, so the result is needed to update the cache.
+
+        #         # So, the __call__ method needs to:
+
+        #         key = args + tuple(kwargs.items())
+        #         if key in self.cache:
+        #             # Move to end
+        #             index = self.cache.index(key)
+        #             self.cache.pop(index)
+        #             self.cache.append(key)
+        #         else:
+        #             if self.maxsize and len(self.cache) >= self.maxsize:
+        #                 # Remove the oldest item (front)
+        #                 self.cache.pop(0)
+        #             # Add the new key-value pair
+        #             self.cache.insert(0, (key, self.func(*args, **kwargs)))
+        #         # Return the result
+        #         return self.cache[0][1] if self.cache else None
+
+        # But wait, this approach has a problem. The cache is a list of tuples (key, result). When a key is in the cache, it's moved to the end. When a new key is added, it's inserted at the front. So, the order of the cache is maintained correctly.
+
+        # However, the code above uses self.cache.index(key), which is O(n) for each hit. For large caches, this could be slow. So, perhaps using a deque or another data structure that allows O(1) access and insertion would be better.
+
+        # Alternatively, perhaps using a dictionary to track the presence of keys and a deque to maintain the order.
+
+        # So, perhaps the cache should be a deque where the order is the insertion order, and a dictionary to quickly check if a key exists.
+
+        # So, the __call__ method would:
+
+        # 1. Generate the key.
+        # 2. If key is in the dictionary, remove it and append to the deque.
+        # 3. Else, add to the deque and the dictionary.
+        # 4. If maxsize is reached, remove the leftmost item from the deque and delete it from the dictionary.
+
+        # So, the code would be:
+
+        # class LRU:
+        #     def __init__(self, maxsize=128, typed=False):
+        #         self.cache = {}  # key: (args, kwargs, result)
+        #         self.order = deque()
+        #         self.maxsize = maxsize
+        #         self.typed = typed
+
+        #     def __call__(self, func):
+        #         # The wrapper function
+        #         def wrapper(*args, **kwargs):
+        #             key = args + tuple(kwargs.items())
+        #             if key in self.cache:
+        #                 # Move to the end of the deque
+        #                 index = self.order.index(key)
+        #                 self.order.pop(index)
+        #                 self.order.append(key)
+        #             else:
+        #                 if self.maxsize and len(self.cache) >= self.maxsize:
+        #                     # Remove the oldest item
+        #                     removed_key = self.order.popleft()
+        #                     del self.cache[removed_key]
+        #                 # Add the new key-value pair
+        #                 self.cache[key] = func(*args, **kwargs)
+        #                 self.order.append(key)
+        #             return self.cache[key]
+        #         return wrapper
+
+        # But wait, this is incorrect because the wrapper is supposed to be the function that is called when the decorated function is called. So, the __call__ method should return the result, but the wrapper is what's called.
+
+        # Alternatively, perhaps the wrapper should be inside the __call__ method, but that's not possible because the __call__ method is supposed to handle the arguments and manage the cache.
+
+        # So, perhaps the wrapper is the function that is called when the decorated function is called, and it's defined inside the __call__ method.
+
+        # So, the code would be:
+
+        # class LRU:
+        #     def __init__(self, maxsize=128, typed=False):
+        #         self.cache = {}  # key: (args, kwargs, result)
+        #         self.order = deque()
+        #         self.maxsize = maxsize
+        #         self.typed = typed
+
+        #     def __call__(self, func):
+        #         def wrapper(*args, **kwargs):
+        #             key = args + tuple(kwargs.items())
+        #             if key in self.cache:
+        #                 # Move to the end of the deque
+        #                 index = self.order.index(key)
+        #                 self.order.pop(index)
+        #                 self.order.append(key)
+        #             else:
+        #                 if self.maxsize and len(self.cache) >= self.maxsize:
+        #                     # Remove the oldest item
+        #                     removed_key = self.order.popleft()
+        #                     del self.cache[removed_key]
+        #                 # Add the new key-value pair
+        #                 self.cache[key] = func(*args, **kwargs)
+        #                 self.order.append(key)
+        #             return self.cache[key]
+        #         return wrapper
+
+        # But this code is inside the __call__ method, so when the decorated function is called, it's actually calling the wrapper function. So, the wrapper is the one that manages the cache.
+
+        # However, the wrapper function is created each time the decorated function is called, which is not efficient, but for the sake of the problem, it's acceptable.
+
+        # But in this approach, the key is generated as args + tuple(kwargs.items()), which is a tuple containing the positional arguments and the keyword arguments as (key, value) tuples.
+
+        # However, this approach has the same issue as before: mutable arguments can lead to incorrect cache behavior.
+
+        # Additionally, the wrapper function is not capturing the function's name, which could lead to incorrect cache behavior if two functions with the same arguments but different names are decorated.
+
+        # So, perhaps the key should not include the function's name. But how to determine the function's name? Well, the wrapper function is created inside the __call__ method, so it doesn't have access to the function's name.
+
+        # Alternatively, perhaps the key should be based solely on the arguments, not including the function's name.
+
+        # So, the key would be args + tuple(kwargs.items()), as before.
+
+        # Another issue is that the wrapper function is created each time the decorated function is called, which is not efficient. So, perhaps the wrapper should be a closure that captures the function and the cache.
+
+        # Alternatively, perhaps the LRU class should be a decorator factory that returns an instance of the LRU class, which wraps the function.
+
+        # So, the code would be:
+
+        # class LRU:
+        #     def __init__(self, maxsize=128, typed=False):
+        #         self.cache = {}  # key: (args, kwargs, result)
+        #         self.order = deque()
+        #         self.maxsize = maxsize
+        #         self.typed = typed
+
+        #     def __set_name__(self, owner, name):
+        #         # This method is called when the decorated object is assigned an attribute name
+        #         # So, we can use this to store the name in the cache
+        #         # But I'm not sure if this is necessary here
+        #         pass
+
+        #     def __call__(self, func):
+        #         # The wrapper function
+        #         def wrapper(*args, **kwargs):
+        #             key = args + tuple(kwargs.items())
+        #             if key in self.cache:
+        #                 # Move to the end of the deque
+        #                 index = self.order.index(key)
+        #                 self.order.pop(index)
+        #                 self.order.append(key)
+        #             else:
+        #                 if self.maxsize and len(self.cache) >= self.maxsize:
+        #                     # Remove the oldest item
+        #                     removed_key = self.order.popleft()
+        #                     del self.cache[removed_key]
+        #                 # Add the new key-value pair
+        #                 self.cache[key] = func(*args, **kwargs)
+        #                 self.order.append(key)
+        #             return self.cache[key]
+        #         return wrapper
+
+        # But this code is inside the __call__ method, which is called each time the decorated function is called. So, the wrapper is redefined each time, which is not efficient but works.
+
+        # However, the problem is that the __call__ method is part of the LRU class, and when the decorated function is called, the __call__ method is invoked, which returns the wrapper function. So, the wrapper function is what is called when the decorated function is called.
+
+        # So, the code above should work, but with the caveat that the key is based on the arguments, and the wrapper manages the cache.
+
+        # Now, considering the typed parameter. The decorator's __init__ takes typed=False. When typed is True, the function's arguments are wrapped in a tuple.
+
+        # So, the key should be ( (args,), (kwargs,), result ) if typed is True. Or perhaps, the key should be a tuple that includes the function's type if typed is True.
+
+        # Wait, the typed parameter is for wrapping the function's arguments into a tuple. So, if typed is True, the arguments are wrapped in a tuple before being used as the key.
+
+        # So, the key generation should be:
+
+        if self.typed:
+            key = (args, kwargs)
+        else:
+            key = args + tuple(kwargs.items())
+
+        Wait, but that's not correct. Because when typed is True, the arguments are wrapped in a tuple. So, the key is (args, kwargs). But args is a tuple, and kwargs is a dict. So, the key would be a tuple containing a tuple and a dict, which is hashable.
+
+        So, in the __call__ method, the key is generated as:
+
+        if self.typed:
+            key = (args, kwargs)
+        else:
+            key = args + tuple(kwargs.items())
+
+        So, the code in the __call__ method would be:
+
+        key = args + tuple(kwargs.items()) if not self.typed else (args, kwargs)
+
+        Wait, but that's not quite right. Because when typed is True, the arguments are wrapped into a tuple, but how? The description says that the arguments should be wrapped into a tuple. So, perhaps when typed is True, the key is (args, kwargs), but when typed is False, it's args + tuple(kwargs.items()).
+
+        So, the key is generated as:
+
+        if self.typed:
+            key = (args, kwargs)
+        else:
+            key = args + tuple(kwargs.items())
+
+        But wait, args is a tuple, and kwargs is a dict. So, (args, kwargs) is a tuple containing a tuple and a dict, which is hashable.
+
+        So, the code in the __call__ method would be:
+
+        if self.typed:
+            key = (args, kwargs)
+        else:
+            key = args + tuple(kwargs.items())
+
+        Then, the rest of the code proceeds as before.
+
+        But wait, when typed is True, the key is a tuple of (args, kwargs), which is a tuple of a tuple and a dict. When typed is False, the key is a tuple of args followed by the items of kwargs as (key, value) tuples.
+
+        So, the code should be:
+
+        if self.typed:
+            key = (args, kwargs)
+        else:
+            key = args + tuple(kwargs.items())
+
+        But wait, in the else case, args is a tuple, and tuple(kwargs.items()) is a tuple of (name, value) pairs. So, the key is a tuple that starts with the positional arguments, followed by the keyword arguments as (name, value) tuples.
+
+        But when typed is True, the key is a tuple of args and kwargs. So, the key is a tuple where the first element is the args tuple, and the second element is the kwargs dict.
+
+        So, the code in the __call__ method would be:
+
+        if self.typed:
+            key = (args, kwargs)
+        else:
+            key = args + tuple(kwargs.items())
+
+        But wait, in the else case, the key is a tuple that starts with the positional arguments, followed by the keyword arguments as (key, value) tuples. So, the key is a tuple that contains all the arguments in a flattened way.
+
+        So, in the else case, the key is a tuple that starts with the positional arguments, followed by the keyword arguments as (key, value) tuples. So, the key is a tuple that is the positional arguments concatenated with the keyword arguments as (key, value) tuples.
+
+        So, the code is correct.
+
+        Now, putting it all together, the LRU class would have an __init__ method that initializes the cache and maxsize, and a __call__ method that handles the arguments and manages the cache.
+
+        So, the complete code would be:
+
+        class LRU:
+            def __init__(self, maxsize=128, typed=False):
+                self.cache = {}
+                self.maxsize = maxsize
+                self.typed = typed
+                self.order = deque()
+
+            def __call__(self, func):
+                def wrapper(*args, **kwargs):
+                    if self.maxsize is None:
+                        self.maxsize = 128
+                    if self.typed:
+                        key = (args, kwargs)
+                    else:
+                        key = args + tuple(kwargs.items())
+                    if key in self.cache:
+                        # Move to end of deque
+                        index = self.order.index(key)
+                        self.order.pop(index)
+                        self.order.append(key)
+                    else:
+                        if self.maxsize and len(self.cache) >= self.maxsize:
+                            # Remove the oldest item
+                            removed_key = self.order.popleft()
+                            del self.cache[removed_key]
+                        # Add the new key-value pair
+                        self.cache[key] = func(*args, **kwargs)
+                        self.order.append(key)
+                    return self.cache[key]
+                return wrapper
+
+        Wait, but the __call__ method is inside the LRU class, and the wrapper is a nested function. So, when the decorated function is called, the __call__ method is invoked, which returns the wrapper function. So, the wrapper function is called, which handles the arguments and manages the cache.
+
+        But in the code above, the wrapper is defined inside __call__, so each time the decorated function is called, a new wrapper is defined. That's not efficient, but it's acceptable for the purpose of this code.
+
+        Also, the code captures the func variable, which is the function being decorated. So, the wrapper function uses func to call the original function.
+
+        Now, testing this code:
+
+        Suppose we have:
+
+        @lru_cache(maxsize=1)
+        def f(*args, **kwargs):
+            return sum(args)
+
+        f(1)  # returns 1
+        f(2)  # returns 2
+        f(3)  # returns 3+2+1=6? Wait, no. Because the cache is based on the arguments.
+
+        Wait, no. Because f is decorated with lru_cache, which uses the LRU class's __call__ method.
+
+        So, when f(1) is called, the wrapper is called with args=(1,), kwargs={}. Since typed is False by default, the key is ( (1,), () ). So, the key is a tuple of (args, kwargs), which is ((1,), ()).
+
+        Then, when f(2) is called, the key is ((2,), ()).
+
+        When f(3) is called, the key is ((3,), ()).
+
+        So, each call with different arguments has a different key.
+
+        So, the cache size is 3, which is correct.
+
+        Now, if we have f(1, 2), the key would be ((1,2), {}). So, it's a different key.
+
+        So, the code seems to handle that.
+
+        Now, considering the case when the function is called with the same arguments but in different orders.
+
+        For example, f(1,2) and f(2,1). These would have different keys because the args are different.
+
+        So, the cache would treat them as separate calls.
+
+        But according to the LRU algorithm, the most recently used item is the one at the end of the order deque. So, when a new key is added, it's placed at the end, and when a hit occurs, the key is moved to the end.
+
+        So, the code should correctly manage the order.
+
+        Now, testing the code when the maxsize is reached.
+
+        Suppose maxsize is 1.
+
+        f = lru_cache(maxsize=1)(lambda x: x)
+
+        f(1)  # returns 1, cache has { (1,): 1 }
+        f(2)  # cache is full, remove the oldest (1,), add (2,):2. So, returns 2
+        f(3)  # same, returns 3.
+
+        So, the code seems to handle that.
+
+        Now, considering the typed parameter.
+
+        When typed is True, the arguments are wrapped into a tuple.
+
+        So, for example:
+
+        @lru_cache(maxsize=1, typed=True)
+        def f(a, b):
+            return a + b
+
+        f(1,2)  # key is ((1,2), )
+        f(3,4)  # key is ((3,4), )
+
+        So, the cache would have two entries.
+
+        But if we call f(1,2) again, it's a hit, and the key is moved to the end.
+
+        So, the code handles that.
+
+        Now, considering the problem statement: the decorator should wrap a function with a memoizing callable that saves up to maxsize results based on a Least Recently Used (LRU) algorithm.
+
+        So, the code seems to satisfy all the requirements.
+
+        But wait, the code uses a deque to manage the order of keys. However, the deque's popleft() method is O(n), which is inefficient for large caches. So, perhaps using a more efficient data structure would be better.
+
+        Alternatively, perhaps using a linked list or another structure that allows O(1) access and insertion.
+
+        But for the purposes of this problem, the code is correct, even if it's not the most efficient.
+
+        So, putting it all together, the code is as follows.

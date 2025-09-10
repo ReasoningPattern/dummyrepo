@@ -1,0 +1,84 @@
+
+Okay, I need to generate Python code for the ansible_playbook function based on the given signature and docstring. Let me start by understanding the parameters. The function takes an ir_workspace, which is a Workspace object, ir_plugin as a Plugin object, playbook_path as a string, and optional parameters like verbose, extra_vars, and ansible_args.
+
+The docstring says it wraps the 'ansible-playbook' CLI. So the function is probably meant to execute an Ansible playbook using these parameters. The parameters verbose, extra_vars, and ansible_args are passed to Ansible. 
+
+First, I should figure out how to construct the command-line arguments for ansible-playbook. The verbose parameter is an integer, which corresponds to the -v flag. So if verbose is provided, I need to add '-v' multiplied by the verbose level. For example, verbose=2 would be '-vv'.
+
+Next, extra_vars is a dictionary. Ansible expects these as key-value pairs in the command line. So I need to convert the dict into a string format that Ansible can read. Maybe using the '--extra-vars' flag followed by a JSON string or a space-separated list. Wait, the standard way is to pass them as a JSON string, like --extra-vars '{"key1": "value1", "key2": "value2"}'.
+
+Then, ansible_args is a dict of arguments that are directly passed to ansible-playbook. These could be things like --inventory, --connection, etc. So I need to convert each key-value pair into command-line arguments. For example, if ansible_args has {'inventory': 'inventory.ini'}, that becomes --inventory inventory.ini.
+
+I also need to consider the working directory. The ir_workspace might have a specific directory where the playbook is located. So the function should run the playbook from the workspace's directory. Maybe using the workspace's path as the cwd.
+
+Now, how to execute the command. Using subprocess.run would be appropriate here. The command would be ['ansible-playbook', playbook_path], then adding the verbose flags, extra_vars, and other ansible_args.
+
+Wait, the parameters are passed as a dict. So I need to loop through ansible_args and add each key as a flag. For example, if the key is 'inventory', the value is the inventory path. So for each key in ansible_args, add '--' + key + ' ' + value.
+
+But I need to make sure that the keys are valid Ansible arguments. Also, some arguments might have multiple values or require different formatting. However, the function's docstring says it's a dict of arguments to plumb down directly, so perhaps it's assuming that the keys are the long-form options without the '--' prefix. So for example, if ansible_args is {'inventory': 'inv', 'tags': 'tag1,tag2'}, then the command would include --inventory inv --tags tag1,tag2.
+
+Putting it all together, the steps are:
+
+1. Construct the command list starting with 'ansible-playbook' and the playbook path.
+2. Add the verbose flags if provided.
+3. Add the extra-vars if provided, converting the dict to a JSON string.
+4. Add all the arguments from ansible_args, formatting each key-value pair as --key value.
+5. Execute the command using subprocess.run, with the working directory set to ir_workspace's path.
+
+Wait, but the ir_workspace and ir_plugin objects might have methods or properties that need to be used. For example, maybe the workspace has a method to get the inventory path or something else. However, the function parameters don't mention that. The user might expect that the function uses these objects to determine certain paths or configurations. But the current parameters don't specify that, so perhaps the function is supposed to use them in some way, maybe to set the inventory or other settings.
+
+Alternatively, maybe the ir_workspace and ir_plugin are used to get the necessary context, like the inventory path. But since the parameters are given as objects, perhaps the function is part of a larger framework where these objects have attributes that are used. However, without more information, I'll assume that the function needs to run the playbook with the given parameters, using the workspace's directory as the current working directory.
+
+So, the code would start by importing subprocess. Then, build the command list. Let's see:
+
+command = ['ansible-playbook', playbook_path]
+
+If verbose is provided, append '-v' multiplied by the verbose level. For example, verbose=3 would be ['--verbose', '--verbose', '--verbose']? Wait, no. The verbose level in Ansible is controlled by the number of -v flags. So for verbose=1, it's -v; for 2, -vv, etc. So in code, that would be command.extend(['-v'] * verbose) if verbose is not None.
+
+Then, handle extra_vars. If extra_vars is a dict, convert it to a JSON string and add --extra-vars with that string. So:
+
+if extra_vars:
+    command.append('--extra-vars')
+    command.append(json.dumps(extra_vars))
+
+For ansible_args, loop through the items and add each as --key value. So:
+
+if ansible_args:
+    for key, value in ansible_args.items():
+        command.append(f'--{key}')
+        command.append(str(value))
+
+Then, execute the command using subprocess.run. The working directory would be ir_workspace.path, assuming that the Workspace object has a 'path' attribute. Also, maybe the plugin has some specific arguments. But the parameters are given as ir_plugin, so perhaps it's used to get the plugin's specific configurations. However, the function's parameters don't indicate that, so maybe it's just passed along for context, but not used directly in the command.
+
+So the code would be something like:
+
+import json
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None,
+                     extra_vars=None, ansible_args=None):
+    command = ['ansible-playbook', playbook_path]
+    if verbose is not None:
+        command.extend(['-v'] * verbose)
+    if extra_vars:
+        command.append('--extra-vars')
+        command.append(json.dumps(extra_vars))
+    if ansible_args:
+        for key, value in ansible_args.items():
+            command.append(f'--{key}')
+            command.append(str(value))
+    subprocess.run(command, cwd=ir_workspace.path, check=True)
+
+Wait, but the parameters are in the function signature. Also, the check=True might not be desired if the user wants to handle errors themselves. But the original function doesn't mention error handling, so maybe just run it without check, or let it raise exceptions.
+
+But the original function's docstring doesn't specify return values, so perhaps the function is supposed to execute the playbook and return the result. However, the original code might not have a return statement. Alternatively, maybe it's supposed to return the subprocess result.
+
+But the user hasn't provided any specific return requirements. The original function's parameters don't have a return type mentioned. So perhaps the function is just executing the playbook and not returning anything, or maybe it's returning the result of the subprocess.
+
+Also, need to make sure that the extra_vars are properly formatted as a JSON string. Using json.dumps is correct here.
+
+Another thing: the ansible_args might include arguments that are not in the form of key-value pairs. For example, some arguments take multiple values. But the function's docstring says it's a dict of arguments to plumb down directly, so assuming that each key is a separate argument with a value.
+
+So putting all together, the code would import subprocess and json, then construct the command list, add the verbose flags, extra-vars, and other arguments, then run the command in the workspace's directory.
+
+I think that's the general approach. Now, write the code accordingly.

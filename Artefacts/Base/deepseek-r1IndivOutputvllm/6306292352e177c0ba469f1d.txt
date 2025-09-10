@@ -1,0 +1,70 @@
+
+
+To solve this problem, we need to identify and collect tags from a given text while ignoring tags inside code blocks. Additionally, we can optionally replace each tag with the result of a provided function. The solution involves parsing the text to distinguish between normal text and code blocks, extracting tags from the normal text, and applying the replacement function if provided.
+
+### Approach
+1. **State Machine for Segmentation**: We use a state machine to iterate through each character of the input text. This helps in distinguishing between normal text and code blocks. The state machine transitions between 'normal' and 'inside_code' states based on encountering delimiters like `#`, `//`, `"`, and backticks (`).
+2. **Collect Segments**: As we iterate through the text, we collect segments of normal text and code blocks separately.
+3. **Extract and Replace Tags**: For each segment of normal text, we extract tags using a regular expression and apply the replacement function if provided. Code blocks are added to the result without modification.
+4. **Construct Final Text**: After processing all segments, we concatenate them to form the final text, which includes the modified tags and the original code blocks.
+
+### Solution Code
+```python
+import re
+
+def find_tags(text: str, replacer: Optional[Union[callable, None]] = None) -> Tuple[Set, str]:
+    tags = set()
+    result_text = []
+    state = 'normal'  # can be 'normal' or 'inside_code'
+    current_segment = []
+    
+    for char in text:
+        if state == 'normal':
+            if char in ('#', '//', '"', '`'):
+                # End of normal text, start code block
+                if current_segment:
+                    result_text.append(''.join(current_segment))
+                    current_segment = []
+                state = 'inside_code'
+        elif state == 'inside_code':
+            if char in ('#', '//', '"', '`', '\n'):
+                # End of code block, add to result
+                result_text.append(''.join(current_segment))
+                current_segment = []
+                state = 'normal'
+        else:
+            current_segment.append(char)
+    
+    # Add the last segment if any
+    if current_segment:
+        result_text.append(''.join(current_segment))
+    
+    # Now process each segment
+    for segment in result_text:
+        if not segment.strip():
+            continue  # skip empty segments
+        if segment.startswith('//') or segment.startswith('"""') or segment.startswith('`'):
+            # It's a code block, add to result_text
+            result_text.append(segment)
+        else:
+            # Extract tags from normal text
+            tags_in_segment = re.findall(r'\b\w+\b', segment)
+            tags.update(tags_in_segment)
+            # Replace tags in the segment
+            if replacer is not None:
+                modified_segment = re.sub(r'\b\w+\b', lambda m: replacer(m.group(0)), segment)
+            else:
+                modified_segment = segment
+            result_text.append(modified_segment)
+    
+    final_text = ''.join(result_text)
+    return (tags, final_text)
+```
+
+### Explanation
+- **State Machine**: The state machine helps in identifying whether we are processing normal text or code blocks. This is crucial for ignoring tags inside code blocks.
+- **Segment Collection**: Segments of text are collected into either normal text or code blocks. This allows us to handle each type appropriately.
+- **Tag Extraction and Replacement**: Using regular expressions, we extract tags from normal text segments. If a replacer function is provided, each tag is replaced; otherwise, the text remains unchanged.
+- **Final Text Construction**: The processed segments are concatenated to form the final text, ensuring that code blocks are preserved and tags are replaced or collected as required.
+
+This approach efficiently handles the parsing and processing of text, ensuring that tags are correctly identified and handled while preserving code blocks.

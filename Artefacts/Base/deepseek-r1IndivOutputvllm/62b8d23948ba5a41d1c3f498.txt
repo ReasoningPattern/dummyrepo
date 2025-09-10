@@ -1,0 +1,52 @@
+
+
+To solve this problem, we need to create a decorator that wraps a function with a memoizing callable using an LRU (Least Recently Used) algorithm. This decorator will cache the results of the function calls based on the arguments, ensuring that the most recently used results are retained and older results are discarded when the cache reaches its maximum size.
+
+### Approach
+The approach involves creating a decorator class `LRU` that handles the caching mechanism. The class will maintain a cache to store the results of function calls and an order to track the usage of these results. When a function is decorated with this decorator, the decorator's `__call__` method will be triggered each time the function is called. This method will generate a key based on the function's arguments, manage the cache using a deque to track the order of insertion, and ensure that the oldest result is removed when the cache exceeds its maximum size.
+
+### Solution Code
+```python
+from collections import deque
+
+class LRU:
+    def __init__(self, maxsize=128, typed=False):
+        self.cache = {}
+        self.maxsize = maxsize
+        self.typed = typed
+        self.order = deque()
+
+    def __call__(self, func):
+        def wrapper(*args, **kwargs):
+            if self.maxsize is None:
+                self.maxsize = 128
+            if self.typed:
+                key = (args, kwargs)
+            else:
+                key = args + tuple(kwargs.items())
+            if key in self.cache:
+                index = self.order.index(key)
+                self.order.pop(index)
+                self.order.append(key)
+            else:
+                if self.maxsize and len(self.cache) >= self.maxsize:
+                    removed_key = self.order.popleft()
+                    del self.cache[removed_key]
+                self.cache[key] = func(*args, **kwargs)
+                self.order.append(key)
+            return self.cache[key]
+        return wrapper
+```
+
+### Explanation
+1. **Initialization**: The `LRU` class is initialized with a maximum size for the cache and a boolean `typed` parameter. The `typed` parameter determines how the function arguments are wrapped into a tuple.
+
+2. **Decorator Method (`__call__`)**: This method is called each time the decorated function is invoked. It defines a nested `wrapper` function that handles the arguments and manages the caching.
+
+3. **Key Generation**: The key is generated based on the function's arguments. If `typed` is `True`, the arguments are wrapped into a tuple. Otherwise, the key is a tuple of positional arguments followed by keyword arguments as `(key, value)` tuples.
+
+4. **Cache Management**: The `wrapper` function checks if the generated key exists in the cache. If it does, the key is moved to the end of the deque to mark it as recently used. If not, the key is added to the front of the deque. When the cache exceeds its maximum size, the oldest key (at the front of the deque) is removed.
+
+5. **Return Result**: The result of the function call is stored in the cache and returned.
+
+This approach ensures that the most recently used function results are always available, and older results are discarded when the cache is full, efficiently managing the function calls and their results.

@@ -1,0 +1,774 @@
+Okay, I need to write a Python function called difference that takes two dictionaries, d1 and d2, and a level parameter which defaults to -1. The function should return a new dictionary containing all the key-value pairs from d1 that are not present in d2. But wait, the level parameter probably affects how deep the comparison goes. Hmm, the problem statement mentions that the level is -1 by default. Oh right, in some recursive functions, level is used to track the depth. So maybe the function should compare the dictionaries up to a certain level of nesting?
+
+Wait the docstring just says "Return a dictionary with items from d1 not contained in d2." It doesn't specify anything about nested dictionaries. But maybe the user expects a deep comparison? Like, if the values are themselves dictionaries, then check recursively up to a certain level?
+
+The function signature includes level, so I should handle different levels. Let me think. The standard approach for comparing dictionaries might not be sufficient here. Let me outline the steps.
+
+First, the function needs to iterate over all keys in d1. For each key, check if it exists in d2. If it doesn't, then include it in the result. But if the key does exist in d2, then check if the values are the same. If the values are different, then include that key in the result. However, if the values are both dictionaries, and the level isn't 0, then we need to recursively compute the difference between those nested dictionaries and include the result in the overall difference. 
+
+Wait, but the problem says "items from d1 not contained in d2". So an item is not present if either the key isn't in d2, or the value (at the current level) is different. But how does the level parameter come into play here?
+
+Ah, maybe when the level is specified, like level=2, it means to compare the dictionaries up to that level of nesting. For example, if level is 1, then we only check the top-level keys. If a key exists in both but the values are dictionaries, then at level 1, we would consider that the key is present in d2, so we wouldn't include it in the difference. But if level is 2, then we would go one level deeper.
+
+Wait, but the default level is -1. Maybe that's a special value indicating to compare all levels, i.e., do a deep comparison. Let me think of how to structure this.
+
+The function should be recursive. Here's an outline of the steps:
+
+Initialize the result as an empty dictionary.
+
+Loop through each key in d1:
+
+- If the key is not in d2: add it to the result with the same value from d1.
+- Else, check if the value in d1 is a dictionary and the value in d2 is also a dictionary:
+   - If so, and if level is not 0, then recursively call difference with d1[key], d2[key], and level-1. If the recursive result is not empty, then add the key and that result to the current result.
+   - If level is 0, then we don't go deeper; even if the values are dictionaries, since we can't go further, we treat them as equal only if their top-level types are the same? Or maybe in that case, if the key is present but the nested dictionaries differ, they are considered different, but the level stops here. Hmm, perhaps when the level is 0, we don't check deeper, so only compare the top-level keys and their immediate values. Wait, maybe the level parameter specifies how many levels deep to compare. So if level is -1, we go as deep as possible. If level is 0, then we just compare the top-level keys and their values (without recursing into nested dicts). 
+
+Alternatively, maybe level is the maximum depth to compare. So if level is 1, then we compare the first level, but not deeper. Let me see.
+
+So here's the plan:
+
+For each key in d1:
+
+- If key not in d2: add the key and its value to the result.
+- Else, check if the value in d1 is a dictionary and the value in d2 is also a dictionary. If so, and if we are allowed to go deeper (level not 0), then we need to compute the difference between these nested dicts. If the difference is non-empty, then include the key and the nested difference in the result. But if the level is 0, then we just treat the key as present, so we don't include it unless their values are different at this level (non-dictionary values).
+- But if the values are of different types (like one is a dict and the other isn't), then they are considered different. So the key would be included in the result.
+
+Wait, so the function is supposed to return all items in d1 that are not in d2. So for a key present in both, if their values are equal (including considering nested dicts if needed), then the key is not part of the difference. But if the values differ, then the key is added to the result. However, when the values are both dictionaries, the difference would only be added if the nested difference exists (i.e., the sub-dictionary in d1 has items not in d2's sub-dictionary), but only up to the given level.
+
+Hmm, perhaps the approach is to first check the keys. Then for each key present in both, check if the values are equal. If they are not, then the key is part of the difference. But when the values are both dictionaries, the comparison depends on the level. So, for example, if level is -1, we go as deep as needed. If level is 0, then we only compare the top-level values (so if they are both dicts, they are considered equal, so the key is not added unless their structure differs beyond the first level).
+
+Alternatively, maybe the difference is computed such that for each key in d1, if the value in d1 is a dictionary, and the key exists in d2 and its value is also a dictionary, then the difference between those sub-dicts is considered. But only if the current level allows going deeper. So level starts at -1, which would mean we go as deep as possible. Each recursive call would decrement the level by 1, so when level reaches 0, it stops.
+
+Wait, let's think of the parameters. The level is set by the user. For instance, if level is 1, then the function would compare the top-level keys and their immediate values. If the values are dictionaries, then they would check if the sub-dicts are different, but only at the first level (since level=1, when we go down a level, the next level would be 0, so no deeper). Wait, perhaps the initial level is set to a certain depth. Like, if level is 2, then we check the first two levels of nesting. But I'm not entirely sure. Let me see how the parameters work here.
+
+The function is difference(d1, d2, level=-1). The default level is -1, which could mean that it goes to all levels. So the idea is that, when level is not 0, we proceed to check nested dictionaries. 
+
+So here's a possible approach:
+
+def difference(d1, d2, level=-1):
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            v1 = d1[key]
+            v2 = d2[key]
+            if isinstance(v1, dict) and isinstance(v2, dict):
+                if level != 0:
+                    # need to check deeper, so call recursively with level-1
+                    sub_diff = difference(v1, v2, level-1)
+                    if sub_diff:
+                        # if there's a difference in the sub-dicts, include this key with sub_diff
+                        result[key] = sub_diff
+            else:
+                # if either is not a dict, compare the values directly
+                if v1 != v2:
+                    result[key] = v1
+    return result
+
+Wait, but maybe that's not exactly right. Let's think of an example. Suppose d1 has a key 'a' whose value is a dictionary. d2 also has 'a' with a different dictionary. The difference should include 'a' only if the sub-dicts are different. But if the level is set, say, to 0, then the function would not check the sub-dicts, so if the keys are present and their top-level values are both dicts, then the key 'a' would not be in the result because the function stops at level 0, treating the sub-dicts as equal (since they are both of type dict). But that's probably not correct. Because in that case, the top-level values are both dictionaries, so the key exists in both, but their actual content may differ. But if level is 0, then the function should not recurse further, so even if the sub-dicts differ, the key 'a' would not be part of the difference. Wait, but that's not right. Because the problem states that the function should return items from d1 not in d2. So, if the key is present in both, but the values are different, then the key is part of the difference. But when the values are nested dictionaries, how do we determine if they are different?
+
+So, for a given key present in both, the value is a dictionary in both. To check if they are the same, we need to compare their contents. But if the level is 0, then we can't do that. So perhaps in that case, even if the sub-dicts differ, we consider the key as present in d2, so it's not added to the result. Only when the level allows going deeper would we check further.
+
+Wait, maybe the function's purpose is to compute the difference at each level. So the difference between two dictionaries is all the keys in d1 that are either not in d2, or their values are different. But when the values are dictionaries, the difference is computed recursively. The level parameter controls how deep the recursion goes. 
+
+So, for example:
+
+d1 = {'a': 1, 'b': {'c': 2}}
+d2 = {'a': 1, 'b': {'c': 3}}
+
+If level is -1, the difference would include 'b' because the sub-dicts have different 'c' values. But if level is 0, then since the top-level 'b' is present in both, and their values are both dictionaries, the function would not go deeper, so it would consider the 'b' values as equal (since they are both dict types?), so the key 'b' would not be in the difference. Wait, but that's not correct because the actual content of the sub-dicts differ. So perhaps the level parameter is the maximum depth to compare. So if level is 0, then only compare the top level. So if two keys have the same top-level value (regardless of nested structure), then they are considered equal. 
+
+Alternatively, maybe the level parameter is the depth at which the comparison stops. For instance, level=-1 means no limit, and level=1 means compare up to first level, but not deeper. 
+
+Hmm, perhaps the approach is to first check if the key is present. Then, if the value is a dictionary, and we're allowed to go deeper (level is not zero), then compute the difference between the nested dictionaries. If that difference is non-empty, then include the key in the result with that difference. Otherwise, if the values are not equal (either because they are different types, or if they are non-dicts and their values are different), then include the key in the result with the original value from d1.
+
+Wait, but when comparing the values, if they are not both dictionaries, then we just check if they are equal. If they are different, then the key is part of the difference. So, for example:
+
+d1 has key 'a' with a list, and d2's 'a' is a different list. Then, since the values are not dicts, they are directly compared. So even if the level is set, it doesn't matter because we can't recurse into non-dicts.
+
+Another example: level=1. So top level is level 0? Or level starts counting from 0?
+
+Hmm, the function's level is -1 by default. So perhaps the initial call is level -1, and in each recursive step, we decrease the level by 1. So when level reaches 0, we stop recursing.
+
+Wait, let me think again. Suppose level is set to 2. Then the first call would be level 2, so we can go two levels deeper. Each recursive call would subtract 1 from the level. So at each step, the current level is how many more levels we can go. 
+
+Alternatively, maybe the level is the depth at which we stop. So if level is 1, then we compare up to that depth, so the first level, and if the value is a dict, we don't go into it. But perhaps that's not exactly how it's supposed to work.
+
+Alternatively, perhaps the level is the maximum depth to consider. So for level=0, only compare top-level keys. For level=1, compare top-level keys and their immediate subkeys if they are dicts, etc.
+
+Wait, the problem is a bit ambiguous. But given the function's parameters, I think the level is the maximum depth to compare. So when level is -1, it's unlimited, so we go as deep as needed. For level=0, we don't go into nested dictionaries. 
+
+Let me try to code this. The function should start by checking each key in d1. For each key present in both d1 and d2:
+
+- If the value in d1 is a dict and the value in d2 is a dict, then we need to check if their contents are different. But if the current level allows us to go deeper (level is not 0), then we do a recursive difference. 
+
+Wait, but how do we handle the level parameter correctly in the recursion?
+
+Let me see. The base case would be when level is 0, then we don't recurse further. 
+
+So the code outline would be:
+
+def difference(d1, d2, level=-1):
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            v1 = d1[key]
+            v2 = d2[key]
+            if isinstance(v1, dict) and isinstance(v2, dict):
+                if level != 0:
+                    new_level = level -1 if level >0 else level
+                    # Wait, if level is -1, then new_level is still -1, so it continues
+                    # So when level is -1, it's allowed to go deeper infinitely.
+                    sub_diff = difference(v1, v2, new_level)
+                    if sub_diff:
+                        result[key] = sub_diff
+            else:
+                # check if the values are different (non-dicts)
+                if v1 != v2:
+                    result[key] = v1
+    return result
+
+Hmm, but let's test this logic. Let's say level is 1. So the first call has level 1. Then, when we check a key whose value is a dict, the next level would be 0, so we can't recurse further. So for the sub-dicts, we would treat them as equal unless their top-level values are different (i.e., their own contents are considered only if level allows). 
+
+Wait, but in the else clause, if the values are not both dicts, then we compare them directly. So in that case, if they are different (like if one is a list and the other is a dict, or their values are different), then we include that key in the result.
+
+Another case: d1 has a key 'a' with a sub-dict {'b': 1}, and d2's 'a' is {'b': 2}. Then, when level is 1, the first call (level=1) would check that 'a' exists in both. Since v1 and v2 are dicts, and level is not 0, we go into the next level (level becomes 0). Then in the next call (difference with level 0), since the level is 0, we can't go deeper. So we check each key in v1 (the sub-dicts). For 'b', since it's present in both, but their values are different (1 vs 2), then in the second call (level 0), since the values are not dicts, the else clause would trigger. But in that second call, the level is 0, so when we check the 'b' key in the sub-dicts, since their values are not dicts, the code would compare them. So in the second call (the sub-dicts), the key 'b' would be in the sub_diff, so the first call would have a non-empty sub_diff, so 'a' would be added to the result with the sub_diff. 
+
+Wait, but in the second call (the sub-dicts), the level is 0. Let me see:
+
+First call: key 'a' in d1 and d2, both are dicts, and level is 1 (not zero). So we call difference(v1, v2, level-1) which is 0.
+
+In the second call (level 0), for key 'b' in v1:
+
+- key 'b' is present in both v1 and v2. Their values are 1 and 2, which are not dicts. So we check if v1['b'] != v2['b']. Since they are different, 'b' would be added to the sub_diff. 
+
+Thus, the sub_diff would be {'b': 1}, so the first call's key 'a' would be included with that sub_diff. So the final result would have 'a' as a key, and its value is the sub_diff. 
+
+But in that case, the difference is correct. 
+
+Another example where the level is 0:
+
+Suppose d1 has 'a' as a dict {'x':5}, d2 has 'a' as {'x':5}. Then the difference would be empty. But if d1's 'a' is {'x':6}, then in the first call, level is 0, so the code would not go into the sub-dicts. Thus, since the key 'a' exists in both, and their values are both dicts, the code would check if v1 != v2. But since they are both dictionaries, their type is the same, so the comparison would be based on their contents. Wait, but comparing two dictionaries with == in Python compares the keys and values, so if the sub-dicts have different values, then v1 != v2 would be True. But in that case, even with level 0, we would have to compare their contents. But that's not possible unless we do a deeper check. 
+
+Hmm, this is a problem. Because when the level is 0, but the values are dicts, then we can't check the contents. So the code as written would not capture that. 
+
+Wait, in the current code, when the level is 0, and the values are both dicts, then the code would not recurse further, so the sub_diff would be empty (since the recursive call is made with level 0, and in that call, the loop would check each key in v1. Let me see:
+
+Wait, in the first call, if level is 0, then in the case where the key exists in both and their values are dicts, the code would not proceed further. So the sub_diff would be computed as difference(v1, v2, 0 -1 = -1?), no. Wait, in the code above, new_level is level-1 if level>0? Or wait, the code says:
+
+new_level = level -1 if level >0 else level. 
+
+Wait, no, that line is incorrect. Let me see: the original code had:
+
+if level !=0:
+
+    new_level = level-1 if level>0 else level
+
+Wait, no, that's not part of the code I wrote. Let me re-express:
+
+Wait, in the code outline, the recursive call would be difference(v1, v2, level-1). But if level was 1, then the next level is 0, which is allowed. But if level is -1, then level-1 is -2, which is still less than zero, so the function will continue recursing until the end. 
+
+Wait, in the case where the level is 0, and the values are dicts, then the code would not call the recursive function. So, in the first call (level 0), when we have a key 'a' which is present in both, but their sub-dicts differ, then the code would not check the sub-dicts. So the code would consider that since the key is present in d2, and the value types are both dicts, the key is not added to the result. But in reality, the sub-dicts may differ, so the value of 'a' in d1 is not equal to that in d2, so 'a' should be in the difference. 
+
+Ah, here's the problem. The code's current logic for non-recursive cases (when level is 0) would not check the contents of the sub-dicts, so the comparison of v1 and v2 (the sub-dicts) would only check if they are the same object (since in Python, comparing two different dictionaries with == would return False if their contents differ). 
+
+Wait, but in Python, when you compare two dictionaries, like {'x':5} == {'x':5}, that's True. So if the values are both dictionaries, but not equal (because their contents differ), then even if level is 0, the else clause would trigger because v1 != v2. Wait no, the code's current structure checks for the case where the values are both dictionaries, and then proceeds to recurse. If they are not both dicts, then it checks if v1 != v2. 
+
+Wait, in the code I outlined, for the case where the values are both dictionaries and level is 0, then the code would not recurse. So the code would skip the recursive part, and then fall into the else clause? Wait no, because the first check is whether both are dictionaries. So in that case, the else clause (the one that checks v1 != v2) is not executed. 
+
+Wait, the code's structure is:
+
+if key not in d2:
+    add to result
+else:
+    check if v1 and v2 are both dicts. 
+
+    if yes:
+        if level is not 0:
+            recurse with level-1
+            if the sub_diff is not empty, add key and sub_diff to result
+        else:
+            since level is 0, we can't go deeper. So we have to check if the two dicts (v1 and v2) are equal as a whole. 
+
+            If they are not equal (i.e., v1 != v2), then we need to add the key to the result. 
+
+    else:
+        if v1 != v2, add to result.
+
+Wait, so in the case where the values are both dictionaries but level is 0, then the code would not recurse. So the code would check if v1 != v2. Since v1 and v2 are different dictionaries (even if their keys are the same but values differ), the comparison v1 != v2 would be True. So that key would be added to the result with v1's value. 
+
+Wait, but in that case, when the level is 0, the function would compare the entire sub-dicts. But that's okay. Because level 0 would mean that at this level, we can't go deeper. So the key would be considered part of the difference if the entire sub-dict is different. 
+
+Hmm, but maybe the user expects that when level is 0, only the top-level keys are compared, and the sub-dicts are not considered. But according to the problem's docstring, it's just to return items from d1 not in d2. So, if the key exists in both, but the values are different (even if they are dictionaries), then the key is added to the difference. But in that case, the code would work. Let me see.
+
+Wait, the problem says "items from d1 not contained in d2". An item is a key-value pair. So for a key present in both, the item is not included in the result if the value is the same. But if the values are different (even if they are both dictionaries but have different content), then the key is included. 
+
+So, in the case where the values are both dictionaries and level is 0, then the code would check if the entire sub-dicts are equal. If they are not, then the key is added with v1's value. 
+
+Wait, but the problem might expect that when the level is 0, the function doesn't go deeper, so for the sub-dicts, the function treats them as equal if their keys are present? No, I think the problem is expecting that the function compares the entire value, even if it's a dictionary, unless the level restricts that. 
+
+Wait, perhaps the level is the maximum depth allowed. So for example:
+
+level = 0: compare only top-level keys and their values (so treat nested dicts as equal only if they are the same object, but that's not the case). So in the case of two sub-dicts with different contents, since they are different objects, the code would add the key to the result. 
+
+But that's correct. Because the entire value (the sub-dict) is different. 
+
+Wait, but if two dictionaries have the same keys and values, then their == comparison would be True. So in that case, even with level 0, the code would not add the key. 
+
+So the code seems to handle that case correctly. 
+
+Another example: d1 has a key 'a' with a sub-dict {'b': 1}, and d2's 'a' is {'b':1}. Then, even with level 0, since the sub-dicts are equal, the key 'a' is not added. 
+
+Another case where d2's 'a' is a different dictionary (but same keys and values), then since they are different objects, but the contents are equal, the comparison would be True. 
+
+Wait, but in Python, two dictionaries with the same key-value pairs are considered equal even if they are different objects. So that's okay. 
+
+So the code outline should be okay. Let me code it properly.
+
+Wait, in the code, when we call the recursive function, and if the sub_diff is non-empty, then we add the key with sub_diff as the value. But that's not exactly right. Because the sub_diff is the difference between the two sub-dicts. So the key's value in the result should be the sub_diff, which represents the part of d1's sub-dict not present in d2's. 
+
+Yes, that's correct. So the resulting dictionary would have nested differences as needed. 
+
+Now, what about when the values are not both dictionaries? For example, d1 has a key 'x' with value 5, and d2's 'x' is 6. Then, the else clause would trigger, since they are not both dicts. So v1 != v2 would be True, so the key is added. 
+
+Another case where d1's 'x' is a list, and d2's 'x' is a different list. Then, since they are not dicts, the else clause would check if the lists are equal, and if not, add the key. 
+
+So that seems correct. 
+
+Now, edge cases. What if the level is 1, and the value is a nested dictionary two levels deep? Like:
+
+d1 = {'a': {'b': {'c': 1}}}
+d2 = {'a': {'b': {'c': 2}}}
+
+If level is 1, then the first call (level=1) would check 'a' exists in both. The values are both dicts, so we proceed to check with level-1 (0). So the next call (difference of the 'a' sub-dicts) would have level 0. 
+
+In that second call (level=0), when checking key 'b' in the sub-dicts, since the values are both dicts, and the current level is 0, the code would not recurse further. So it would compare the two 'b' sub-dicts (the ones with 'c' entries). Since their contents are different (the 'c' values are 1 vs 2), the comparison v1 != v2 would be True. So the key 'b' would be added to the sub_diff with its value from d1's 'a' (the sub-dict {'b': {'c':1}} would have the 'b' value as a dict, so in the sub_diff (when level is 0), the 'b' would trigger because their sub-dicts are different. 
+
+Wait, let me walk through:
+
+First call (difference(d1, d2, level=1)):
+
+key 'a' is present in both. v1 is {'b': {'c':1}}, v2 is {'b': {'c':2}}. 
+
+They are both dicts, so check if level (1) is not 0. It is not, so call difference(v1, v2, 0). 
+
+Second call (difference({'b': {'c':1}}, {'b': {'c':2}}, level=0):
+
+key 'b' is present in both. v1 is {'c':1}, v2 is {'c':2}. 
+
+Now, since level is 0 here, the code checks if they are both dicts (yes), so enters the if clause. 
+
+Then, because level is 0, the condition (level !=0) is false, so we don't recurse. Instead, we check if the entire sub-dicts (v1 and v2) are equal. 
+
+Wait, in this case, the sub-dicts (the 'b' values) are {'c':1} vs {'c':2}, so they are not equal. Therefore, the code would add the 'b' key to the result with v1's value (the {'c':1} dict). 
+
+Wait, no, because in the second call (the 'a' sub-dicts), the code is comparing the 'b' keys. So in the second call's loop over 'b' (since it's in v1), when checking if 'b' is in v2 (yes), then check if the values (the sub-dicts of 'b') are both dicts. Since level in the second call is 0, the level for the next call would be 0-1 = -1? Wait, no. Wait, in the second call, the level is 0. So for the 'b' key in v1 and v2, their values are both dicts. 
+
+The code in the second call would process 'b' as follows:
+
+key is 'b', present in both. 
+
+v1 is {'c':1}, v2 is {'c':2}. 
+
+Check if both are dicts (yes). Then, the code checks if the current level (0) is not 0? No, so it skips the recursive call. 
+
+So then, the code proceeds to check if v1 != v2. Since they are not equal (because their 'c' values differ), then we would add 'b' to the result with v1's value (the {'c':1} dict). 
+
+Wait, but the code in the second call's else clause (the one after the check for being dicts) doesn't exist. Wait, in the code outline, after checking if the values are dicts, the code proceeds to check if level is not 0. If it is, then the code would compare the entire dict (v1 != v2). 
+
+Wait, in the second call (level=0), the code would do:
+
+for key in v1 (which is 'b'):
+
+key is in v2, so else clause. 
+
+Check if v1's value (the sub-dict of 'b') and v2's value are both dicts. 
+
+Yes, so then the code checks if level is not 0 (current level is 0, so no). 
+
+So then, the code needs to check if v1 != v2. 
+
+Wait, in that case, the code would do:
+
+if v1 != v2 (since the sub-dicts are different), then add key 'b' to the sub_diff with v1's value (the sub-dict). 
+
+Wait, no, that's not right. Because when the values are both dicts and level is 0, we can't go deeper, so the code would check if the entire sub-dicts are equal. Since they are not, the key 'b' would be added to the sub_diff (the result of the second call) with the value of v1's sub-dict (which is {'c':1}).
+
+Wait, but the problem's requirement is to return items from d1 not in d2. So if the entire value (the sub-dict) is different, then the key 'a' in the first call would have a sub_diff of {'b': {'c':1}}? Because the second call (difference of the 'a' sub-dicts at level 0) would return {'b': {'c':1}}? Because in the second call's processing of 'b', since the level is 0, when their sub-dicts (the 'c' entries) are considered, the code would treat those as part of the deeper check which isn't allowed. 
+
+Wait, in the second call (level=0), when processing key 'b', the code would see that the values (the sub-dicts) are both dicts. So the first condition (if isinstance(v1, dict) and ... ) is true. Then, since the current level (0) is equal to 0, the code would not recurse. Therefore, it would proceed to check if v1 != v2 (the two sub-dicts of 'b'). 
+
+Since they are not equal, then in the second call's processing, the key 'b' would be added to the sub_diff with its value from v1 (the {'c':1} dict). 
+
+Therefore, the first call's sub_diff for 'a' would be {'b': {'c':1}}, so the key 'a' would be added to the result with that sub_diff. 
+
+Which is correct, because the 'a' sub-dicts in d1 and d2 are different, so the 'a' key in the original d1 is part of the difference. 
+
+Hmm, so that seems to work. 
+
+Another test case: level is 1. Let's say the 'a' sub-dicts have 'b' with different values. 
+
+d1 = {'a': {'b': 1}}
+d2 = {'a': {'b': 2}}
+
+Calling difference(d1, d2, level=1). 
+
+The first call processes 'a', which is present in both. The values are both dicts. level is 1, so not zero. So we call difference(v1, v2, level-1 =0). 
+
+In the second call (level=0), processing key 'b' in v1 (the 'b' exists in both). 
+
+The values are 1 and 2, which are not dicts. So the else clause (non-dict case) is executed. 
+
+Since 1 !=2, the key 'b' is added to the sub_diff with the value 1. 
+
+Thus, the sub_diff for 'a' is {'b':1}, so the first call would include 'a' with that sub_diff. 
+
+So the result is {'a': {'b':1}} which is correct. 
+
+Another case where the sub-dicts have the same value. 
+
+d1 = {'a': {'b': 1}}
+d2 = {'a': {'b': 1}}
+
+Calling with level=1. 
+
+Then the sub_diff would be empty (since the 'b' values are equal), so the first call's 'a' key would not be added to the result. 
+
+So the code works. 
+
+What about a case where the sub-dicts have a deeper difference. 
+
+d1 = {'a': {'b': {'c': 1}}}
+d2 = {'a': {'b': {'c': 2}}}
+
+Calling with level=2. 
+
+First call (level=2) processes 'a'. 
+
+The values are dicts, so we call difference with level=1 (2-1=1). 
+
+In the second call (level=1), processing 'b' (present in both). 
+
+The values are dicts. Since level is 1, not 0, so we call difference with level=0. 
+
+In the third call (level=0), processing 'c' in v1 (the 'b's sub-dicts). 
+
+Since 'c' is present in both, and their values are 1 and 2 (not dicts), then v1 !=v2, so 'c' is added to the sub_diff (third call's result). 
+
+The third call returns {'c':1}, so the second call's sub_diff is {'b': {'c':1}}. 
+
+Then, the second call's sub_diff is non-empty, so 'b' is added to the second call's result. 
+
+Thus, the first call's sub_diff for 'a' is {'b': {'c':1}}, so 'a' is added to the result. 
+
+But if the level was 1, then in the first call's level is 1. The second call would be with level 0. 
+
+Wait, let's see. 
+
+If the original call is level=1, then:
+
+First call (level=1) processes 'a' (present in both). 
+
+The values are both dicts. So we call difference with level 0 (1-1). 
+
+In the second call (level=0), processing 'b' (present in both). 
+
+The values are dicts. Now, since level is 0, the code skips the recursive part. 
+
+So compares the entire sub-dicts (the 'b's). 
+
+v1 (the 'b' of d1's 'a') is {'c':1}, v2 is {'c':2}. 
+
+These are not equal, so the second call's result for 'b' would be {'c':1}? 
+
+Wait, no. Let me see: in the second call (difference of the 'a's with level 0), the code would loop over the keys in v1 (which is the 'b' sub-dict). 
+
+Wait, the second call's parameters are the 'b' sub-dicts from d1 and d2. 
+
+Wait, no, wait. 
+
+Original first call (difference(d1, d2, 1)): 
+
+The key 'a' is present in both, so we call difference on the 'a' sub-dicts, with level=0 (since 1-1 is 0). 
+
+Wait, the second call is difference(v1, v2, level-1). Where v1 is the sub-dict of d1's 'a', and v2 is d2's 'a' sub-dict. 
+
+So in the second call (level=0), the function is comparing the 'b' sub-dicts. 
+
+Wait, in the second call, the keys in v1 (the 'a's sub-dict) is 'b', so the second call loops over keys in v1 (the 'a's sub-dict). 
+
+In the second call (level=0):
+
+for key in v1 (the 'b' key):
+
+   if key not in v2 (no, it is present), so else clause. 
+
+   v1's value here is {'c':1}, and v2's is {'c':2}. 
+
+   So they are both dicts, so check if level (0) is not 0. 
+
+   Since it is 0, we do not recurse. 
+
+   So we check if the entire sub-dicts (v1's value and v2's value) are equal. 
+
+   Since {'c':1} != {'c':2}, the else clause (the non-recursive part for the dict case) would need to check if they are different. 
+
+Wait, but in the code outline above, after the if level !=0 clause, the code would have to compare the entire dict. 
+
+Wait, in the current code outline, the code is structured as:
+
+if key in d2:
+
+    check if both are dicts. 
+
+    if yes and level !=0:
+
+        recurse and check sub_diff. 
+
+        if sub_diff exists, add to result. 
+
+    else:
+
+        # here, either one is not a dict, or level is 0. 
+
+        # but in the case where they are both dicts but level is 0, 
+
+        # then we need to check if their values are different. 
+
+        # So in this else block, when they are both dicts and level is 0, 
+
+        # then compare v1 and v2 (the entire sub-dicts). 
+
+        # So, in this case, if v1 != v2, then the key is added with v1's value. 
+
+Wait, the code as outlined doesn't handle that. Because the code only checks the else clause when one of them is not a dict. 
+
+Ah, here's a problem. The current code outline only handles the case where the values are not both dictionaries. So when they are both dictionaries and the level is zero, the code would skip the recursive part, but then the else clause (the non-dict case) is not entered. So in that case, the code would not add the key to the result even if the sub-dicts are different. 
+
+Wait, let me re-express the code structure. 
+
+Inside the else (key is present in d2):
+
+   v1 = d1[key], v2 = d2[key]
+
+   if both are dicts:
+
+       if level !=0:
+
+           recurse and see if there's a sub_diff. 
+
+           if yes, add key and sub_diff to result. 
+
+       else:
+
+           # level is 0, so we can't recurse further. 
+
+           # So we need to check if the entire sub-dicts are different. 
+
+           if v1 != v2:
+
+               result[key] = v1
+
+   else:
+
+       if v1 != v2, add to result. 
+
+Ah, right! So in the case where the values are both dictionaries but level is 0, then the code would compare the entire sub-dicts. 
+
+So, the code needs to have an else clause for when the level is zero and the values are both dicts. 
+
+Wait, the code structure I had before was missing that. Let me correct that.
+
+So the code should be:
+
+Inside the else block (key is in d2):
+
+    v1 = d1[key]
+
+    v2 = d2[key]
+
+    if isinstance(v1, dict) and isinstance(v2, dict):
+
+        if level !=0:
+
+            sub_diff = difference(v1, v2, level-1)
+
+            if sub_diff:
+
+                result[key] = sub_diff
+
+        else:
+
+            # since level is 0, but the values are both dicts, we can't go deeper. 
+
+            # So, if the entire sub-dicts are different (v1 != v2), then the key is added. 
+
+            # Wait, but how to check that? 
+
+            # The problem is that the code can't compare the sub-dicts' contents if level is 0. 
+
+            # Because in that case, the sub-dicts are considered as a whole. 
+
+            # So, if their contents differ, then v1 !=v2 would be true, so we add the key to the result with v1's value. 
+
+            # So yes, the code would do that. 
+
+            if v1 != v2:
+
+                result[key] = v1
+
+    else:
+
+        # one or both are not dicts. 
+
+        if v1 != v2:
+
+            result[key] = v1
+
+Wait, but in the case where level is 0 and the values are both dicts, then the code would check if v1 != v2. 
+
+Which is exactly what we want. Because when level is 0, we can't go deeper, so the comparison is whether the entire sub-dict is different. 
+
+Wait, but comparing two dictionaries in Python with == does check their contents. So that's correct. 
+
+So the code needs to handle that. 
+
+Hmm, so the code structure is okay. 
+
+Now, what if the level is 0, but the sub-dicts are the same? Then, since v1 == v2, no addition. 
+
+Another case where the values are a list and a dict. 
+
+d1 has key 'x' with value [1,2], d2's 'x' is {'a':1}. 
+
+Then, the values are not both dicts. So the else clause (the non-dict case) is entered. Since [1,2] != {'a':1}, so the key is added. 
+
+Okay, that's correct. 
+
+Now, what about non-dictionary values that are the same. So the key is in both, and their values are equal. Then, they are not added. 
+
+Another edge case: a key exists in d1 but not in d2, so it's added. 
+
+Another edge case: when the level is 0, and the value is a list in both, but different elements. Then, since they are not dicts, the else clause checks for v1 !=v2, which would be true, so the key is added. 
+
+So the code seems to handle that. 
+
+Now, I need to code this properly. Let me structure the code step by step.
+
+Wait, the function must return a new dictionary. The keys are those from d1 which are either not in d2, or their values differ (with the level consideration). 
+
+So here's the code:
+
+def difference(d1, d2, level=-1):
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            v1 = d1[key]
+            v2 = d2[key]
+            if isinstance(v1, dict) and isinstance(v2, dict):
+                if level != 0:
+                    sub_diff = difference(v1, v2, level -1)
+                    if sub_diff:
+                        result[key] = sub_diff
+                else:
+                    # check if the entire dicts are different
+                    if v1 != v2:
+                        result[key] = v1
+            else:
+                # if either is not a dict, check equality
+                if v1 != v2:
+                    result[key] = v1
+    return result
+
+Wait, but in the case where the level is 0, and the values are both dicts, then the code would check if v1 != v2. Since the sub-dicts may be different, that's correct. 
+
+Another test case:
+
+d1 = {'a': 1, 'b': {'c': 2}}
+d2 = {'a': 1, 'b': {'c': 3}}
+difference(d1, d2, level=0) would return {'b': {'c':2}} because the sub-dicts are different. 
+
+Yes, because in the first call (level 0), the key 'b' is present in both. The values are both dicts, so we check if level is 0. 
+
+Then, in the else clause (since level is 0), we check if v1 !=v2. Since they are different (their 'c' keys have different values), the code would add 'b' to the result with the value from d1 (the sub-dict {'c':2}).
+
+Wait, but when you add 'b' to the result with the value {'c':2}, that's the entire value from d1's 'b', but the difference between the sub-dicts is {'c':2} because in d2's 'b', the 'c' is 3. So the comparison v1 !=v2 would be True, so 'b' is added. 
+
+Yes, that's correct. 
+
+Another case where level is 0 and the sub-dicts are the same. 
+
+d1 = {'a': {'b': 1}}, d2 same. 
+
+Then difference would return empty. 
+
+Another case where the key is present in both, but the value in d1 is a non-dict and different from d2's. 
+
+Like d1 has 'x' =5, d2 has 'x' =6. 
+
+Then the else clause (since they are not dicts) would trigger, and the key is added. 
+
+Okay, that's correct. 
+
+Now, what about when the level is 1, and the sub-dicts have a key that exists in both but the deeper level's value is different? 
+
+Like:
+
+d1 = {'a': {'b': {'c': 1}}}
+d2 = {'a': {'b': {'c': 2}}}
+
+Calling difference with level=1. 
+
+First call level=1, processes 'a' (present in both). 
+
+The values are dicts. level is 1 !=0, so recurse with level 0. 
+
+Second call (difference of the 'a' sub-dicts, level=0):
+
+for each key in v1 (the 'b' key):
+
+   key 'b' is in v2. 
+
+   v1['b'] is {'c':1}, v2['b'] is {'c':2}. 
+
+   Both are dicts. 
+
+   Now, in the second call's processing, level is 0. 
+
+   So check if level !=0? No, so enter the else clause. 
+
+   So check if v1['b'] != v2['b']. Since they are different, add 'b' to the sub_diff with v1['b'] (the {'c':1} dict). 
+
+   So sub_diff for the second call is {'b': {'c':1}} (since when comparing the 'b's, their sub-dicts are different, but since level is 0 here, the code would compare the entire sub-dicts, and they are different, so 'b' is added to the sub_diff. 
+
+Wait, no, in the second call (difference of the 'a's sub-dicts at level=0), the 'b' is the key. 
+
+Processing 'b' in the second call (level=0):
+
+key 'b' is present in both. 
+
+v1 is {'c':1}, v2 is {'c':2}. 
+
+These are both dicts, so check if level is 0 (yes). 
+
+Then, the code checks if v1 != v2 (which is True), so adds 'b' to the sub_diff with the value {'c':1}. 
+
+Thus, the sub_diff from the second call is {'b': {'c':1}}. 
+
+So the first call's 'a' would have a non-empty sub_diff, so add 'a' to the result with that sub_diff. 
+
+Thus, the overall difference is {'a': {'b': {'c':1}}}. 
+
+Wait, but in this case, the level was 1. The first call's level was 1, so when processing 'a', it went down one level (to level 0) and compared the 'b' sub-dicts. Since their contents differ, the 'b' key is added, so the 'a' is added in the first call's result. 
+
+That's correct. 
+
+Another test case where the level is 0 and the sub-dicts are the same except in a deeper level. 
+
+d1 = {'a': {'b': {'c': 1}}}
+d2 = {'a': {'b': {'c': 1}}}
+
+Then difference with level=0 would return empty. Because the 'a's sub-dicts are equal (since their entire contents are the same), so the code would not add 'a' to the result. 
+
+Yes. 
+
+Now, what about a case where the value is a list in d1 and a dict in d2. 
+
+d1 has 'x' as [1,2], d2 has 'x' as {'a':3}. 
+
+The key is present in both. 
+
+The values are not both dicts, so the else clause (non-dict case) is entered. 
+
+Check if [1,2] != {'a':3} (yes), so the key is added. 
+
+Okay. 
+
+So the code seems to handle all these cases. 
+
+Now, what about when the value in d1 is a non-dict, and the value in d2 is a dict. 
+
+Like d1['x'] = 5, d2['x'] = {'a':5}. 
+
+Then the key is present in both. 
+
+The values are not both dicts (one is a dict, the other is an int), so the else clause is entered. 
+
+5 != {'a':5}, so the key is added. 
+
+Yes. 
+
+Now, let's think about the case where the key is present in both, and the values are the same type but not dict (like lists). 
+
+d1 has 'x' as [1,2], d2 has 'x' as [1,3]. 
+
+Then, since the values are not dicts, the else clause checks if they are different (they are), so the key is added. 
+
+Yes. 
+
+Another case where the values are both lists. 
+
+d1 has 'x' as [1,2], d2 has 'x' as [1,2]. 
+
+They are equal, so not added. 
+
+But if the lists are different, then added. 
+
+So the code is correct. 
+
+Now, the code must also handle the case when the level is 0, and the key is present but the sub-dicts are different. 
+
+Wait, in the code's structure, when the values are both dictionaries and the level is 0, then the code checks v1 !=v2. Since they are different, the key is added. 
+
+Yes, so that's correct. 
+
+Now, I think this code should work. Let me code it properly now. 
+
+Wait, the function must be recursive. So, in the code above, the base case is when level is 0, but even then, the code can compare the entire dictionaries. 
+
+Wait, but if level is 0, and the values are dictionaries, then the code compares the entire sub-dicts. So that's okay. 
+
+Another possible edge case: when the values are not dictionaries but other objects. Like, instances of a class. 
+
+The code compares with v1 !=v2, which should work as per their __eq__ method. 
+
+Thus, the code should be okay. 
+
+Now, I need to make sure that the function only takes dictionaries as d1 and d2, but the problem doesn't specify that. So the code may assume that the inputs are dictionaries. 
+
+So, the code as written should work. 
+
+I think this is the correct approach. Now let's code it. 
+
+Wait, in the code, when the values are both dictionaries and level is not zero, then the sub_diff is computed. If the sub_diff is non-empty, then the key is added to the result with sub_diff. 
+
+So, in the first call, if the sub_diff is non-empty, then the key is added. 
+
+But in the case where the sub-dicts have a difference, then the sub_diff would be non-empty, so the key is added. 
+
+Yes. 
+
+Another possible issue: the function loops over all keys in d1, but not in d2. What if d2 has a key that d1 doesn't? That's irrelevant, since the difference is only items in d1 not in d2. 
+
+Wait, the code only checks keys in d1, so that's correct. 
+
+Another case where a key in d1 is present in d2, but the value in d1 is a dict and d2's is not. 
+
+Then, since the types are different, the code would enter the else clause. 
+
+Thus, the key is added. 
+
+So I think this code should work. 
+
+Let me code this now. 
+
+Wait, also, the function should return a dictionary with the items from d1 not in d2. So, the code is correct. 
+
+The code loops through each key in d1, so that's right. 
+
+Yes, I think this is the correct code.

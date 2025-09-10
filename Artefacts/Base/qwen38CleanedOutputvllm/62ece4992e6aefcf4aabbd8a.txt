@@ -1,0 +1,32 @@
+import configparser
+import logging
+import os
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    config_dict = {}
+    error_logs = []
+    for filename in config_filenames:
+        try:
+            config = configparser.ConfigParser(interpolation=configparser.EnvInterpolation() if resolve_env else None)
+            config.read(filename)
+        except PermissionError as e:
+            error_logs.append(logging.LogRecord(
+                name='config_loader', level=logging.ERROR, pathname=filename, lineno=1,
+                msg=f"Permission denied: {str(e)}", args=None, exc_info=None, func=None
+            ))
+        except FileNotFoundError as e:
+            error_logs.append(logging.LogRecord(
+                name='config_loader', level=logging.ERROR, pathname=filename, lineno=1,
+                msg=f"File not found: {str(e)}", args=None, exc_info=None, func=None
+            ))
+        except configparser.Error as e:
+            error_logs.append(logging.LogRecord(
+                name='config_loader', level=logging.ERROR, pathname=filename, lineno=1,
+                msg=f"Parsing error: {str(e)}", args=None, exc_info=None, func=None
+            ))
+        else:
+            parsed_config = {section: dict(config[section]) for section in config.sections()}
+            if overrides:
+                parsed_config.update(overrides)
+            config_dict[filename] = parsed_config
+    return config_dict, error_logs

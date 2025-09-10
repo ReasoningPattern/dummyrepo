@@ -1,0 +1,81 @@
+
+
+```python
+import functools
+import collections
+import time
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    if maxsize == 0:
+        def null_decorator(func):
+            return func
+        return null_decorator
+
+    def _make_key(args, kwds):
+        parts = []
+        for a in args:
+            if typed:
+                parts.append((a, type(a)))
+            else:
+                parts.append(a)
+        if kwds:
+            parts.append(object())
+            for k, v in sorted(kwds.items()):
+                if typed:
+                    parts.append((k, (v, type(v))))
+                else:
+                    parts.append((k, v))
+        return tuple(parts)
+
+    class _TTLCache:
+        def __init__(self):
+            self.maxsize = maxsize
+            self.ttl = ttl
+            self.timer = timer
+            self.cache = collections.OrderedDict()
+
+        def get(self, key):
+            now = self.timer()
+            if key in self.cache:
+                val, exp = self.cache[key]
+                if exp > now:
+                    self.cache.move_to_end(key, last=True)
+                    return val
+                else:
+                    del self.cache[key]
+            return None
+
+        def set(self, key, value):
+            now = self.timer()
+            expire = now + self.ttl
+            to_remove = []
+            for k in list(self.cache.keys()):
+                val, exp = self.cache[k]
+                if exp <= now:
+                    to_remove.append(k)
+            for k in to_remove:
+                del self.cache[k]
+            if len(self.cache) >= self.maxsize:
+                self.cache.popitem(last=False)
+            self.cache[key] = (value, expire)
+
+    cache = _TTLCache()
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwds):
+            key = _make_key(args, kwds)
+            result = cache.get(key)
+            if result is not None:
+                return result
+            result = func(*args, **kwds)
+            cache.set(key, result)
+            return result
+        return wrapper
+    return decorator
+```

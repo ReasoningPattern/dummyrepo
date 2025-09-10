@@ -1,0 +1,1996 @@
+Okay, I need to generate Python code for the method _include_groups based on the provided docstring. The docstring says it resolves the include dict directive in the spec files. Hmm, so what does that mean exactly? Probably, the parser_dict has some 'include' keys that refer to other groups or dictionaries that should be merged into the current one. 
+
+Wait, the function is called _include_groups, so maybe it's part of a larger class that's parsing some specification files. The method's purpose is to handle includes, where a group might reference another group's configuration and merge it into itself. Like, if a dictionary has an 'include' entry pointing to another group's name, then that group's data should be added here.
+
+So the approach might be to loop through each group in the parser_dict. For each group, check if there's an 'include' key. If it does, then look up the target group from parser_dict, get its items, and merge them into the current group. But I have to be careful not to overwrite existing entries unless intended. Also, recursion might be needed if the included groups themselves have includes. 
+
+Wait, but how do I handle that? Maybe first process all includes in a first pass, then iterate again to make sure all includes are resolved. Or perhaps process each group's includes one by one, and for each include, recursively include the target's includes before merging. That way, it's handled in a depth-first manner.
+
+Alternatively, maybe it's a single-level include. The problem is that the docstring isn't very specific. Let's assume that includes can be nested, so we need to resolve them all. 
+
+So here's a possible plan: For each group in the parser_dict, if it has an 'include' key, which is probably a list of group names, then for each of those included groups, we need to add their key-value pairs to the current group. But we also have to check if those included groups have their own includes, so we need to process those first. 
+
+Wait, but the function is called _include_groups, so maybe it's supposed to handle all groups at once. Let me think. The method is part of a class, so parser_dict is probably a dictionary of groups, each group being a dictionary. The 'include' key in a group's dict would point to other group names. 
+
+The steps could be:
+
+1. Iterate over all the groups in parser_dict. For each group, check if the 'include' key exists.
+2. If it does, get the list of included groups (maybe it's a list? Or a single string? The docstring doesn't say, but I'll assume it's a list).
+3. For each included group name in the list, retrieve that group's data from parser_dict.
+4. Then, merge the included group's data into the current group's data. But also, need to resolve any includes in those included groups first. So this might require a recursive approach.
+5. After merging, remove the 'include' key from the current group to avoid reprocessing it again.
+
+Wait, but how do I handle the merging without overwriting? Like, if the current group has a key that's also in the included group, which one takes precedence? Probably, the current group's entries should stay, and the included group's entries are added unless they already exist. Or maybe the included group's entries override? The problem statement isn't clear, but perhaps the standard is that the includes are merged, and existing keys in the current group take precedence. Alternatively, maybe the included groups' keys come first, so the current group's own keys override. Hmm, not sure. Since the function's job is to resolve includes, maybe it's to merge the included groups into the current, so any existing keys in the current group would remain, and the included ones add to them where possible. Or maybe the included groups are added before, so their values are overridden by the current group's own entries. 
+
+Alternatively, perhaps the 'include' is a list of groups to include, and each included group's keys are added to the current group. If there are duplicates, the current group's values stay. So when merging, the included group's data is added to the current group's data, but if the current already has a key, it's not replaced. 
+
+So the steps would be:
+
+- For each group in parser_dict:
+   - If the group has an 'include' entry:
+      - For each included group name in the 'include' list:
+         - Recursively process the included group (to resolve its includes first)
+         - Then, take all the key-value pairs from the included group and add them to the current group, except for the 'include' key itself. Or maybe include the 'include' keys but process them as well? Wait, no. Because the included group's includes would have already been processed before merging.
+
+Wait, but how do I do that? Let's think of an example. Suppose group A includes group B, and group B includes group C. So when processing A's include, we first process B, which in turn processes C. Then, when merging, all the included data from B and C would be in A. 
+
+Therefore, the function needs to handle this recursively. 
+
+So the method could be something like this:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in parser_dict.items():
+        if 'include' in group_data:
+            includes = group_data.pop('include')  # Remove the include list so we don't loop
+            if isinstance(includes, str):  # if it's a single string, make it a list
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    included_group = parser_dict[inc]
+                    # need to resolve includes in the included group first, recursively
+                    self._include_groups({inc: included_group})  # but this might not be the best way
+                    # then merge the included group's data into current group_data
+                    group_data.update(included_group)
+                else:
+                    # handle case where included group doesn't exist? Maybe raise an error?
+                    # but the problem doesn't specify, so perhaps just skip or log?
+                    pass
+
+Wait, but that approach might not work. Because when we call self._include_groups again on a subset, it would process that group again, but since the 'include' has been popped, it would not process again. Wait, maybe the recursion is not handled properly here. Let me think again. 
+
+Alternatively, perhaps the function should process each group's includes by first ensuring that all the included groups have their includes resolved, then merge their data. 
+
+Wait, perhaps a better way is to loop through all groups, and for each group, if it has an 'include' key, process the included groups first (recursively), then merge their data into the current group, then remove the 'include' key from the current group. 
+
+Wait, but how do I loop through all the groups and process their includes. Let's see:
+
+Maybe the function should be:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)  # Wait, but this might cause an infinite loop?
+                    # Wait, no, because when we process the included group, we pop its include first. 
+                    # Wait, but if we process all groups again, then maybe the included group is processed again. 
+
+Hmm, perhaps this approach is not correct. Let me think again. 
+
+Suppose the group's include is a list of groups to include. To handle the includes, we first need to process those included groups, then merge their data into the current group. 
+
+But if the included groups are processed before the current group, then their includes would have been resolved already. 
+
+So maybe the correct approach is:
+
+Loop through all groups in parser_dict. For each group, check if it has an 'include' key. If so, process the included groups first, then merge. 
+
+But how to do that in code. Maybe a recursive function that, given a group name, processes its includes and then merges. 
+
+Alternatively, the function could work as follows:
+
+Iterate over each group in the parser_dict. For each group, if it has an 'include' key, then collect all the groups it includes, process those groups (recursively), then merge their data into this group, and remove the 'include' key. 
+
+Wait, but how do you process the included groups first. Like, for each group in the list, you need to process them before merging. So the order matters here. 
+
+Alternatively, the function could be written to process all the includes in a top-down manner. 
+
+Alternatively, here's another approach. For each group in the dictionary, first process any includes it has. So for each group, if there's an 'include', we process each of those included groups first (so their includes are resolved before merging). Then, we can merge the included groups into the current group. 
+
+So the code could be:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in parser_dict.items():
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # recursively process the included group first
+                    self._include_groups({inc: parser_dict[inc]})
+                    # then merge the included group into current group
+                    group_data.update(parser_dict[inc])
+                else:
+                    # handle missing group, maybe raise error or ignore
+                    pass
+
+Wait, but when I call self._include_groups with {inc: ...}, that would process only that group. But since the included group is part of the parser_dict, perhaps the entire parser_dict needs to be passed, but then that might cause recursion issues. 
+
+Hmm, perhaps the code should be written without creating a new dictionary each time. Let me think. 
+
+Maybe the function should process all groups in the given parser_dict, and for each group that has an 'include', it first processes the included groups (so the included groups are in the parser_dict as well), and then merge their data. 
+
+Wait, perhaps the problem is that when you process the included group, you have to make sure their includes are resolved first. So the function needs to process the entire dictionary, but when a group is being processed, any included groups must be processed before merging. 
+
+Alternatively, maybe we can use a helper function to process a single group, and then the main function loops through all groups. 
+
+Alternatively, let's structure it as follows: 
+
+The method loops through each group in the parser_dict. For each group, if it has an 'include' key, then it first processes all the included groups (recursively), then merges their data into this group's data. 
+
+Wait, but how do I make sure that the included groups are processed first. Because if I'm looping through all groups in the initial loop, and an included group is processed before the current group, then when merging, their includes would have been resolved. 
+
+But in the code above, when I call self._include_groups again, passing the entire parser_dict, that could lead to infinite recursion. Because the same dictionary is being passed each time. 
+
+Hmm, maybe I should process each group in the dictionary, and for each group's include, process the included groups first. 
+
+Wait, perhaps the method should be written in a way that for each group, it processes its includes by looking up the included groups in the same parser_dict. 
+
+Wait, maybe the correct way is to loop through each group, and whenever an 'include' is found, process the included groups first (recursively), then merge their data into the current group. 
+
+Alternatively, here's a possible approach. Let me try writing it step by step.
+
+The function is called with parser_dict, which is a dictionary of group names to their data. 
+
+We can loop through each group in the parser_dict. 
+
+Wait, but if the group has an 'include' key, then we need to first process the included groups, so that their includes are resolved. 
+
+Wait, perhaps the order of processing is important here. Let's think of an example:
+
+Group A includes B and C. Group B includes D. 
+
+We need to process D first (so that when B is processed, D's includes are resolved), then process B, then process C (assuming C has no includes), then process A. 
+
+But how to ensure this order in a loop? Because if we process the groups in the order of their names in the dictionary, maybe that's not the right order. 
+
+Alternatively, maybe the function can process each group's includes in a way that ensures dependencies are resolved first. 
+
+Alternatively, perhaps the function can be written in a way that when processing a group, it first processes the included groups, then merges. 
+
+Wait, perhaps the code can be structured as follows:
+
+for each group in the parser_dict:
+    if the group has an 'include' key:
+        process each included group first (recursively)
+        then merge the included groups into this group
+
+Wait, but how to implement that. Maybe the loop is over all the keys, and for each group, check if it has 'include', then process the includes. 
+
+Wait, but in Python, when you loop through a dictionary's items, you can't modify the dictionary while looping. So perhaps the initial loop is over a copy of the keys. 
+
+Alternatively, perhaps the code can be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)  # Wait, this is the problem. Because this would process all groups again, leading to infinite loop.
+                    # So that's not right. 
+
+Hmm, perhaps the function should process each group's includes in a way that when a group is being processed, first process its included groups. 
+
+Wait, maybe the function can process each group's includes by first resolving the included groups' includes, then merging. 
+
+Wait, here's a better idea. Let's process each group in such a way that when we process a group that has an 'include', we first process all the groups it includes. 
+
+So the code could look like:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):  # iterate over a copy to avoid issues
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first, recursively
+                    self._include_groups({inc: parser_dict[inc]})
+                    # then merge the included group's data into current group
+                    group_data.update(parser_dict[inc])
+                else:
+                    # handle missing group
+                    pass
+
+Wait, but when I call self._include_groups with {inc: ...}, that would process just that group. But in the loop, the group is part of the original parser_dict. 
+
+Wait, perhaps this approach works. Let's see:
+
+Suppose the parser_dict has group A and B. 
+
+When processing group A, if it includes B, then we call _include_groups on a dictionary containing just B. 
+
+In that recursive call, the loop would check B's items. If B has its own include, then process that first. 
+
+Once the included groups are processed, their includes are resolved, and their data is merged into the current group. 
+
+Wait, but in the recursive call, the function is passed a dictionary with only the included group. So the loop in that call will process only that group, which is necessary. 
+
+Yes, that might work. 
+
+Wait, but in the example where group A includes B, and B includes C, the first call to _include_groups with the main parser_dict would loop through all groups. 
+
+When processing group A, it would check for 'include', then process each included group (B) by making a recursive call with {B: ...}, which would then loop through that group. 
+
+In the recursive call for B, the loop would process B. Since B has an 'include' (C), it would pop that include, then process C in another recursive call. 
+
+Processing C's includes (if any), and then merging. 
+
+Once C is processed, B's data now includes the merged data from C. 
+
+Then, back to processing B's recursive call, after merging C into B, then when we go back to the original call for A, we can merge B into A. 
+
+That seems okay. 
+
+Now, the problem is that in the recursive call, when you pass a dictionary containing only the included group (like {inc: parser_dict[inc]}), then the loop in that call will process only that group. 
+
+Wait, but in the initial loop, the first iteration would process group A. But when you process group B in the recursive call, the main parser_dict's B has already had its 'include' processed. 
+
+Hmm, maybe this approach works. 
+
+Wait, but in the code above, when we do group_data.update(parser_dict[inc]), that would take the merged data from the included group (since we've processed it first) and add it to the current group. 
+
+So the steps would be:
+
+1. For each group in the original parser_dict:
+   a. Check if it has an 'include' key.
+   b. If so, collect the included groups.
+   c. For each included group:
+      i. Recursively process the included group (so their includes are resolved first)
+      ii. Merge the included group's data into the current group.
+
+Wait, but the loop is over all groups. So when processing group A (which includes B), we process B first. 
+
+But in the code, when we loop through the groups in the parser_dict passed to the function, which in the first call is the entire dictionary, then when we process group A, we need to first process B, which is part of the same parser_dict. 
+
+But when you call self._include_groups({inc: ...}), that creates a new dictionary with just the included group. So in that recursive call, the function loops over that single group. 
+
+Wait, in that case, the recursive call will process that single group. So for B's 'include' (say C), then it would process C. 
+
+Wait, but then when you call self._include_groups on {inc: ...}, you have to make sure that the entire parser_dict is accessible, because the included group's includes might refer to other groups in the original parser_dict. 
+
+Hmm, maybe this approach is not correct because the recursive call is only processing a subset of the groups. 
+
+Wait, perhaps the problem is that when you pass a subset (like {inc: ...}), the included group's includes may reference other groups not in that subset, so the recursion would miss them. 
+
+Ah, right. So the helper function should process the entire parser_dict each time, but in such a way that the included group's includes are resolved first. 
+
+Hmm, maybe I need to process each group's includes by first processing the included groups. 
+
+Alternatively, perhaps the function should process each group in the dictionary, but when a group has an 'include', first process the included groups (recursively), then merge. 
+
+Wait, but how do you do that in a loop. 
+
+Another approach: For each group, if it has an 'include', then process the included groups first, then merge. 
+
+This sounds like a post-order traversal, where the included groups are processed before the current group. 
+
+But how to implement that. 
+
+Maybe the function can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in parser_dict.items():
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first
+                    self._include_groups(parser_dict)
+                    # then merge the included group's data into current group
+                    group_data.update(parser_dict[inc])
+                else:
+                    # handle missing include
+                    pass
+
+Wait, but that would cause infinite recursion. Because each time you call self._include_groups(parser_dict), it loops over all groups again. 
+
+Hmm, maybe I should process the included groups first before merging. So perhaps:
+
+for group in the list of groups to process, but in a way that dependencies are handled. 
+
+Alternatively, maybe the function can be written with a loop that for each group, checks if the 'include' is present, and processes the includes. But this might require multiple passes. 
+
+Wait, perhaps a better approach is to use a helper function that merges the includes for a single group. 
+
+Like:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # process each included group's includes first
+            for inc in includes:
+                self._include_groups(parser_dict)  # No, that's not right. 
+
+Alternatively, here's an idea. To handle a group's includes, first process all the included groups (recursively), then merge their data into the current group. 
+
+So the code for a single group would be:
+
+def process_group(self, group_name, parser_dict):
+    group_data = parser_dict[group_name]
+    if 'include' in group_data:
+        includes = group_data.pop('include')
+        if not isinstance(includes, list):
+            includes = [includes]
+        for inc in includes:
+            if inc in parser_dict:
+                self.process_group(inc, parser_dict)
+                group_data.update(parser_dict[inc])
+            else:
+                # error handling
+                pass
+
+Then the _include_groups method would loop through all groups and call process_group. 
+
+But since I can't add a new method, maybe I have to do it within the same function. 
+
+Alternatively, the _include_groups function can be written to handle each group in turn, and for each, if it has an 'include', first process the included groups. 
+
+Wait, here's a possible way. 
+
+Loop through each group in the parser_dict. For each group, first check if it has an 'include', then process each of the included groups (recursively), then merge them. 
+
+Wait, but that might not work because when processing a group, the included groups are processed in the same loop. 
+
+Hmm, perhaps the function can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)
+                    group_data.update(parser_dict[inc])
+                else:
+                    # handle missing group
+                    pass
+
+Wait, but again, the recursive call to _include_groups with the same parser_dict would loop through all groups again, leading to infinite recursion. 
+
+Ah, right. So that's a problem. 
+
+Alternative idea: The function should process all groups, but for each group, when it's being processed, first process all the groups that it includes. 
+
+Wait, perhaps the function should process each group's includes in a way that when you process a group, you first process the included groups. 
+
+So here's a possible solution:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):  # iterate over a copy
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)  # Wait, no. Because that would process all groups again. 
+
+Hmm, maybe I need to process the included group first before processing the current group's includes. 
+
+Wait, here's a possible way to structure this. 
+
+The function can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in parser_dict.items():
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first
+                    self._include_groups({inc: parser_dict[inc]})
+                    # then merge the data
+                    group_data.update(parser_dict[inc])
+                else:
+                    # handle missing group
+                    pass
+
+Wait, but when we call self._include_groups with a dictionary containing just the included group (inc), then in that call, the function will loop over that group's items. 
+
+Suppose the included group (inc) has its own 'include' key. 
+
+In the recursive call, the function will process that group's includes. 
+
+Wait, but in the recursive call, the function is passed a new dictionary with only that group, so the loop in the recursive call will process that group's 'include' first. 
+
+Yes, that could work. 
+
+Let me test this logic with an example. 
+
+Suppose parser_dict has groups A, B, C. 
+
+Group A has 'include': ['B', 'C']
+Group B has 'include': ['C']
+Group C has no include.
+
+First, the initial call loops through all groups. 
+
+First group is A. 
+
+Processing A's 'include' list: B and C. 
+
+For inc in B: 
+
+Check if B is in parser_dict (yes). 
+
+Call self._include_groups({ 'B': parser_dict['B'] }) 
+
+In that recursive call, the loop is over the keys of this new dictionary (only B). 
+
+Processing B's 'include' (which is ['C']). 
+
+So includes is ['C']. 
+
+Loop through inc in ['C']:
+
+Check if 'C' is in the current parser_dict (the one passed here, which is {'B': ...}), so C is not present here. 
+
+Wait, that's a problem. Because in the recursive call for B, the parser_dict is only containing B, but the include refers to C. 
+
+So this approach won't work because the included group (C) is not in the passed dictionary. 
+
+Ah, so the problem is that when we pass a subset of the parser_dict, the included groups may reference other groups outside that subset. 
+
+Therefore, the helper function should have access to the entire parser_dict. 
+
+Hmm, so maybe the function should be called with the entire parser_dict, but the loop is over all groups again each time. 
+
+Alternatively, perhaps I should pass the entire parser_dict, and for each included group, process it by calling _include_groups again on the entire parser_dict. 
+
+Wait, but that would still cause recursion issues. 
+
+Alternatively, perhaps the function should first process all the groups, and when a group's includes are being resolved, it can look into the entire parser_dict. 
+
+Wait, here's another idea. 
+
+The function loops through all groups. 
+
+For each group, if it has an 'include' key, then process each included group first (recursively), then merge their data into the current group. 
+
+But how to ensure that the included groups are processed before the current group? 
+
+Maybe by iterating over all groups in a way that processes dependencies first. 
+
+Alternatively, maybe we can process each group's includes in a way that the included groups are processed first. 
+
+Wait, perhaps the correct approach is to iterate over all the groups, and for each group, if it has an 'include', process each included group first, then merge. 
+
+But how to implement that. 
+
+Let me think of this as a dependency graph. Each group that includes others depends on those groups. To resolve this, we need to process the dependencies first. 
+
+But doing that in a simple loop is tricky. 
+
+Alternatively, maybe the function can be written in a way that whenever a group's include is found, we first process the included groups, then merge. 
+
+Wait, here's a possible code structure:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first, recursively
+                    self._include_groups(parser_dict)  # Wait, this would loop again through all groups, causing infinite recursion
+                    # No, that's not right. 
+                    # We need to process the inc group first, but not reprocess all groups again. 
+
+Hmm, perhaps the function can be written with a loop that for each group in the dictionary, if it has an include, process the included groups first (by calling the function again for each included group), then merge. 
+
+Wait, perhaps the code should be:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in parser_dict.items():
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # process each included group first
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)  # No, this is the problem. 
+
+Wait, I'm getting stuck here. Maybe I should think of another way. 
+
+Alternatively, perhaps the includes can be handled by merging all included groups into the current one, but the function must first ensure that the included groups have their own includes resolved. 
+
+So, for each group in the parser_dict, if it has an 'include' key, then first process all the included groups (so their includes are resolved first), then merge their data. 
+
+Wait, but how to do that. 
+
+Wait, here's a possible way. 
+
+The function is called with the entire parser_dict. 
+
+For each group in the parser_dict:
+
+   if the group has an 'include' key:
+
+      pop the include list, then for each included group name:
+
+         if the included group exists, then first call _include_groups again on the parser_dict (but this would loop again through all groups, leading to infinite recursion)
+
+      then merge the included groups' data into the current group. 
+
+Hmm, maybe the problem is that when you call the function again, you process all groups again, which includes the current group, leading to infinite loop. 
+
+So to prevent that, perhaps after processing a group's includes, we can mark it as processed. 
+
+Alternatively, maybe the function should process each group once, and when it's processing a group's includes, it can process the included groups in a separate step. 
+
+Wait, perhaps the function can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # Process each included group first
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)  # No, this is the issue again.
+
+Wait, maybe the problem is that the function is processing the entire dictionary each time. So when we call it recursively, we process all groups again, including the current one. 
+
+To avoid this, perhaps the function should process each group's includes only once. 
+
+Alternatively, perhaps the code should process each group's includes by first checking if the group has an include, then processing each of the included groups first, then merging. 
+
+Wait, here's a possible solution. 
+
+The function will loop through all groups. 
+
+For each group, if it has an 'include', then:
+
+   For each included group in the list:
+
+      if the included group exists, then call the function recursively on that group's data. 
+
+      then merge the included group's data into the current group's data. 
+
+Wait, but how to do that. 
+
+Wait, perhaps the code should be:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in parser_dict.items():
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first
+                    # but how to do that without recursion on the entire dict
+                    # perhaps call the function again but only process the inc group's includes first
+                    # maybe extract the included group and process it separately?
+                    # perhaps not. 
+
+Wait, maybe the function can process each group in turn. 
+
+Suppose the loop is over all groups. 
+
+For group A, if it has an include list, we need to first process the included groups (B and C). 
+
+To process them first, maybe we can process the included groups before processing group A's include. 
+
+Wait, but in the loop, when we are at group A, how do we ensure that B and C have been processed already? 
+
+Maybe the loop is ordered such that the groups are processed in an order that their dependencies are already handled. 
+
+Alternatively, perhaps we need to process each group's includes in a way that when a group is being processed, any included groups are first processed. 
+
+Wait, here's a possible way. 
+
+The function can be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            # process the included groups first
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # recursively process the included group's includes first
+                    self._include_groups({inc: parser_dict[inc]})
+                    # then merge the included group's data into current group
+                    group_data.update(parser_dict[inc])
+                else:
+                    # handle missing group
+                    pass
+
+Wait, this time, when we call self._include_groups with a dictionary that only has the inc group, then that function's loop will process that group. 
+
+Let me try the earlier example again. 
+
+Suppose the parser_dict has groups A, B, C. 
+
+Group A's includes are ['B', 'C']
+Group B's includes are ['C']
+
+Processing group A first:
+
+The function's loop starts with group A. 
+
+Check if group A has 'include' (yes). 
+
+Pop the includes (B and C). 
+
+Now, loop over each inc in ['B', 'C'].
+
+First, inc is B. 
+
+Check if B is in parser_dict (yes). 
+
+Call self._include_groups({ 'B': ... }) 
+
+In that recursive call, the loop is over the keys of that dictionary (only B). 
+
+Processing group B:
+
+Check if it has 'include' (yes, 'C'). 
+
+Pop includes (C). 
+
+Then, loop over inc in ['C']. 
+
+Check if C is in the passed dictionary (which is only B, so no). 
+
+Wait, that's a problem again. Because in the recursive call for B, the passed dictionary only contains B, so when looking for C, it won't be found. 
+
+Ah, right. So the problem is that when we call _include_groups with a subset (like {inc: ...}), then the included groups (like C in B's case) aren't in that subset. 
+
+Therefore, this approach won't work. 
+
+Hmm, so maybe the function must process the entire parser_dict each time, but in such a way that when we process a group's includes, the included groups have already been processed. 
+
+Wait, perhaps the solution is to process each group in the parser_dict in an order such that all included groups are processed before the current group. 
+
+But how to determine that order? 
+
+Alternatively, maybe we can process each group's includes multiple times until there are no more includes left. 
+
+Like, first pass through the groups, and process any groups that have includes but their includes don't have any includes themselves. 
+
+Then, in subsequent passes, process the next level. 
+
+This would require multiple passes through the dictionary until all includes are resolved. 
+
+That might be a better approach. 
+
+So the _include_groups function could loop through all groups multiple times, until no 'include' keys are left. 
+
+Wait, but how to implement that. 
+
+Maybe in a while loop, keep checking if any group has an 'include' key. 
+
+But that could be inefficient, but maybe manageable. 
+
+Alternatively, here's a possible code structure:
+
+def _include_groups(self, parser_dict):
+    changed = True
+    while changed:
+        changed = False
+        for group_name, group_data in list(parser_dict.items()):
+            if 'include' in group_data:
+                changed = True
+                includes = group_data.pop('include')
+                if not isinstance(includes, list):
+                    includes = [includes]
+                for inc in includes:
+                    if inc in parser_dict:
+                        group_data.update(parser_dict[inc])
+                    else:
+                        # handle error
+                        pass
+
+Wait, but this would not handle nested includes. 
+
+For example, group B includes group C. 
+
+In the first pass, if group B's include is processed, then C's data is merged into B. 
+
+Then, group A includes B. 
+
+In the next pass, A's include is processed, so B's data (which now includes C) is merged into A. 
+
+But this requires multiple passes. 
+
+So in the first iteration of the while loop, group B would process its include (C), and group A would process its includes (B and C). 
+
+Wait, but when processing group A, if B hasn't been processed yet, then when merging B's data into A, B's include (C) hasn't been resolved yet. 
+
+So this approach would require that each pass goes through all groups, and whenever a group has an 'include', it merges the included groups' current data. 
+
+This way, even if the included group's includes haven't been processed yet, it will be handled in the next pass. 
+
+So let's think through the example again:
+
+Initial parser_dict:
+
+A: {'include': ['B', 'C'], 'a_key': 'a_val'}
+
+B: {'include': ['C'], 'b_key': 'b_val'}
+
+C: {'c_key': 'c_val'}
+
+First pass of the while loop:
+
+Start with changed = True.
+
+First, process group A. 
+
+It has an 'include' key. 
+
+Pop the includes: ['B', 'C'].
+
+Then for each inc in B and C:
+
+Check if they exist. 
+
+For B:
+
+merge B's data (including its own 'include' key) into A. 
+
+Wait, but B's data still has the 'include' key. 
+
+So after merging, A's data will have B's 'include' key and C's data? 
+
+No, because B's data has 'include' still. 
+
+Hmm, so in this approach, the 'include' keys are only removed when processed. 
+
+Wait, in the code above, when processing group A, the includes are popped from A's data. 
+
+Wait, let me see. 
+
+In the first loop:
+
+Processing group A:
+
+group_data (A) has 'include' key. 
+
+includes is popped, so A's data now doesn't have the 'include' key. 
+
+Then, for each inc in ['B', 'C']:
+
+if inc exists (yes for B and C):
+
+group_data (A) is updated with B's data. 
+
+B's data still has the 'include' key (since we only popped from A's data). 
+
+Wait, so when we do group_data.update(parser_dict[inc]), that would merge B's data (including its 'include' key) into A. 
+
+Which would leave A's data with 'include' key again? 
+
+No, because group_data (A's) had the 'include' popped, so after merging B's data, which includes 'include', A's data would now have the 'include' key again. 
+
+That's bad. 
+
+So in this approach, the includes are not properly handled because merging the included group's data brings back the 'include' key. 
+
+Therefore, the problem is that the included group's 'include' keys are not yet processed, so when you merge them into the current group, you might reintroduce 'include' keys. 
+
+Hmm. 
+
+Alternatively, perhaps the includes should be processed in a way that first resolves all the includes in the included groups before merging. 
+
+So the correct approach is to process the included groups first, so their 'include' keys have been removed and their data merged. 
+
+Therefore, the function must process each group's includes by first processing any groups it includes, so that when merging, those groups' data already has their includes resolved. 
+
+Thus, the recursive approach is needed, but how to structure it without causing infinite loops. 
+
+Maybe the solution is to process each group's includes by first processing the included groups, then merging. 
+
+So the code could be:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # first process the included group's includes
+                    self._include_groups(parser_dict)
+                    # then merge the included group's data
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but this still causes infinite recursion. Because in the recursive call, the entire parser_dict is passed again, so when processing group B, it would again loop through all groups, including A again. 
+
+Hmm, perhaps the problem is that the function is called with the entire parser_dict each time, so when processing group B's include (C), it would call the function again, leading to processing all groups again. 
+
+So this approach is not working. 
+
+Wait, maybe the function needs to process each group's includes only once, and in a way that when a group is processed, its includes are handled first. 
+
+Another idea: for each group in the parser_dict, when you encounter an 'include', process each of the included groups first (recursively), then merge their data. 
+
+Wait, here's a possible way. 
+
+The function loops through all groups. 
+
+For each group, if it has an 'include', then first recursively process all the included groups. 
+
+Wait, but how to do that. 
+
+Maybe, the code can be structured as:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            # first process the included groups
+            includes = group_data['include']
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)  # No, same problem as before. 
+
+Hmm. 
+
+Alternatively, perhaps the function should first process the included groups, then proceed. 
+
+Wait, here's a possible correct approach. 
+
+The function is called with the parser_dict. 
+
+For each group in the parser_dict:
+
+   if the group has an 'include' key:
+
+      process each included group first (recursively), then merge their data into this group, and remove the 'include' key. 
+
+Wait, but how to do that. 
+
+Wait, perhaps the code should be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first
+                    self._include_groups(parser_dict)
+                    # then merge
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but again, the recursive call will loop through all groups again. 
+
+Hmm, I'm stuck here. Maybe I need to think differently. 
+
+Perhaps the function should process each group's includes in a way that for each group, the includes are handled, but only once. 
+
+Wait, here's another approach. 
+
+The function can be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # merge the included group's data into current group
+                    # but first ensure that the included group's includes are resolved
+                    self._include_groups(parser_dict)
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but again the recursion is causing infinite loops. 
+
+Alternatively, maybe the function should process each group's includes in a way that when a group is being processed, the included groups are processed first. 
+
+Wait, perhaps the code should be written as:
+
+for group in the list of groups:
+
+   if the group has an 'include' key:
+
+      process each included group first (recursively)
+
+      then merge those groups' data into current group. 
+
+Wait, but how to loop through the groups in such an order. 
+
+Alternatively, perhaps the function should be called for each group individually. 
+
+Wait, perhaps the method can be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in parser_dict.items():
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first
+                    # call _include_groups again for the entire parser_dict, but that's not good.
+                    # Alternatively, process the included group's includes first, then merge
+                    # So, first, process the inc group's includes (recursively)
+                    self._include_groups(parser_dict)
+                    # then merge
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Hmm, I'm going in circles here. Let me think of another way. 
+
+Suppose the function works by first processing all groups' includes, but in a way that each time a group is processed, its includes are resolved. 
+
+Wait, perhaps the function can be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # process each included group first
+            for inc in includes:
+                if inc in parser_dict:
+                    # recursively process the included group's includes
+                    self._include_groups(parser_dict)
+                    # then merge the data
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but again, the same problem. 
+
+Wait, perhaps the function should process each group's includes in a separate step. 
+
+Like, first, process all groups that have includes but their included groups have no includes. 
+
+Then, process the next level. 
+
+This would require multiple passes. 
+
+Alternatively, maybe the function can process each group's includes by first processing all the groups in the includes list, then merging. 
+
+Wait, here's a correct approach. 
+
+The function can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):
+        if 'include' in group_data:
+            # process the included groups first before merging
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # recursively process inc's includes first
+                    self._include_groups(parser_dict)
+                    # then merge inc's data into current group
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but when processing inc, the recursive call would process all groups again. 
+
+Hmm, perhaps the problem is that in the recursive call, the entire parser_dict is passed again, leading to processing all groups again. 
+
+Therefore, the function will end up in an infinite loop. 
+
+So perhaps the solution is to process the included groups first without recursively calling the entire function again, but instead process each included group one by one. 
+
+Wait, maybe the code can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # first ensure the included group is processed
+                    # so call _include_groups on the entire dict again? 
+                    # but that would lead to infinite recursion. 
+                    # Alternatively, process each included group first, but how?
+
+Wait, maybe the code can be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the included group first
+                    # but how? maybe just call the function again. Wait, but how to avoid infinite loop.
+
+Alternatively, perhaps the code should process each group's includes in a way that the included groups are processed before the current group. 
+
+Wait, here's a different approach. Let's iterate over the groups in such a way that each group is processed after all the groups it includes have been processed. 
+
+To do this, perhaps we need to process the groups in reverse dependency order. 
+
+But that requires building a dependency graph and topological sorting. 
+
+Hmm, but the problem may not require that. Maybe the function can process each group's includes by first recursively processing them. 
+
+Wait, perhaps the code should look like this:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # process each included group first
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, no. Because the self._include_groups(parser_dict) call will process all groups again. 
+
+Hmm, perhaps I should process each included group first, but not the entire dictionary again. 
+
+Wait, here's an idea. 
+
+Instead of passing the entire parser_dict each time, perhaps the function should process each group's includes individually. 
+
+Wait, perhaps the function can be written to process each group's includes in a loop, but for each group, first process all the groups in its include list. 
+
+Wait, but how to do that. 
+
+Wait, here's a possible code structure. 
+
+We can loop over all groups, and for each group, process its includes by first getting the included groups' data (which has already been processed), then merging. 
+
+Wait, but to ensure that the included groups are processed before the current group, we need to process the included groups first. 
+
+So perhaps the code should first process the included groups recursively, then proceed to merge. 
+
+Wait, perhaps the code can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name, group_data in list(parser_dict.items()):
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # first process the included groups
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups({inc: parser_dict[inc]})
+            # Now merge the included groups
+            for inc in includes:
+                if inc in parser_dict:
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, let's see this. 
+
+Suppose group A includes B and C. 
+
+In the first loop iteration for group A:
+
+Check if it has 'include' (yes). 
+
+Pop the includes, store them in includes list. 
+
+Then, loop over each inc in includes (B and C). 
+
+For inc = B:
+
+Check if B is in parser_dict (yes). 
+
+Call self._include_groups with a dictionary {B: ...}, so in that call, the function loops over B's items. 
+
+If B has its own 'include' (say C), then in that call:
+
+Processing B's 'include' (C). 
+
+Pop that, then process C's includes (if any), then merge. 
+
+So the recursion would process C first (if needed), then B, then back to A. 
+
+Then, after processing the included groups, the code loops again through the includes list (B and C) and merges their data into group A. 
+
+Yes, that might work. 
+
+Wait, let me test this with the previous example:
+
+Group B has 'include' C. 
+
+In the first call for group A's includes:
+
+Processing inc = B:
+
+Call self._include_groups({ 'B': ... })
+
+In that call, the function loops over B's items. 
+
+Since B has an 'include' key, it pops the includes (C), then loops over each inc in ['C'].
+
+Processing inc = C:
+
+Check if C is in the current dictionary (which is {'B': ...}), so no. 
+
+Wait, that's the problem again. 
+
+Wait, in the call for B, the passed dictionary is {'B': ...}. So when processing B's include (C), the code checks if C is in that dictionary, which it is not. 
+
+So the code would not process C. 
+
+Hmm, so the problem is that the included group (C) is not part of the passed dictionary in the recursive call. 
+
+Therefore, the recursive call must be made with the entire parser_dict, but how to avoid processing the same group again. 
+
+Wait, maybe the code should not loop over the entire parser_dict each time, but instead process the included group's includes by calling the function again but only for that group. 
+
+Wait, perhaps the code can be written as:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # process each included group first
+            for inc in includes:
+                if inc in parser_dict:
+                    # process the inc group's includes (recursively)
+                    self._include_groups({inc: parser_dict[inc]})
+                    # then merge the data from inc into current group
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but in the example where B includes C, and the main parser_dict has C, then when processing B's include in the recursive call:
+
+The passed dictionary to the recursive call for B is { 'B': ... }, but when the code checks for inc in includes (C), it's not in that dictionary. 
+
+So that approach won't work. 
+
+Hmm, so the problem is that when processing group B's includes, the passed dictionary must include C. 
+
+Therefore, the recursive call must be made with the entire parser_dict, but then how to avoid infinite loops. 
+
+Wait, maybe the key is to not process the current group again in the recursive call. 
+
+Wait, perhaps the code can be written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            # process each included group first
+            for inc in includes:
+                if inc in parser_dict:
+                    # recursively process the included group
+                    self._include_groups(parser_dict)
+                    # then merge the data
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but again, the recursive call will process all groups again, including the current one. 
+
+Hmm, maybe I should process the included groups in a way that they are handled first, but the loop is over the entire dictionary each time, but since the 'include' key is popped, after the first time, the group won't have it anymore. 
+
+Wait, let's think step by step. 
+
+Suppose we have group A, which includes B and C. 
+
+Group B includes C. 
+
+Group C has no include. 
+
+First, the outer loop runs through all groups. 
+
+First group is A. 
+
+A has 'include', so we pop it. 
+
+Then, for each inc in ['B', 'C']:
+
+Check if B is in parser_dict. 
+
+Yes. 
+
+Call self._include_groups(parser_dict) again. 
+
+Wait, but in that recursive call, the first group processed would again be A, but since we already popped its 'include' key, it won't do anything. 
+
+Wait, in the first call to _include_groups, when processing group A, we pop its include list. 
+
+Then, when processing the included group B, we call _include_groups again with the entire parser_dict. 
+
+In the second call (the recursive one), the loop starts again. 
+
+Processing group A again, but since its 'include' was popped, it skips. 
+
+Then group B comes next. 
+
+B has an 'include' (C). 
+
+So in the second call, processing group B:
+
+pop the 'include' (C), then loop over inc in ['C'].
+
+Check if C is in parser_dict (yes). 
+
+Call _include_groups again (third call) with the entire parser_dict. 
+
+In the third call, the loop runs again, processing each group. 
+
+Group A has no 'include', group B has 'include' popped, group C has no 'include'. 
+
+So processing group C, nothing happens. 
+
+Then, back to processing group B's inc (C). 
+
+Since C is present, it will call the recursive _include_groups again, but in the third call, when processing B, its 'include' was already popped. 
+
+Hmm, maybe this way, each group's 'include' is processed once. 
+
+Wait, let's walk through this example step by step. 
+
+Initial parser_dict has A, B, C. 
+
+First call to _include_groups(parser_dict):
+
+Loop over group A first. 
+
+Group A has 'include' key. 
+
+Pop the includes (B and C). 
+
+Then, for each inc in B and C:
+
+First inc is B. 
+
+Check if B is in parser_dict (yes). 
+
+Call self._include_groups(parser_dict). 
+
+Now, in the second call:
+
+Loop through all groups again. 
+
+The first group is A again. 
+
+But since the 'include' was popped in the first call, it skips. 
+
+Then group B comes next. 
+
+Group B has 'include' key. 
+
+Pop includes (C). 
+
+Then, for each inc in ['C']:
+
+Check if C exists. 
+
+Yes. 
+
+Call self._include_groups(parser_dict) again (third call). 
+
+In third call, the loop starts again. 
+
+Processing group A (no include), B (include popped), then group C. 
+
+Group C has no include. 
+
+So third call returns. 
+
+Back to the second call's processing of B's inc (C):
+
+Now, since C is present, we merge C's data into B's data. 
+
+Then, back to the first call's processing of A's inc (B and C). 
+
+After the second call returns, we process the next inc, which is C. 
+
+Check if C is present (yes). 
+
+Call self._include_groups(parser_dict) again (fourth call). 
+
+In the fourth call, loop through groups again. 
+
+Group A's include is already popped, group B's include is also popped, so group C is processed but has no include. 
+
+Thus, the fourth call returns. 
+
+Then, merging C's data into A's. 
+
+So after all that, group B has merged C's data, and group A has merged B and C's data. 
+
+But this requires multiple recursive calls, and each time the entire dictionary is processed again, but since the 'include' keys are popped, it's okay. 
+
+Wait, but this approach may be inefficient, but perhaps it works. 
+
+Because each time a group is processed, the 'include' key is popped, so in subsequent calls, it won't be processed again. 
+
+Yes. 
+
+Let me see:
+
+The first time processing group A, the 'include' is popped. 
+
+When processing group B in the second call, its 'include' is popped. 
+
+When processing group C in the third call, it has no 'include', so nothing happens. 
+
+Thus, each group's 'include' is handled once. 
+
+The problem is that each time the function is called recursively, it loops through all groups again, but since the 'include' keys are already removed, they don't trigger again. 
+
+Therefore, this approach might work. 
+
+Wait, but in the example, when processing group A's include B, the first step is to call self._include_groups(parser_dict) again. 
+
+In that second call, the first group is A again, but since 'include' is popped, it's skipped. 
+
+Then group B is processed, which has its own include. 
+
+Thus, the recursion would eventually process all necessary groups. 
+
+Hmm, maybe this is the right approach. 
+
+So the code would be:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)  # recursive call, which will process the included groups first
+                    group_data.update(parser_dict[inc])
+                else:
+                    # handle missing group
+                    pass
+
+Wait, but in the recursive call, when we call self._include_groups(parser_dict), it loops through all groups again. 
+
+But since the 'include' key in group B has been popped (when processing group B's own 'include'), then when we process group B again in the second call's loop, it won't have the 'include' key anymore. 
+
+Wait, let's see step by step. 
+
+First call: processing group A. 
+
+Inside group A's processing:
+
+includes is ['B', 'C']
+
+Loop over B first:
+
+Check if B is in parser_dict (yes).
+
+Call self._include_groups(parser_dict). 
+
+This is the second call. 
+
+In the second call's loop:
+
+The first group is A again. 
+
+But since group A's 'include' was already popped in the first call, it skips. 
+
+Next group is B. 
+
+Now, in the second call, when processing B:
+
+Check if B has 'include' (yes). 
+
+Pop the 'include' (which was ['C']). 
+
+Then loop over each inc in ['C']:
+
+Check if C exists (yes). 
+
+Call self._include_groups(parser_dict) again (third call). 
+
+Third call loops through all groups again. 
+
+Processing A (no include), B (now has no include), then C (no include). 
+
+Thus, third call returns. 
+
+Back to the second call's processing of B's inc 'C':
+
+Now, merge C's data into B's data. 
+
+Then, after processing all includes for B, we return to the first call's processing of A's inc 'B'. 
+
+The first call is now in the loop over the includes for A. 
+
+After the recursive call to process B, we now merge B's data (which now has C's data merged) into A's data. 
+
+Then, proceed to process the next inc (C) in A's include list. 
+
+Check if C is present (yes). 
+
+Call self._include_groups(parser_dict) again (fourth call). 
+
+But in the fourth call, when looping through groups, group C has no 'include' key, so nothing happens. 
+
+Then merge C's data into A's data. 
+
+Wait, but since the 'include' key was popped from B, the third call didn't process B again. 
+
+Thus, this approach would work. 
+
+Because each time a group is processed, the 'include' key is popped, so subsequent calls won't process them again. 
+
+Therefore, this method would process all includes correctly. 
+
+Let me see another example. 
+
+Suppose group D includes E, which includes F. 
+
+First call to _include_groups:
+
+Processing D's 'include' list (E). 
+
+Call the function again (second call). 
+
+In second call, processing D again (but 'include' was popped), then group E is processed. 
+
+E's 'include' is popped (F). 
+
+Then, in the loop for E's includes (F):
+
+Check if F exists. 
+
+Call the function again (third call). 
+
+In third call, the loop goes through all groups. 
+
+D's 'include' is popped, E's 'include' is popped. 
+
+Processing F, no include, so nothing. 
+
+Then, in the third call's loop, when processing F, nothing happens. 
+
+Back to the second call's processing of E's inc F:
+
+merge F's data into E's. 
+
+Back to the first call's processing of D's inc E:
+
+merge E's data (now including F's) into D. 
+
+Thus, it works. 
+
+Therefore, the code seems correct. 
+
+Now, in code:
+
+Wait, the code uses a for loop over all the groups in parser_dict. 
+
+Each time, if the group has an 'include', pop it, then for each inc in includes, call the function again (to process the included groups first), then merge. 
+
+Wait, but in the code above, when processing the 'B' case in the first example, the first step is to call the function again (with the entire parser_dict), which processes B's include first. 
+
+Yes, this should work. 
+
+Now, the code needs to handle the case where 'include' is a single string (not a list). 
+
+The code checks if includes is not a list, then wraps it in a list. 
+
+So the code should be okay. 
+
+What about if a group includes a group that doesn't exist? 
+
+The code skips it (the else clause). 
+
+But maybe the problem requires an error, but since the docstring doesn't mention it, perhaps we can just ignore. 
+
+Thus, the code would be:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but in this code, when you call self._include_groups again (recursively), it processes all groups again, but since the 'include' keys are popped, they won't be processed again. 
+
+Yes. 
+
+So this should resolve all the includes correctly. 
+
+Wait, but in the first call for group A, when you call self._include_groups(parser_dict) for inc B, the second call starts processing again from the beginning. 
+
+But the 'include' for B is still present (since it's the same parser_dict). 
+
+Wait, no. Because in the first call, when processing group A, we call the function again for inc B, which is part of the same parser_dict. 
+
+Wait, in the first call's loop, when processing group A's 'include' B:
+
+the code calls self._include_groups(parser_dict) again. 
+
+This second call loops through all groups again. 
+
+In the second call, the first group is A again, but since 'include' was popped in the first call, it skips. 
+
+Then group B is processed. 
+
+In the second call's processing of B, the 'include' key is popped (since it exists). 
+
+Then, for each inc in B's includes (e.g., C), call the function again (third call), which loops through all groups again. 
+
+In the third call, group C has no include, so nothing. 
+
+Thus, after the third call returns, in the second call's loop over B's includes, it processes C and merges. 
+
+Then, after the second call returns to the first call's loop over A's includes (B and C), it now merges B's data (which now includes C's data) into A's data. 
+
+Then, processing the next inc (C) in A's includes:
+
+call self._include_groups again (fourth call). 
+
+In the fourth call, the loop starts again. 
+
+When processing group C, since its 'include' was not popped (because in the first call, group C's 'include' was not processed yet), but in the first example, group C has no 'include' key. 
+
+Thus, the fourth call would process all groups again, but since their 'include' keys are already popped, nothing happens. 
+
+Thus, the code would work. 
+
+Hmm, I think this is the correct approach. 
+
+So the code is as above. 
+
+Wait, but what about the order of merging? 
+
+Suppose a group has multiple includes. 
+
+Like group A includes B and C. 
+
+B includes D, and C also includes D. 
+
+Then when merging B and C's data into A, D's data would be included from both B and C. 
+
+But since D's data is already merged into B and C's data, that's okay. 
+
+The code would process B and C first, each of them would process D first (if needed), then their data is merged into A. 
+
+Yes. 
+
+Another possible case: 
+
+Group X includes Y, and Y includes X. 
+
+This would be a circular dependency. 
+
+In this case, when processing X's includes, the code would call self._include_groups again, which would process Y's includes. 
+
+Processing Y's includes would call the function again, processing X's includes (but the 'include' key has been popped already in the first call). 
+
+Thus, the code would not process X again in the second call. 
+
+Wait, let's see. 
+
+Initial call: processing X's 'include' (Y). 
+
+Pop the 'include' (so X's data now doesn't have it). 
+
+Call self._include_groups (second call). 
+
+In the second call, loop through all groups again. 
+
+Processing X first: no include. 
+
+Then Y: has include X. 
+
+Pop the include (so Y's data now has include popped). 
+
+Call self._include_groups again (third call). 
+
+In the third call, loop over all groups. 
+
+Processing Y first (no include now). 
+
+Then X: no include. 
+
+Thus, the third call returns. 
+
+Back to the second call processing Y's inc X (which is present). 
+
+Call self._include_groups (third call), which does nothing. 
+
+Then merge X's data into Y's. 
+
+But X's data may have its own includes (which were popped earlier). 
+
+Thus, the code would merge X's data into Y's, and then Y's data into X's (since the initial call for X's include Y would have merged Y's data into X's. 
+
+Wait, in the first call, after processing Y's includes (which includes X), the code would have merged X's data into Y's. 
+
+Then, in the first call's loop over X's includes (Y), after the recursive call returns (which handled Y's includes), then the code merges Y's data (which now includes X's data) into X's data. 
+
+This would create a loop where X's data now includes Y's data, which includes X's data again. 
+
+This is a problem because merging Y's data into X would include the X's data that was already there, but since group_data.update uses the existing values, the result would be that the includes are merged, but since it's a circular dependency, the 'include' key was already popped, so it's okay. 
+
+The code would merge Y into X, and since Y's 'include' was popped, it won't cause another include. 
+
+But the merging would include the data from Y (which includes X's data). 
+
+Wait, but in that scenario, the includes would be resolved, but it's a circular reference. 
+
+However, the code would handle it as follows:
+
+Processing X first, then Y. 
+
+When processing X's include Y:
+
+call self._include_groups (second call), which loops through all groups again. 
+
+In the second call, when processing Y, it has include X. 
+
+call self._include_groups (third call), which loops through all groups again. 
+
+In the third call, processing X (no include), then Y (no include, because the second call popped it). 
+
+Thus, the third call does nothing. 
+
+Then, back to the second call processing Y's include X:
+
+since X exists, call self._include_groups (third call) which does nothing. 
+
+Then merge X's data into Y's. 
+
+Then, back to the first call's processing of X's include Y:
+
+merge Y's data (which now contains X's data) into X's data. 
+
+Thus, X's data now has all of Y's data, including X's own data. 
+
+But this could lead to duplicates. 
+
+Wait, but since the 'include' keys are popped, it's okay. 
+
+The problem of circular dependencies is a possible issue, but perhaps the function is supposed to handle it by merging anyway. 
+
+Alternatively, maybe the function should detect circular dependencies and raise an error, but the docstring doesn't mention that. 
+
+Assuming that circular dependencies are not an error, the code will handle them, but it may not be desired. 
+
+However, the problem statement doesn't specify error handling, so perhaps we can ignore it for now. 
+
+Thus, the code seems to handle the dependencies properly. 
+
+Now, the code is written as follows:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but in the first call, the loop goes over all the groups. 
+
+But when you process a group and call the function again, the loop will process all groups again, but the 'include' keys are popped, so they won't trigger again. 
+
+Therefore, this should work. 
+
+Hmm, but perhaps there's a better way. 
+
+Alternatively, maybe we should process each group's includes by first resolving the included groups' includes, then merging. 
+
+Thus, for each group, when processing its includes, first call the function on the entire parser_dict, which will process the included groups first. 
+
+Wait, but how? 
+
+Wait, in the code above, when you call self._include_groups(parser_dict) again, it starts processing all groups again, but since the 'include' keys have been popped, it won't process those groups again. 
+
+Wait, no. Let's see. 
+
+Suppose the first call is processing group A. 
+
+Inside the loop for group A's includes, when processing inc B, the code calls self._include_groups(parser_dict). 
+
+The second call will loop through all groups again. 
+
+Group A's 'include' key was popped, so it's skipped. 
+
+Group B is next. 
+
+Group B's 'include' key is present (since the first call only popped the 'include' in A). 
+
+Thus, the second call processes group B's includes. 
+
+Pops the 'include' from B, then processes each included group (e.g., C). 
+
+Then, when back to the first call, merging B's data into A's. 
+
+Yes, this seems correct. 
+
+So this code should work. 
+
+Now, let's think about the code's structure. 
+
+The method loops through all the groups in the parser_dict. 
+
+For each group with an 'include', it pops that key, then processes the entire parser_dict again (recursively), which will handle the included groups first. 
+
+Then, after the recursive processing, the included group's data is merged into the current group. 
+
+This way, the included groups are processed first. 
+
+The multiple recursive calls will eventually process all the dependencies in the correct order. 
+
+Yes, this seems to be the correct approach. 
+
+Thus, the code should be as written above. 
+
+Wait, but in the first example, when group A's includes are B and C, the first step is to process the entire parser_dict again (the recursive call) when handling inc B. 
+
+That recursive call will process group B first, then C. 
+
+Wait, no, in the recursive call, the loop is over all groups again. 
+
+So when processing inc B, the first recursive call is to process the entire parser_dict again. 
+
+In that second call, the first group is A, which already had its 'include' popped, so it skips. 
+
+Then group B is processed. 
+
+So group B's includes are popped and processed. 
+
+Then, group C is processed (if it had an include). 
+
+Thus, after the recursive call, the included group (B) has been processed, so its data is already merged with any of its includes. 
+
+Then, merging B's data into A's. 
+
+Yes, this should work. 
+
+Now, the code may have some inefficiencies, but for the problem's scope, it's probably acceptable. 
+
+Therefore, the code should be as written above. 
+
+Wait, but in the code, after popping the 'include' key, the code loops over the includes and for each inc, calls self._include_groups again. 
+
+Wait, in the first example:
+
+Processing group A's first include (B):
+
+Call self._include_groups (second call). 
+
+In the second call, it loops through all groups again. 
+
+Processing group B's 'include' (C). 
+
+Then, when processing group B's include C, the code will call self._include_groups again (third call), which processes all groups again. 
+
+In the third call, when processing group C, it has no 'include', so nothing. 
+
+Thus, when back to the second call, after the recursive third call returns, the code will process group B's inc C (if exists). 
+
+Wait, the code in the second call's loop is processing group B's includes. 
+
+Wait, in the second call's processing of group B:
+
+includes is ['C']
+
+pop that, then loop over inc C. 
+
+Check if C is present. 
+
+Call self._include_groups again (third call). 
+
+Third call loops through all groups. 
+
+Processing group C first (no include), then others. 
+
+Thus, third call returns. 
+
+Then back to second call's processing of inc C:
+
+merge C's data into B's data. 
+
+Thus, B's data now has C's data. 
+
+Then, back to first call's processing of inc B (after the second call returns), merge B's data (which now includes C) into A's. 
+
+Thus, it works. 
+
+Therefore, this code should work. 
+
+Now, the code as written:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but in the code, after popping the 'include' from group_data, we then loop over each included group (inc) and call self._include_groups again. 
+
+Wait, the first call to self._include_groups(parser_dict) for inc B would process all groups again, including B's own includes, so that B's includes are resolved first. 
+
+Yes. 
+
+Therefore, this code should correctly resolve all include directives in the parser_dict. 
+
+Now, I need to make sure that the code is correctly written. 
+
+Wait, in the for loop, group_name is in list(parser_dict.keys()), so that the loop is over a copy of the keys. 
+
+Because if the dictionary is modified during iteration, it can cause issues, but since we're popping the 'include' key, but the keys list is already copied. 
+
+Yes, that's okay. 
+
+The code uses list(parser_dict.keys()) to get a list of the keys at the start of the loop. 
+
+Thus, the code should work. 
+
+I think this is the correct approach. 
+
+Therefore, the code would be as above. 
+
+Wait, but in the case where a group includes multiple groups, and those groups also include each other. 
+
+But the code's recursive approach would process each included group's dependencies first. 
+
+Hmm, I think this is the best way I can think of. 
+
+Therefore, the final code would be:
+
+def _include_groups(self, parser_dict):
+    for group_name in list(parser_dict.keys()):
+        group_data = parser_dict[group_name]
+        if 'include' in group_data:
+            includes = group_data.pop('include')
+            if not isinstance(includes, list):
+                includes = [includes]
+            for inc in includes:
+                if inc in parser_dict:
+                    self._include_groups(parser_dict)
+                    group_data.update(parser_dict[inc])
+                else:
+                    pass
+
+Wait, but the code calls self._include_groups(parser_dict) for each inc. 
+
+Wait, in the loop over includes for group A's 'include' B and C:
+
+for each inc in B and C:
+
+   call self._include_groups(parser_dict) 
+
+Wait, so for B, you call it once. 
+
+Then for C, you call it again. 
+
+Each time, the entire parser_dict is processed again. 
+
+But since the 'include' keys have been popped already, the second call (for C) would process the groups again, but since group B's 'include' was already popped, it won't process them again. 
+
+Thus, the code would process all included groups first before merging. 
+
+Yes, this seems to be the correct code. 
+
+Therefore, I'll write the code like that. 
+
+Wait, but I have to make sure that the group_data is updated with the included group's data after the recursive call. 
+
+Yes, because after the recursive call, the included group's data has been processed (any includes in it have been resolved), so merging it into the current group's data will include all necessary data. 
+
+So the code is correct. 
+
+Thus, the Python code is as written above. 
+
+Now, let me check again for possible errors. 
+
+Suppose the includes is a single string, not a list. 
+
+The code converts it to a list, so that's okay. 
+
+What if the included group does not exist? 
+
+The code skips it. 
+
+What if the group has no include? 
+
+Nothing happens. 
+
+Yes, this should work. 
+
+I think that's the correct code.

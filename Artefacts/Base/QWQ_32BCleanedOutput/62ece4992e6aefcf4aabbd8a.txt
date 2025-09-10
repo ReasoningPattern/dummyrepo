@@ -1,0 +1,52 @@
+import json
+import logging
+import os
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    configs = {}
+    errors = []
+    
+    def resolve_environment_variables(data):
+        if isinstance(data, str):
+            return os.path.expandvars(data)
+        elif isinstance(data, dict):
+            return {k: resolve_environment_variables(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [resolve_environment_variables(item) for item in data]
+        else:
+            return data
+    
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                config_data = f.read()
+        except PermissionError as e:
+            msg = f"Insufficient permissions to read configuration file: {filename}"
+            errors.append(logging.LogRecord('config_loader', logging.ERROR, filename, 0, msg, None, None))
+            continue
+        except OSError as e:
+            msg = f"Error reading configuration file {filename}: {e.strerror}"
+            errors.append(logging.LogRecord('config_loader', logging.ERROR, filename, 0, msg, None, None))
+            continue
+        
+        try:
+            config = json.loads(config_data)
+        except json.JSONDecodeError as e:
+            msg = f"Error parsing configuration file {filename}: {str(e)}"
+            errors.append(logging.LogRecord('config_loader', logging.ERROR, filename, 0, msg, None, None))
+            continue
+        else:
+            if not isinstance(config, dict):
+                msg = f"Parsed configuration for {filename} is not a dictionary"
+                errors.append(logging.LogRecord('config_loader', logging.ERROR, filename, 0, msg, None, None))
+                continue
+        
+        if overrides is not None:
+            config.update(overrides)
+        
+        if resolve_env:
+            config = resolve_environment_variables(config)
+        
+        configs[filename] = config
+    
+    return (configs, errors)

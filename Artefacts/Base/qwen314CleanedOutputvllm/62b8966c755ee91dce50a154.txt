@@ -1,0 +1,138 @@
+import re
+from datetime import datetime
+from dateutil import tz
+
+def isoparse(self, dt_str):
+    """
+    Parse an ISO-8601 datetime string into a :class:`datetime.datetime`.
+
+    An ISO-8601 datetime string consists of a date portion, followed
+    optionally by a time portion - the date and time portions are separated
+    by a single character separator, which is ``T`` in the official
+    standard. Incomplete date formats (such as ``YYYY-MM``) may *not* be
+    combined with a time portion.
+
+    Supported date formats are:
+
+    Common:
+
+    - ``YYYY``
+    - ``YYYY-MM`` or ``YYYYMM``
+    - ``YYYY-MM-DD`` or ``YYYYMMDD``
+
+    Uncommon:
+
+    - ``YYYY-Www`` or ``YYYYWww`` - ISO week (day defaults to 0)
+    - ``YYYY-Www-D`` or ``YYYYWwwD`` - ISO week and day
+
+    The ISO week and day numbering follows the same logic as
+    :func:`datetime.date.isocalendar`.
+
+    Supported time formats are:
+
+    - ``hh``
+    - ``hh:mm`` or ``hhmm``
+    - ``hh:mm:ss`` or ``hhmmss``
+    - ``hh:mm:ss.ssssss`` (Up to 6 sub-second digits)
+
+    Midnight is a special case for `hh`, as the standard supports both
+    00:00 and 24:00 as a representation. The decimal separator can be
+    either a dot or a comma.
+
+    .. caution::
+
+        Support for fractional components other than seconds is part of the
+        ISO-8601 standard, but is not currently implemented in this parser.
+
+    Supported time zone offset formats are:
+
+    - `Z` (UTC)
+    - `±HH:MM`
+    - `±HHMM`
+    - `±HH`
+
+    Offsets will be represented as :class:`dateutil.tz.tzoffset` objects,
+    with the exception of UTC, which will be represented as
+    :class:`dateutil.tz.tzutc`. Time zone offsets equivalent to UTC (such
+    as `+00:00`) will also be represented as :class:`dateutil.tz.tzutc`.
+
+    :param dt_str:
+        A string or stream containing only an ISO-8601 datetime string
+
+    :return:
+        Returns a :class:`datetime.datetime` representing the string.
+        Unspecified components default to their lowest value.
+
+    .. warning::
+
+        As of version 2.7.0, the strictness of the parser should not be
+        considered a stable part of the contract. Any valid ISO-8601 string
+        that parses correctly with the default settings will continue to
+        parse correctly in future versions, but invalid strings that
+        currently fail (e.g. ``2017-01-01T00:00+00:00:00``) are not
+        guaranteed to continue failing in future versions if they encode
+        a valid date.
+
+    .. versionadded:: 2.7.0
+    """
+    # Replace commas with dots for sub-second parsing
+    dt_str = dt_str.replace(',', '.')
+    # Split into date and time parts
+    parts = dt_str.split('T')
+    date_part = parts[0]
+    time_part = parts[1] if len(parts) > 1 else None
+
+    # Check if date part is incomplete and time is present
+    if time_part and (re.fullmatch(r'\d{4}-\d{2}', date_part) or re.fullmatch(r'\d{4}\d{2}', date_part)):
+        raise ValueError("Incomplete date format cannot be combined with a time portion")
+
+    # Parse date part
+    if re.fullmatch(r'\d{4}-\d{2}-\d{2}', date_part) or re.fullmatch(r'\d{4}\d{2}\d{2}', date_part):
+        date_obj = datetime.strptime(date_part, "%Y-%m-%d")
+    elif re.fullmatch(r'\d{4}-\d{2}', date_part) or re.fullmatch(r'\d{4}\d{2}', date_part):
+        date_obj = datetime.strptime(date_part, "%Y-%m")
+    elif re.fullmatch(r'\d{4}-W\d{2}-\d', date_part) or re.fullmatch(r'\d{4}W\d{2}\d', date_part):
+        # Handle ISO week and day
+        year, week, day = re.split(r'[-W]', date_part)
+        date_obj = datetime.strptime(f"{year}-W{week}-{day}", "%Y-W%U-%w")
+    elif re.fullmatch(r'\d{4}-W\d{2}', date_part) or re.fullmatch(r'\d{4}W\d{2}', date_part):
+        # Handle ISO week
+        year, week = re.split(r'[-W]', date_part)
+        date_obj = datetime.strptime(f"{year}-W{week}", "%Y-W%U")
+    elif re.fullmatch(r'\d{4}', date_part):
+        date_obj = datetime.strptime(date_part, "%Y")
+    else:
+        raise ValueError(f"Unsupported date format: {date_part}")
+
+    # Parse time part
+    if time_part:
+        time_match = re.fullmatch(r'(\d{2}:\d{2}:\d{2})(?:\.(\d+))?', time_part)
+        if time_match:
+            time_str, frac = time_match.groups()
+            if frac:
+                time_str += '.' + frac
+            time_obj = datetime.strptime(time_str, "%H:%M:%S")
+        else:
+            time_match = re.fullmatch(r'(\d{2}:\d{2})', time_part)
+            if time_match:
+                time_obj = datetime.strptime(time_match.group(1), "%H:%M")
+            else:
+                time_match = re.fullmatch(r'(\d{2})', time_part)
+                if time_match:
+                    time_obj = datetime.strptime(time_match.group(1), "%H")
+                else:
+                    raise ValueError(f"Unsupported time format: {time_part}")
+    else:
+        time_obj = datetime.min.time()
+
+    # Combine date and time
+    combined = datetime.combine(date_obj.date(), time_obj.time())
+
+    # Parse timezone
+    if dt_str.endswith('Z'):
+        combined = combined.replace(tzinfo=tz.tzutc())
+    elif re.search(r'[+-]\d{2}:\d{2}$', dt_str) or re.search(r'[+-]\d{4}$', dt_str):
+        tz_offset = re.search(r'[+-]\d{2}:\d{2}$|[+-]\d{4}$', dt_str).group()
+        hours, minutes = map(int, tz_offset[1:3]), map(int, tz_offset[3:5]) if len(tz_offset) > 3 else (0, 0)
+        combined = combined.replace(tzinfo=tz.tzoffset(None, hours * 3600 + minutes * 60))
+    return combined

@@ -1,0 +1,60 @@
+
+
+```python
+from typing import Sequence, Tuple, List, Dict
+
+def _get_platform_max_length() -> int:
+    return 2048
+
+def xargs(
+    cmd: Tuple[str, ...],
+    varargs: Sequence[str],
+    *,
+    color: bool = False,
+    target_concurrency: int = 1,
+    _max_length: int = _get_platform_max_length(),
+    **kwargs
+) -> List[Tuple[str, ...]]:
+    options = []
+    if color:
+        options.append("--color")
+    for key, value in kwargs.items():
+        options.append(f"--{key}")
+        options.append(str(value))
+    new_cmd = cmd + tuple(options)
+    base = " ".join(new_cmd)
+    base_length = len(base)
+    max_group_length = _max_length - base_length
+    if max_group_length < 1:
+        raise ValueError(
+            f"Command is too long even without arguments. Max allowed length is {_max_length}"
+        )
+
+    groups: List[List[str]] = []
+    current_group: List[str] = []
+    current_sum = 0
+
+    for arg in varargs:
+        arg_len = len(arg) + 1
+        new_count = len(current_group) + 1
+        new_length = current_sum + arg_len
+        if new_length > max_group_length or new_count > target_concurrency:
+            if current_group:
+                groups.append(current_group)
+                current_group = []
+                current_sum = 0
+            if arg_len > max_group_length or 1 > target_concurrency:
+                raise ValueError(
+                    f"Argument {arg!r} is too long or target_concurrency {target_concurrency} is too low"
+                )
+            current_group.append(arg)
+            current_sum = arg_len
+        else:
+            current_group.append(arg)
+            current_sum += arg_len
+
+    if current_group:
+        groups.append(current_group)
+
+    return [tuple(new_cmd) + tuple(g) for g in groups]
+```

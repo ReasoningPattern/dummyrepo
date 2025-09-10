@@ -1,0 +1,49 @@
+from collections import OrderedDict
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        if maxsize == 0:
+            return func
+        cache = OrderedDict()
+        hits = 0
+        misses = 0
+
+        def wrapper(*args, **kwargs):
+            nonlocal hits, misses
+            key_args = args
+            key_kwargs = sorted(kwargs.items())
+            key = (tuple(key_args), tuple(key_kwargs))
+            if typed:
+                typed_args = []
+                for a in args:
+                    typed_args.append((a, type(a)))
+                typed_kwargs = []
+                for k, v in key_kwargs:
+                    typed_kwargs.append((k, v, type(v)))
+                key = (tuple(typed_args), tuple(typed_kwargs))
+            if key in cache:
+                hits += 1
+                val = cache.pop(key)
+                cache[key] = val
+                return val
+            else:
+                misses += 1
+                result = func(*args, **kwargs)
+                cache[key] = result
+                if len(cache) > maxsize:
+                    cache.popitem(last=False)
+                return result
+
+        def cache_info():
+            return f'hits={hits}, misses={misses}, maxsize={maxsize}, current size={len(cache)}'
+
+        def cache_clear():
+            nonlocal hits, misses
+            cache.clear()
+            hits = 0
+            misses = 0
+
+        wrapper.cache_info = cache_info
+        wrapper.cache_clear = cache_clear
+        return wrapper
+    return decorator

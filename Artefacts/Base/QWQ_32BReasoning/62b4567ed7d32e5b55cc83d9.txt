@@ -1,0 +1,2248 @@
+Okay, I need to write a Python function called deep_merge_nodes that takes a list of nodes and merges them, handling duplicate keys. The docstring says that if there are colliding keys with non-MappingNode values, the last one should stay. Hmm, right, so the key here is to figure out how to merge these nodes deeply. 
+
+First, I should think about the types of nodes involved. The problem mentions MappingNode, which I assume is a custom class, maybe similar to a dictionary but with some extra properties. So, the nodes are probably instances of this class. The function needs to merge all the nodes in the list into a single node. 
+
+The deep part means that if a key exists in multiple nodes and the value is another MappingNode, then those should be merged recursively. But if a key has a non-MappingNode value in any of the nodes except the last one, then the last node's value takes precedence. 
+
+Wait, the order matters here. Since the last occurrence of a key's value (non-MappingNode) should override previous ones. So for each key, we look through all the nodes in the list, and for each key, check the values. If all the values for that key are MappingNodes, then we need to merge them. Otherwise, the last value in the list is the one to keep.
+
+Let me outline the steps. The function will process each node in the nodes list. For each key in all nodes, collect all the values from each node in order. Then, for each key, decide whether all the values are MappingNodes. If they are, then recursively merge them. If any of the values is not a MappingNode, then the last one is used.
+
+Wait, but how do I handle the order? Like, for each key, iterate through the nodes in reverse order? Because the last node's value should take precedence. Alternatively, for each key, the values from the nodes are considered in the order of the list, but when a non-MappingNode is encountered, we can stop and take that as the value. Wait, no, because the last node's value is the one that stays. So if there are multiple non-MappingNodes, the last one in the list is kept. 
+
+So the approach is: start with an empty result. Then, iterate through the nodes in reverse order. For each node, iterate through its keys, and for each key, if the key is already in the result and both the existing value and the new value are MappingNodes, then merge them. Otherwise, replace the existing value with the new one. Because by going backwards, the last occurrence (original list's order) would be the one that's kept if there's a non-MappingNode.
+
+Wait, that might work. Let's see. Suppose the nodes are [node1, node2, node3]. If I process them in reverse order (node3 first, then node2, then node1), then for each key in node3, we add them to the result. Then when processing node2, if a key already exists in the result and both are MappingNodes, we merge. Otherwise, we replace. Then node1's keys are processed, but again, if the existing value is a MappingNode and the new one is also a MappingNode, merge, else replace. Since we process from last to first, the last node's non-Mapping values would already be in the result, so the earlier nodes can't override them except if they are also MappingNodes. 
+
+Wait, maybe that's the right way. Let me think again. Let's say the first node has a key 'a' with a non-Mapping value, and the second node has 'a' as a MappingNode. Then when processing in reverse, the second node (node2) comes first. So 'a' would be added as a MappingNode. Then when node1 is processed, since it has a non-Mapping value for 'a', the existing value (from node2) would be a MappingNode, so the new value is not a MappingNode, so we replace the existing with node1's value? Wait no, that's the opposite of what we need. Because in the original list, node1 comes before node2. So in the problem's requirement, if there are colliding keys with non-MappingNode values, the last (i.e., node2 in this case) would have its value take precedence. Wait, the problem says "the last of the values remains". So the last in the list is the one that stays. 
+
+Therefore, the correct approach is to process the nodes in the order given, and for each key in each node, if the current node's key is already in the result, check if both are MappingNodes. If yes, merge them. If not, then replace the existing value with the current node's value. Wait, but that might not be efficient. Alternatively, process the nodes in reverse order and use the existing logic where the later nodes (in original list) overwrite earlier ones. Let me think:
+
+Suppose we process nodes from last to first (reverse order). Then for each key in the current node, if it's already in the result, and if both are MappingNodes, merge them. Otherwise, just take the current node's value (since it's earlier in the original list, but later in processing order). Wait, no. Because when processing in reverse, the first node (last in original list) is the first to be added. Then, each subsequent node (going back) can only add or merge if possible, but their non-Mapping values would overwrite existing ones. Wait, maybe that's the way to do it. Let's see:
+
+Take the example where node1 has {'a': 1}, node2 has {'a': {'b': 2}}, and node3 has {'a': 3}. The list is [node1, node2, node3]. The desired result should be {'a':3} because the last value is 3, a non-MappingNode. 
+
+Processing in reverse order (node3, node2, node1):
+
+Start with result as empty.
+
+Process node3 first. So key 'a' is added with value 3. 
+
+Next, node2 has key 'a' with a MappingNode. The existing value in the result is 3 (non-Mapping), so the existing value stays? Or since the current node's value is a MappingNode, but the existing is not, then the existing (3) would be kept. Because according to the problem statement, if there are colliding keys with non-MappingNode values, the last (original list's last) is kept. 
+
+Wait, in this example, node3's 'a' is non-Mapping, so when we process node2's 'a', since the existing value is non-Mapping, we should replace it with node2's value only if node2's value is a MappingNode? No, that's not right. Because the last occurrence in the original list (node3) has the value 3, which is non-Mapping, so that's the one that should remain. 
+
+Wait, processing in reverse order, node3's 'a' is 3. Then node2's 'a' is a MappingNode. Since the existing value (3) is not a MappingNode, we should not merge. So the existing value (3) would stay. 
+
+But when processing node1, which has 'a' as 1 (non-Mapping), again the existing value in the result is 3, so since it's non-Mapping, we leave it. So that works. 
+
+Another example: node1 has {'a': {'b': 1}}, node2 has {'a': {'c':2}}, then merging them, the result should be {'a': merged {'b':1, 'c':2}}. 
+
+Processing in reverse order, node2 first: the result has 'a' as {'c':2}. Then node1's 'a' is a MappingNode, so check if existing value (from node2) is also a MappingNode. Since yes, merge them. So the result would have 'a' with both b and c. 
+
+Yes, that's correct. 
+
+So the plan is to start with an empty result, and iterate through the nodes in reverse order. For each node, iterate through its keys. For each key, if it's already in the result:
+
+- if the current node's value is a MappingNode and the existing result's value is also a MappingNode, then do a deep merge. 
+
+- else, replace the existing value with the current node's value. 
+
+Wait, but the existing value could be a non-MappingNode. So in that case, the current node's value is a MappingNode, but the existing is not. Then since there was a non-MappingNode in the existing, we should replace it with the current's value? Wait no. The problem says, if there are colliding keys with non-MappingNode values, the last remains. So if in the current node (which is earlier in the original list), the value is a MappingNode, but the existing in the result (from a later node) is a non-MappingNode, then the existing (the later one) should stay, so we don't merge. 
+
+Wait, in this case, when processing in reverse, the later nodes in the original list are processed first. So in the first example where the last node (node3) has a non-Mapping value for 'a', that's the first to be added. Then node2's 'a' is a MappingNode, but the existing is non-Mapping, so node2's value can't override it. So the existing remains. 
+
+So the correct logic is: for each key in the current node (processed in reverse order), check if the key is already present in the result. 
+
+If it is present:
+
+- if current node's value is a MappingNode and the existing value is also a MappingNode, then merge them (by recursively calling deep_merge_nodes on the two values). 
+
+- else, do not change the existing value. Because the existing value comes from a later node in the original list, so it should take precedence. 
+
+Wait, but that's the opposite. Because when processing in reverse, the current node is earlier in the list, so the existing value in the result is from a later node, so we want to keep that. So in this case, if the existing value is a non-MappingNode (like the 3 in node3), then the current node's (node2) value (a MappingNode) would not replace it. 
+
+But in another scenario where the existing value is a MappingNode and the current node's value is a non-MappingNode, then the current's value would replace the existing? Wait, no. Because the current node is earlier in the original list, so the later nodes have already been processed. Wait, maybe I need to think of it this way: the result starts as the last node. Then each previous node is merged into it. 
+
+So when merging a new node into the result, for each key in the new node:
+
+- if the key is not in the result, add it with the new node's value. 
+
+- else, check if both are MappingNodes. 
+
+   - if yes, then merge their children (so the result's value for that key becomes the deep merge of the two)
+
+   - if not, then the result's value stays as whatever it was (since the new node's value is from an earlier node, so the later one's value is already in the result). 
+
+Wait, no, that can't be right. Let me think again. Suppose the result is built by starting from the last node, then adding previous nodes. So the first step is to copy the last node into the result. Then for each previous node, for each key in that node:
+
+- if the key is in the result, check if the current value (from the previous node) is a MappingNode and the result's value is also a MappingNode. 
+
+   - if both are MappingNodes, then we need to merge them, but the result's value is the later one, so the existing result's value is kept as the base, and the previous node's value is merged into it. Wait, but in this case, since we are processing the nodes in reverse order, the result is the last node's data. Then when processing node N-1, for each key in node N-1, if the key is already in the result and both are MappingNodes, then we merge them. 
+
+   The merging would be done by taking the existing (from node N) and merging with the current node's (N-1) value. So the existing value (from later node) is the first in the list, and the current (N-1) is the next? Wait maybe I need to think of the merging as the current node's value and the existing value. 
+
+Alternatively, for each key in the current node (which is being processed in reverse order), the existing value in the result is from the later nodes. So when merging, if both are MappingNodes, then we can merge them (so that the later's Mapping is merged with the earlier's). But the order in the merging function would be important here. 
+
+Wait, the deep_merge_nodes function is supposed to take a list of nodes and merge them. So when merging two MappingNodes, it's like calling deep_merge_nodes on [node's value, existing value]? 
+
+Hmm, perhaps the approach is:
+
+Initialize the result as an empty MappingNode (assuming that's the base class). Then loop over each node in reverse order. For each node in the list (starting from the last one), we need to merge it into the result. 
+
+Wait, maybe the reverse approach is better. Let me think of the process step by step. 
+
+Suppose the nodes list is [n1, n2, n3]. 
+
+We start with result = n3. 
+
+Then process n2: for each key in n2, if the key is in result:
+
+   if n2's value and result's value are both MappingNodes, then merge them (result[key] = deep_merge_nodes([n2's value, result's value])). 
+
+   else, leave result's value as is. 
+
+Wait, no. Because in that case, if n2 has a key that's a non-MappingNode, but the result already has it (from n3) as a non-Mapping, then n2's value would not override. That's correct because n3 comes after n2. 
+
+Then process n1. For each key in n1:
+
+   if the key is in result, check if both are MappingNodes. 
+
+   If they are, then merge. 
+
+   Else, leave the existing value in the result (since n3 or n2's value is later). 
+
+So this way, the last node's values are the base, and earlier nodes can only contribute if their values are MappingNodes and the existing in the result is also a MappingNode. 
+
+So the merging is done by taking the existing result and then merging in each previous node, but only for keys that are both MappingNodes. 
+
+Therefore, the function can be structured as follows: 
+
+We start with the result as the last node in the list. Then, for each node from the second last to the first, we merge it into the result. 
+
+Wait, but how do we handle the case when the list is empty? Probably return an empty node. Also, what if there are no nodes? But the function is supposed to take a list of nodes. 
+
+So first, check if the nodes list is empty. If so, return an empty MappingNode? Or maybe just return an empty one. 
+
+Alternatively, perhaps the function is designed to take a list of nodes and merge all of them. 
+
+So the steps would be:
+
+1. If there are no nodes, return an empty MappingNode. 
+
+2. Initialize the result as the last node. 
+
+3. Then iterate over the nodes in reverse order, except the last one. 
+
+Wait, no. Let's see. The nodes list is [n0, n1, n2, ..., n_{k-1}]. The order is to process them in reverse, so starting from n_{k-1}, then n_{k-2}, etc. The initial result is the last node. Then for each previous node (n_{k-2}, n_{k-3}, etc.), we merge each into the result. 
+
+The merging of each previous node into the result would be done by:
+
+for key in previous_node:
+
+   if key is in result:
+
+      if previous_node's value is a MappingNode and result's value is a MappingNode:
+
+          merge them (result's value becomes the deep merge of the two)
+
+      else: 
+
+          do not change the result's value. 
+
+   else:
+
+      add the key to the result with the previous_node's value. 
+
+Wait, but this might not be the case. Let me think again. 
+
+Wait, perhaps the merging of two nodes (like a previous node and the current result) is done by creating a new list of nodes [prev_node, current_result] and then deep_merge_nodes that list. 
+
+Wait, but the function is supposed to take a list of nodes. So maybe when merging two nodes, we can call deep_merge_nodes([node_a, node_b]) where node_a is the previous one and node_b is the current result. 
+
+Alternatively, the function can be designed recursively. 
+
+Hmm, perhaps the best way is to loop through all nodes in reverse order, and for each node, merge it into the result. 
+
+So, to merge a single node into the result, we can do:
+
+for key, value in node.items():
+
+    if key in result:
+
+        existing_value = result[key]
+
+        if isinstance(existing_value, MappingNode) and isinstance(value, MappingNode):
+
+            # merge them, so create a new MappingNode with the merged values
+
+            merged_value = deep_merge_nodes([existing_value, value])
+
+            result[key] = merged_value
+
+        else:
+
+            # do nothing, since existing value comes from a later node, so it stays
+
+            pass
+
+    else:
+
+        result[key] = value
+
+Wait, but that's not quite right. Because in the example where node2 has a MappingNode and the existing (from node3) is non-Mapping, then we don't replace it. 
+
+But when merging node2 into the result (which is node3), the key 'a' in node2 has a MappingNode, but the result's 'a' is 3 (non-Mapping). So since one is not a MappingNode, we leave the existing value (result's 'a' remains 3). 
+
+Yes. 
+
+So the process would be:
+
+result starts as the last node. 
+
+Then for each node in reversed(nodes[:-1]):
+
+   for each key in that node:
+
+      if key in result:
+
+         if both are MappingNode, then merge them (recursively)
+
+         else, leave the existing value (since the existing came from a later node in the original list)
+
+      else:
+
+         add the key to the result with the current node's value. 
+
+Wait, but nodes[:-1] would not include the last node. Wait, no, because reversed(nodes) would start at the end. Wait, perhaps the correct loop is:
+
+for node in reversed(nodes):
+
+   for key, value in node.items():
+
+      ... 
+
+Wait, no. Because if you do reversed(nodes), then the first iteration is the last node, which we can take as the initial result. Wait, no, perhaps the steps should be:
+
+Initialize the result as an empty MappingNode. 
+
+Then, loop over each node in nodes in reverse order (from last to first). 
+
+Wait, but then the first node in the reversed list is the last node in the original list. So adding its items to the result. Then the next node (second last) is merged into the result. 
+
+Wait, that's the right approach. Because the order is such that each subsequent node in the reversed list (i.e., moving backward through the original list) is merged into the result. 
+
+Wait, let me see. 
+
+Suppose the nodes are [n1, n2, n3]. 
+
+Reversed order is n3, n2, n1. 
+
+First, process n3: since the result is empty, all its keys are added to the result. 
+
+Then process n2: for each key in n2, if it's in the result, check if both are MappingNodes. If so, merge. 
+
+Then process n1: same logic. 
+
+But in this case, when processing n1, any key in n1 that is also in the result (from n2 or n3) would only override if the existing value is not a MappingNode. 
+
+Wait, no. Because if the existing value is a MappingNode, and n1's value is also a MappingNode, then they can be merged. 
+
+Wait, let's take an example where n1 has 'a': {'b':1}, n2 has 'a': {'c':2}, and n3 has 'a': {'d':3}. 
+
+The initial result after processing n3 is {'a': {'d':3}}. 
+
+Then processing n2: key 'a' exists. The existing value is a MappingNode (from n3), and n2's value is also a MappingNode. So merged, the result's 'a' becomes the deep merge of {'c':2} and {'d':3}, so {'c':2, 'd':3}. 
+
+Then processing n1: key 'a' exists again. The existing value (from n2 and n3) is a MappingNode, and n1's value is also a MappingNode. So merge those, adding 'b':1. The final result would have 'a' as {'b':1, 'c':2, 'd':3}? 
+
+Wait no, because when merging in reverse order, n3 comes first, then n2, then n1. 
+
+Wait, the merging between n1 and the existing result (which is the merged of n2 and n3) would be done by taking n1's value and the existing value (which is a MappingNode). So the existing value (from n2 and n3) is a MappingNode, and n1's is also a MappingNode. So they are merged, so the existing value gets the new key from n1. 
+
+Wait, but the order here is important. Because when merging two MappingNodes, the later one (the existing in the result) is the one that's already been processed. 
+
+Wait, the merging of n2 into the result (which was n3's a) would be done by considering the existing (n3's a) and n2's a. Since both are MappingNodes, the merge would be their combination. 
+
+Then when merging n1 into the result, the existing a is the merged of n2 and n3, and n1's a is a MappingNode. So again, merge them. 
+
+So the final a would have all the keys. 
+
+Another example where n1 has a non-Mapping value for 'a', and n2 has a MappingNode. 
+
+Original nodes list: n1 (a:1), n2 (a: {'b':2}), n3 (a:3). 
+
+Processing in reverse: n3 first, so result has a:3. 
+
+Then n2's a is a MappingNode, but existing is 3 (non-Mapping). So we leave the existing. 
+
+Then n1's a is 1 (non-Mapping), existing is 3. So since both are non-Mapping, the existing (3) stays. 
+
+So the final result is correct. 
+
+So the algorithm would be:
+
+- create a new result (a MappingNode?), then iterate over the nodes in reverse order. 
+
+Wait, but how do I create a new result? Maybe the result starts as a new instance of MappingNode. Then for each node in reversed(nodes):
+
+   for each key in the node:
+
+      if key is in result:
+
+          existing_val = result[key]
+
+          current_val = node[key]
+
+          if both are MappingNodes:
+
+              merged_val = deep_merge_nodes([current_val, existing_val])
+
+              result[key] = merged_val
+
+          else:
+
+              # do nothing because existing_val (from later nodes) is kept. 
+
+              pass
+
+      else:
+
+          result[key] = current_val 
+
+Wait, but in this approach, when merging node into the result, the existing_val is the accumulated result so far, which includes nodes processed after the current node (since we are going in reverse). 
+
+Wait, let me think again. Suppose the nodes are [n1, n2, n3]. 
+
+Processing reversed(nodes) is n3, n2, n1. 
+
+The result starts as a new MappingNode (empty). 
+
+First, process n3: for all keys in n3, add them to the result. 
+
+Then process n2: for each key in n2, check if it's in the result. 
+
+If it is, and both values are MappingNodes, then merge them (so the existing in the result is from n3, and the current is from n2). 
+
+Wait, but in the function's logic, when merging the list of nodes, the later nodes in the original list have higher priority. 
+
+Wait, in the example above, if n2 and n3 both have 'a' as MappingNodes, then the merged result would take the values from both. 
+
+So the approach of processing in reverse and merging into the result (which starts empty) may not be the right way. Because the first node in the reversed list (n3) is added first. Then n2's a would be merged with n3's a, but since n2 comes before n3 in the original list, the order in the deep_merge_nodes call should have n3's value first, then n2's? Or the other way around?
+
+Wait, the function is called with a list of nodes, and the merging is done such that the later nodes in the list override the earlier ones except when both are MappingNodes. 
+
+So for the example of two nodes, n and m, when merging [n, m], the result is the same as merging m into n? 
+
+Wait, no. Let's see. Suppose n has 'a': 1 and m has 'a': 2. The merged result would be 'a':2 (the last one). 
+
+Another example where n has 'a': {'b':1}, m has 'a': {'c':2}. The merged would have 'a' as the combination of both. 
+
+If n has 'a': {'b':1}, and m has 'a': 2, then the merged 'a' is 2, since m is later. 
+
+So when merging a list of nodes, the later nodes in the list have higher priority. 
+
+Therefore, when merging multiple nodes into the result, we need to process them in reverse order (so that the first in the reversed list is the last node, which has highest priority). 
+
+Wait, perhaps the correct approach is to start with the first node in the reversed list (the last node in the original list) as the initial result. Then for each subsequent node (the previous ones), we merge them into the result. 
+
+Wait, the reversed list would be [n3, n2, n1]. 
+
+The result starts as n3. 
+
+Then for each node in [n2, n1], merge them into the result. 
+
+So the merging of each node into the result is done as follows:
+
+for key in current_node:
+
+   if key is in the result:
+
+      if both values are MappingNodes:
+
+          merge them by creating a new list of those two nodes and doing deep_merge_nodes on them, then assign the merged value to result[key]
+
+      else:
+
+          # existing is non-Mapping (from result), so leave it. 
+
+          pass 
+
+   else:
+
+      add the key to the result with the current node's value. 
+
+Wait, but how do I get the existing value and the current node's value? 
+
+Wait, the existing value in the result is the accumulated result so far, which includes all nodes processed so far (starting from n3, then adding n2's keys except those that override). 
+
+Wait, perhaps when merging a node into the result, the existing value is the one in the result, and the current node's value is the one from the current node. 
+
+So for each key in the current node (like n2), if the key is in the result, check if both are MappingNodes. 
+
+If yes, then the merged value is the deep_merge of the two (so the existing value and the current node's value). 
+
+Wait, but then the order of the two nodes in the list passed to deep_merge_nodes matters. 
+
+In the case of merging n2 and n3's a, since the existing in the result is n3's a, and the current node is n2, which has a's value as a MappingNode. 
+
+So when merging those two, the list would be [n2's a, n3's a]? Or [n3's a, n2's a]? 
+
+Wait, in the example where n3's a is a MappingNode and n2's a is also a MappingNode, then merging them would combine both. 
+
+But in the case where the existing is a non-MappingNode (like n3's a is 3), and the current node's a is a MappingNode (n2's a is {'b':2}), then since one is not a MappingNode, the existing (3) is kept. 
+
+So the logic is, for each key in the current node (being processed in reverse order, so starting from n3, then n2, then n1):
+
+Wait, no. Let me re-clarify the steps. 
+
+The initial result is n3. 
+
+Then, processing n2:
+
+for each key in n2:
+
+   if key is in result:
+
+      existing_val = result[key]
+
+      current_val = n2[key]
+
+      if both are MappingNodes:
+
+          result[key] = deep_merge_nodes([existing_val, current_val])
+
+      else:
+
+          leave existing_val (since existing_val is from a later node in original list, which has higher priority)
+
+   else:
+
+      add the key to result with current_val. 
+
+Wait, but in the case where existing_val is a non-Mapping and current_val is a Mapping, we leave the existing. 
+
+Yes, that's correct. 
+
+Then processing n1:
+
+for each key in n1:
+
+   check if in result. 
+
+   if existing is a Mapping and current is also a Mapping, then merge. 
+
+   else, leave existing. 
+
+So this way, the last node's values are the base, and earlier nodes can only contribute if their values are MappingNodes and the existing in the result is also a MappingNode. 
+
+Therefore, the function can be structured as:
+
+Start with the result as the first node in reversed(nodes) (i.e., the last node in the original list). 
+
+Wait, but what if the nodes list is empty? Then return an empty node. 
+
+Wait, let me see. 
+
+The code structure would be something like:
+
+def deep_merge_nodes(nodes):
+    # create a new result node
+    result = MappingNode()  # but how to handle the initial node?
+
+Wait, perhaps the first step is to check if the nodes list is empty. If so, return an empty MappingNode. 
+
+Otherwise, start with the last node as the initial result. 
+
+Wait, perhaps the code should be:
+
+result = nodes[-1] if nodes else MappingNode()
+
+But then, when merging other nodes into it, we need to create a new MappingNode and copy the keys, but that might not be the case. 
+
+Alternatively, perhaps we need to start with an empty result and process all nodes in reverse. 
+
+Wait, let's try this approach:
+
+result = {}
+
+for node in reversed(nodes):
+
+    temp = {}
+
+    for key, value in node.items():
+
+        if key in result:
+
+            existing_val = result[key]
+
+            if isinstance(existing_val, MappingNode) and isinstance(value, MappingNode):
+
+                merged_val = deep_merge_nodes([value, existing_val])
+
+                temp[key] = merged_val
+
+            else:
+
+                # existing_val has higher priority (since it comes from a later node)
+
+                pass
+
+        else:
+
+            temp[key] = value
+
+    # then merge temp into result?
+
+    Hmm, maybe not. 
+
+Alternatively, perhaps the code should be:
+
+result = {}
+
+for node in reversed(nodes):
+
+    for key, value in node.items():
+
+        if key in result:
+
+            existing_val = result[key]
+
+            if isinstance(existing_val, MappingNode) and isinstance(value, MappingNode):
+
+                # merge the two, so create a new MappingNode by merging them. 
+
+                merged_val = deep_merge_nodes([existing_val, value])
+
+                result[key] = merged_val
+
+            else:
+
+                # do nothing, leave existing_val as is. 
+
+                pass
+
+        else:
+
+            result[key] = value
+
+Wait, but this might not work because the initial result is empty. 
+
+Wait, let's think of the first iteration. 
+
+Suppose nodes is [n1, n2, n3]. reversed(nodes) is [n3, n2, n1]. 
+
+The first node is n3. The result is empty. So for each key in n3, since it's not in the result, they are added to the result. 
+
+Then the next node is n2. 
+
+For each key in n2:
+
+   if key is in result (from n3):
+
+      check if both are MappingNodes. 
+
+      If yes, then merge them (deep_merge of existing and current). 
+
+      else, leave existing. 
+
+   else, add the key to the result. 
+
+Then the next node is n1, same process. 
+
+Wait, but in this case, the order is correct. 
+
+Wait, in the case where n3 has a non-Mapping value for 'a', and n2 has a MappingNode for 'a', then when processing n2's 'a', since it's in result (the existing is non-Mapping), the code leaves existing (so the result's 'a' stays as n3's value). 
+
+Yes. 
+
+Another case: if n2 has 'a' as a MappingNode and n3's 'a' is also a MappingNode, then merging them would combine. 
+
+Wait, but when processing n2, the existing value in the result (from n3) is a MappingNode, and the current value (from n2) is also a MappingNode. So the merged_val would be the deep merge of existing (n3's a) and current (n2's a). 
+
+Wait, but the deep_merge_nodes function is called with [existing_val, value], which are the two MappingNodes. 
+
+Wait, in the code above, the existing_val is from the result (which was built from the previous nodes in reversed order). 
+
+Wait, but when processing n2, the existing_val in the result is from n3. So the existing_val is first in the list passed to deep_merge_nodes. 
+
+Wait, the function's parameters are a list of nodes, so when merging two nodes, the order in the list matters. 
+
+Wait, in the example of merging [existing_val, value], existing_val is the later node (n3's a) and value is the earlier (n2's a). 
+
+So the deep_merge would take existing_val first, then value. So the later node's value is first in the list. 
+
+But according to the problem statement, the last node's value should take precedence. 
+
+Hmm, in that case, when merging two nodes, the order of the list passed to deep_merge_nodes would be [value, existing_val], so that the existing_val (from the later node) is last and thus kept if there are non-Mapping conflicts. 
+
+Wait, let me think of two nodes, n and m. 
+
+Suppose n is the current node (earlier in original list), and m is the existing node (from later in the original list). 
+
+So when merging n and m's key 'a', the list should be [n's a, m's a], so that m's a comes last, so if there's a conflict, it's kept. 
+
+Wait, no. The function takes a list of nodes, and when merging, the last node's value is kept for non-Mapping. 
+
+So when merging [n, m], the result would use m's value for any non-Mapping conflict. 
+
+Therefore, in the code above, when merging existing_val (from m, the later node) and the current node's value (n's value, which is earlier), the list should be [current_val, existing_val]. 
+
+Wait, no. Let's see:
+
+Suppose the existing_val is m's value (the later node in the original list), and current_val is n's value (the earlier). 
+
+When merging them, the list should be [existing_val, current_val]? 
+
+Wait, no, the list should be [n's value, m's value], so the last one (m) is kept. 
+
+Wait, but in the code above, the existing_val is the value from m (the later node), and the current_val is the value from n (the earlier node). 
+
+So to merge them, the correct order is [existing_val, current_val]? Or the other way around? 
+
+Wait, the function deep_merge_nodes is called with the list of the two values. 
+
+Wait, the two values are the current node's value (n's a) and existing_val (m's a). 
+
+The list should be [n's a, m's a], so that the second (m's a) is the last. 
+
+Wait, but in the code, the function is called with [existing_val, value], which would be [m's a, n's a]. That would mean that the last is n's a, which is the earlier node, so that would be wrong. 
+
+Ah, here's a problem. 
+
+So the code above would have the existing_val (m's a) first, then the current value (n's a) second. 
+
+But since m is later, the last node in the list should be m's a, so the list should be [n's a, m's a], so that the m's a is last, so in case of non-Mapping conflict, it's kept. 
+
+Wait, but in the current code's approach, when merging existing_val and current_val (the existing is from the later node), the list is [value (current node's value), existing_val (from the later node)]. 
+
+Wait, let me think again. 
+
+In the example where existing_val (from the result) is m's a (the later node in original list) and the current node's value is n's a (earlier node). 
+
+To merge those two, the list passed to deep_merge_nodes should be [n's a, m's a], so that m's a is the last element. 
+
+Therefore, the code should do:
+
+merged_val = deep_merge_nodes([value, existing_val])
+
+Wait, because value is n's a (current node's value) and existing_val is m's a. 
+
+Wait, the current node is n2 (in the example, which is earlier than n3 in original list). So when processing n2, the existing_val is from n3. 
+
+So the list should be [n2's a (current node's value), existing_val (n3's a)]. 
+
+Wait, but then the existing_val is the second element, so in case of non-Mapping conflict between them, the existing_val (n3's a) is kept. 
+
+Yes, that's correct. 
+
+Wait, so in the code, when merging existing_val and current_val (the current node's value), the list is [current_val, existing_val], so existing_val is the last one. 
+
+Wait, no. current_val is the value from the current node (n2 in the example), and existing_val is from the later node (n3). 
+
+So the list should be [current_val, existing_val], so existing_val is the second element. 
+
+Wait, the function is called with a list of nodes. So when merging two MappingNodes (the existing and the current), the list would be [current_val, existing_val], so the existing_val is last, so in case of a conflict, it's kept. 
+
+Yes, that's correct. 
+
+Therefore, the code should be:
+
+if both are MappingNodes:
+
+   merged_val = deep_merge_nodes([current_val, existing_val])
+
+Wait, but how does the deep_merge_nodes handle a list of two nodes? 
+
+Yes, because the function takes a list of nodes and merges them. So for the two values (current_val and existing_val), the list is [current_val, existing_val], so existing_val is the second, so in case of non-Mapping conflict, it's kept. 
+
+Wait, but the existing_val is the later node, so that's exactly what we want. 
+
+So the code is correct in that case. 
+
+Now, putting this all together. 
+
+First, we need to process each node in reversed order, but start with an empty result. Wait no, perhaps the initial result is an empty MappingNode, and then for each node in reversed(nodes), we merge it into the result. 
+
+Wait, let's see:
+
+Initialize result as empty MappingNode. 
+
+Then for each node in reversed(nodes):
+
+   for key in node's keys:
+
+      if key is in result:
+
+         existing_val = result[key]
+
+         current_val = node[key]
+
+         if both are MappingNodes:
+
+             merged_val = deep_merge_nodes([current_val, existing_val])
+
+             result[key] = merged_val
+
+         else:
+
+             # existing_val is non-Mapping, so leave it. 
+
+             pass 
+
+      else:
+
+          result[key] = current_val 
+
+Wait, but in this case, when processing nodes in reversed order (so the first node is the last one in original list), the first iteration would add all its keys to the result. 
+
+The second iteration would process the second last node (original's n2), and for each key, check if it's in the result. 
+
+If yes, and both are MappingNodes, then merge them. 
+
+Wait, but in this approach, the order in which the nodes are processed in reversed is such that the first node (the last in original) is the first to be added. Then each next node (n2, then n1) is merged into the result. 
+
+Wait, but in the first iteration, the node is n3. The result is empty. So all its keys are added. 
+
+Then n2 comes next. For each key in n2:
+
+   if it's in result (from n3):
+
+      existing_val is from n3. 
+
+      current_val is from n2. 
+
+      So if both are MappingNodes, then merge the two, but the existing_val (n3's) is the later one, so the list is [current_val (n2's), existing_val (n3's)]. 
+
+      The deep_merge would take the existing_val as the last element, so in case of non-Mapping conflict, it stays. 
+
+      So the merged_val is the correct combination. 
+
+   else: 
+
+      leave existing_val. 
+
+So that works. 
+
+Wait, but in the first iteration, the result is empty, so all the keys from n3 are added. 
+
+Then in the second iteration, processing n2's keys:
+
+for each key in n2:
+
+   if key is in result:
+
+      existing is from n3. 
+
+      current is n2. 
+
+      if both are MappingNodes, merge them (with [n2's val, n3's val] as the list, so the later is n3's). 
+
+      So the merged would have the n3's value as the last, so any non-Mapping in n3's would take precedence. 
+
+Wait, but the merged is done by passing [current_val, existing_val], which is [n2's a, n3's a]. 
+
+The deep_merge_nodes([n2's a, n3's a]) would process those two nodes, and the second one (n3's a) would have priority. 
+
+Therefore, that's correct. 
+
+So the code would look like this. 
+
+Now, the question is, how to handle the nodes in the loop. 
+
+Wait, the function's parameter is a list of nodes. So each node in the list is a MappingNode. 
+
+Wait, but in the code, when processing a node (like n3), the items are accessed via node.items(). 
+
+So the code would need to iterate over each node's items. 
+
+But first, the initial result must be a new MappingNode instance. 
+
+Wait, but what if the nodes list is empty? Then return an empty MappingNode. 
+
+Wait, the code outline would be:
+
+def deep_merge_nodes(nodes):
+    if not nodes:
+        return MappingNode()  # or some default?
+    result = MappingNode()
+    for node in reversed(nodes):
+        for key, value in node.items():
+            if key in result:
+                existing_val = result[key]
+                if isinstance(existing_val, MappingNode) and isinstance(value, MappingNode):
+                    merged_val = deep_merge_nodes([value, existing_val])
+                    result[key] = merged_val
+                # else, do nothing
+            else:
+                result[key] = value
+    return result
+
+Wait, but this code has a problem. 
+
+Wait, the first step is to set result as an empty MappingNode. Then, for each node in reversed(nodes), we process its keys. 
+
+Wait, but in the first iteration (the last node in original list), all its keys are added to the result. 
+
+Then the next node (second last) is processed. For each key in that node, if the key is already in the result, and both are MappingNodes, then merge. 
+
+Wait, but in this code, the node is being processed in reversed order, so the first node is the last in the original list. 
+
+Wait, let's see an example where there are two nodes. 
+
+Suppose nodes = [n1, n2]. 
+
+Reversed is [n2, n1]. 
+
+First, process n2. 
+
+The result is empty, so all keys from n2 are added. 
+
+Then process n1. 
+
+For each key in n1:
+
+   if in result, check if both are MappingNodes. 
+
+   If so, merge. 
+
+   else, leave existing. 
+
+So that's correct, because n2 comes after n1. 
+
+Wait, but in the code above, the first reversed node is n2, which is added to the result. Then n1 is processed next. 
+
+Yes, that's correct. 
+
+Wait, but in the code, the first loop is for node in reversed(nodes), so the first iteration is n2 (second node in original list). 
+
+Wait, but in the code, the initial result is empty. So when processing the first node (n2), all its keys are added. 
+
+Then the second node (n1) is processed, and for each key, if it's in the result, then check. 
+
+Yes, this works. 
+
+Wait, but in the code, the initial result is a new MappingNode, which is empty. 
+
+Wait, but what if the nodes list has only one node? Then the result would start as empty, and then process that node (the first and only node in reversed list, which is the original node). 
+
+So in that case, all keys from that node are added to the result. 
+
+Which is correct. 
+
+Another test case: nodes = [n1, n2], where n1 has {'a': 1}, n2 has {'a': 2}. 
+
+Then reversed is [n2, n1]. 
+
+Processing n2 first: result gets 'a':2. 
+
+Then processing n1: key 'a' is in result. 
+
+existing_val is 2 (non-Mapping), current_val is 1 (non-Mapping). 
+
+So since one is non-Mapping, existing_val (from n2) stays. 
+
+Thus, the final result is 'a':2, which is correct. 
+
+Another test case where n1 has {'a': {'b':1}}, n2 has {'a': {'b':2}}. 
+
+Then when processing n2 first (since reversed starts with it), result's 'a' is the MappingNode from n2. 
+
+Processing n1's 'a', existing_val is a MappingNode (from n2), current_val is also a MappingNode. 
+
+So merged_val is deep_merge_nodes([current_val (n1's a), existing_val (n2's a)]). 
+
+Wait, the list here would be [n1's a, n2's a]. 
+
+Then, the deep_merge would process those two nodes, and for their 'b' keys, the second (n2's) would take precedence. 
+
+So the merged_val would have 'b':2, which is correct. 
+
+So the code seems to handle that. 
+
+Wait, but in the code, when merging the two MappingNodes (n1's a and n2's a), the function is called with [value, existing_val], where value is n1's a (current node's value), and existing_val is n2's a. 
+
+Wait, the list is [value (n1's a), existing_val (n2's a)]. 
+
+So the second element is n2's a, so in case of a non-Mapping conflict, that would be kept. 
+
+Which is correct. 
+
+Hmm, this seems okay. 
+
+Now, what about the base case when a node's value is not a MappingNode? 
+
+Suppose in the nodes list, the first node in reversed (the last in original) has a non-Mapping value for 'a', then the next node (second last in original) has a non-Mapping value for 'a'. 
+
+Processing the second node (second last) would check key 'a' is in result (from first node). existing_val is non-Mapping, so the current_val (from second last node) is also non-Mapping. So existing_val (from the last node) is kept. 
+
+Which is correct. 
+
+So the code logic is correct. 
+
+Now, the question is: how to implement this in Python, assuming that MappingNode is a subclass of a dictionary or similar. 
+
+Wait, the problem says that the function is to merge "any node values corresponding to duplicate keys", and if the keys have non-MappingNode values, the last one remains. 
+
+So, the nodes passed into the function are all instances of some class, perhaps a MappingNode. 
+
+Therefore, in the code, the result must be a new instance of MappingNode. 
+
+The code above assumes that nodes are MappingNode instances, and that they have an items() method. 
+
+Therefore, in the code, the result is a new MappingNode. 
+
+Wait, but how do we create a new MappingNode? 
+
+Maybe the code should first check if the nodes list is empty, return a new instance. 
+
+But the code may not have access to the MappingNode's constructor, unless it's imported. 
+
+Assuming that the function is supposed to work with MappingNode objects, perhaps the code can create a new instance by using the first node's class? Or maybe the MappingNode is a dictionary. 
+
+Wait, perhaps the code is supposed to treat the nodes as dictionaries. 
+
+Alternatively, perhaps the nodes are all dictionaries, and the MappingNode is just a regular dict. 
+
+Wait, the problem statement says "non-MappingNode values". So perhaps MappingNode is a class that we can check using isinstance. 
+
+Assuming that, the code needs to create a new MappingNode as the result. 
+
+Wait, but the problem didn't specify the class. 
+
+Hmm, perhaps the code should treat the nodes as dictionaries, and the MappingNode is just a dictionary. 
+
+Alternatively, maybe the nodes are all instances of a class that has a .items() method, and the function is supposed to treat the values as such. 
+
+Wait, perhaps the code can be written using standard dictionaries. 
+
+Wait, the problem's description says "Merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains." 
+
+Assuming that MappingNode is a class that the function can check with isinstance. 
+
+So, in code, the function would need to create a new dictionary (or MappingNode) and process each node's items. 
+
+But in the code I outlined, the result is initialized as a new MappingNode (empty). 
+
+Wait, perhaps the code can be written using regular dictionaries, and the MappingNode is a subclass. 
+
+Alternatively, perhaps the function can work with any Mapping types, but the problem specifies that. 
+
+Well, perhaps the code can proceed as follows. 
+
+Assuming that the nodes are all dictionaries (or a subclass like MappingNode), and the function returns a new dictionary (or MappingNode). 
+
+But the code needs to create a new instance. 
+
+Alternatively, perhaps the code can use a regular dict, and the MappingNode is a type that we can check. 
+
+Wait, perhaps the code is supposed to work with regular dictionaries, and the problem's mention of MappingNode is just part of the problem's context. 
+
+Alternatively, perhaps the code should treat the nodes as dictionaries, and the MappingNode is a class that has a .items() method, and can be checked with isinstance. 
+
+In any case, the code must create a new result. 
+
+Wait, let me think again. 
+
+The function signature is def deep_merge_nodes(nodes). 
+
+The nodes are a list of nodes. The problem says that if there are colliding keys with non-MappingNode values, the last (in the list) remains. 
+
+So, the code's approach of processing the nodes in reversed order, and for each key in the current node, checking if it's in the result. 
+
+Wait, in the code I outlined earlier, the first reversed node (the last in original list) is added to the result. Then processing previous nodes. 
+
+Wait, in that code, the result is initialized as an empty MappingNode. 
+
+Wait, perhaps the code should start with the first node in reversed order (i.e., the last node in original list) as the initial result. 
+
+Wait, let's try that approach. 
+
+def deep_merge_nodes(nodes):
+    if not nodes:
+        return {}
+    # Start with the last node as the initial result
+    result = nodes[-1].copy()  # assuming nodes can be copied. But how?
+    for node in reversed(nodes[:-1]):  # process all except the last, in reverse order
+        for key, value in node.items():
+            if key in result:
+                existing_val = result[key]
+                if isinstance(existing_val, MappingNode) and isinstance(value, MappingNode):
+                    merged_val = deep_merge_nodes([value, existing_val])
+                    result[key] = merged_val
+                # else, do not change existing_val
+            else:
+                result[key] = value
+    return result
+
+Wait, but that approach may not work. 
+
+Wait, let's see the first example again with nodes [n1, n2, n3]. 
+
+The initial result is n3's items. 
+
+Then processing n2 (since nodes[:-1] is [n1, n2], reversed would be [n2, n1]). 
+
+Wait, no. Wait, nodes[:-1] is [n1, n2]. 
+
+Reversed(nodes[:-1]) would be [n2, n1], so the loop would process node in [n2, n1]. 
+
+Processing n2 first. 
+
+For each key in n2, if it's in result (from n3's items), then check if both are MappingNodes. 
+
+If yes, then merge the two (n2's value and n3's value). 
+
+Wait, but in the code above, the list passed is [value (from n2), existing_val (from n3)]. 
+
+Wait, that's the same as the previous approach. 
+
+Wait, but in this code, the initial result is a copy of the last node. 
+
+Wait, but how do you copy a node? If the nodes are instances of a class, perhaps they have a .copy() method. 
+
+Alternatively, maybe the nodes are just regular dictionaries, so we can use a regular dict. 
+
+Wait, perhaps in this code, the nodes are all dictionaries, and the MappingNode is a subclass of dict. 
+
+Then the code can use a regular dict as the result. 
+
+Wait, but the problem says "non-MappingNode values". So perhaps the MappingNode is a class that we can check. 
+
+Assuming that, the code can be written as:
+
+def deep_merge_nodes(nodes):
+    """
+    Merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains.
+    """
+    if not nodes:
+        return {}
+    result = {}
+    for node in reversed(nodes):
+        for key, value in node.items():
+            if key in result:
+                existing_val = result[key]
+                if isinstance(existing_val, MappingNode) and isinstance(value, MappingNode):
+                    merged_val = deep_merge_nodes([value, existing_val])
+                    result[key] = merged_val
+                # else, do not change existing_val (since it's from a later node)
+            else:
+                result[key] = value
+    return result
+
+Wait, but in this code, the initial result is an empty dict. 
+
+Wait, the first node in reversed(nodes) is the last node in the original list. 
+
+Processing that first node (the last node):
+
+for each key in that node, since the result is empty, they are added. 
+
+Then the next nodes in reversed order (the second to last, then third to last, etc.) are processed. 
+
+Wait, that's the same as the first approach. 
+
+Wait, but in the first approach, the result starts as an empty dict, and then the first reversed node (the last node in original) is processed, adding all its keys. 
+
+Then the second node (second to last) is processed, and so on. 
+
+So that's the same as the first approach. 
+
+Wait, but in this code, the initial result is empty, so the first node (last node in original) is added in full. 
+
+Yes. 
+
+Wait, but in the first approach's code, the result was initialized as an empty MappingNode. 
+
+Wait, perhaps in the problem's context, the nodes are all instances of MappingNode, so the result must also be a MappingNode. 
+
+Therefore, the code should create a new instance of MappingNode. 
+
+But how? 
+
+Assuming that MappingNode is a class with a constructor that can take a dictionary, then the code can do something like:
+
+result = MappingNode()
+
+But since the problem didn't specify the class, perhaps the code can just use a regular dictionary. 
+
+Alternatively, perhaps the function is supposed to return a dictionary, and the MappingNode is just a regular dict. 
+
+Alternatively, maybe the MappingNode is a class that the user has defined, so the code must treat them as such. 
+
+Hmm, perhaps the code can just use regular dictionaries. 
+
+Let me see. Let's proceed under the assumption that the nodes are all dictionaries, and that a MappingNode is a dictionary. 
+
+Wait, but the problem says "non-MappingNode values", so perhaps MappingNode is a specific type. 
+
+Alternatively, perhaps the function is supposed to treat any value that is a MappingNode (a subclass of a dict-like structure) as a candidate for deep merging, and others (non-MappingNode) are just replaced by the last occurrence. 
+
+Therefore, the code would need to check if the value is an instance of MappingNode. 
+
+Assuming that, the code would look like this. 
+
+Wait, but then the code must have access to the MappingNode class. 
+
+Alternatively, perhaps the problem is using a type where MappingNode is a dictionary. 
+
+Alternatively, maybe the problem is expecting that the nodes are all dictionaries, and the MappingNode is a dictionary. 
+
+Wait, the problem's description says "corresponding to duplicate keys", so perhaps the values are merged only if they are both dictionaries. 
+
+So perhaps the code can use the following approach, treating all nodes as dictionaries, and the MappingNode is a dict. 
+
+Wait, perhaps the problem's mention of "non-MappingNode" is just a way to say that if a key's value is not a MappingNode (i.e., not a dict), then the last value in the list is kept. 
+
+So the code can be written using regular dictionaries, and checking if the existing_val and value are both of type dict. 
+
+Wait, maybe the problem's "MappingNode" is equivalent to a dictionary. 
+
+If that's the case, then the code can be written as:
+
+def deep_merge_nodes(nodes):
+    result = {}
+    for node in reversed(nodes):
+        for k, v in node.items():
+            if k in result:
+                existing = result[k]
+                if isinstance(existing, dict) and isinstance(v, dict):
+                    merged = deep_merge_nodes([v, existing])
+                    result[k] = merged
+                else:
+                    # existing is non-dict (or v is non-dict), so do not change existing (since node is earlier)
+                    pass
+            else:
+                result[k] = v
+    return result
+
+Wait, this code uses dictionaries. 
+
+Testing the first example where nodes are [n1, n2, n3], and n3 has 'a':3 (non-dict), n2 has 'a': {'b':2} (dict), and n1 has 'a':1 (non-dict). 
+
+The reversed list is [n3, n2, n1]. 
+
+Processing n3 first (since reversed(nodes) starts with it). 
+
+The result is empty, so 'a':3 is added. 
+
+Processing n2 next: 
+
+key 'a' is in the result. existing is 3 (non-dict), v is a dict. 
+
+Since existing is not a dict, the code does nothing. 
+
+Then processing n1's 'a', existing is 3 (non-dict), v is 1 (non-dict). 
+
+Again, existing is non-dict, so do nothing. 
+
+The final result is {'a':3}, which is correct. 
+
+Another test case where two nodes have 'a' as dicts. 
+
+n2 has {'a': {'b':1}}, n3 has {'a': {'c':2}}. 
+
+The reversed list is [n3, n2, ...]. 
+
+Wait, let's say nodes are [n2, n3]. 
+
+Reversed is [n3, n2]. 
+
+Processing n3 first, so the result has 'a': {'c':2}. 
+
+Then processing n2's 'a' (which is a dict). 
+
+existing is a dict, so we call deep_merge_nodes([n2's a (v), existing (from n3)]). 
+
+Wait, the list passed is [v, existing], which in this case would be [ {'b':1}, {'c':2} ].
+
+Calling deep_merge_nodes on this list would process the nodes in reversed order again. 
+
+Wait, let's see: 
+
+In the recursive call, the nodes list is [ {'b':1}, {'c':2} ].
+
+Reversed would be [{'c':2}, {'b':1}]. 
+
+The result starts empty. 
+
+Processing the first node (the second one in original list of the two), which is {'c':2}. 
+
+So the result is {'c':2}. 
+
+Then processing the next node (the first in the original list, {'b':1}).
+
+For key 'a'? Wait, no. Wait, in the recursive call, the nodes are the two dicts. 
+
+Wait, the keys are 'a' in the first level, but in the recursive call, the keys are 'b' and 'c' in the two dicts. 
+
+Wait, let me see step by step. 
+
+Original call: deep_merge_nodes([n2, n3]). 
+
+Wait, no, the original example was n2 and n3's a's being merged. 
+
+Wait, in the first example where n2 and n3 have 'a's as dicts, the initial call is for merging their 'a' values. 
+
+Wait, let's take the example where the two nodes being merged are {'b':1} and {'c':2} (the values for 'a'). 
+
+So the function call is deep_merge_nodes([ {'b':1}, {'c':2} ]). 
+
+The reversed list would be [{'c':2}, {'b':1}]. 
+
+Processing the first node ( {'c':2} ), so the result starts as empty. 
+
+The first node in reversed list is {'c':2}. 
+
+Processing its keys: 'c' is added to the result (result is {'c':2}).
+
+Then the next node is {'b':1}. 
+
+Processing its keys:
+
+key 'b' is not in the result, so add it. 
+
+key 'c' is in the result. 
+
+The existing value is {'c':2} (a dict), and the current node's value (from {'b':1}) has no 'c', so when processing 'c' in the existing? 
+
+Wait, no. Wait, the second node ( {'b':1} ) has key 'b' but not 'c', so when processing that node, its keys are 'b'. 
+
+Wait, in the recursive call, the nodes are the two dicts (values for 'a'). 
+
+Wait, the two nodes are the first one ( {'b':1} ), and the second ( {'c':2} ). 
+
+Wait, no, in the list [v, existing_val], which in the first case (n2 and n3's 'a's) would be [ {'b':1}, {'c':2} ].
+
+So reversed(nodes) would be [{'c':2}, {'b':1}].
+
+Processing first node ( {'c':2} ), the result is empty. 
+
+So after first iteration, the result has {'c':2}. 
+
+Then processing the next node ( {'b':1} ):
+
+for key 'b', it's not in the result, so add it. 
+
+Then the result becomes {'c':2, 'b':1}. 
+
+Wait, but that's not right. Because the two nodes are being merged, and since they are both dicts, their keys should be merged. 
+
+Wait, the merged result should have both 'b' and 'c'? 
+
+Wait, yes. 
+
+Wait, in this case, the merged_val would be {'b':1, 'c':2}? 
+
+Wait, let's see the code. 
+
+In the recursive call, the result starts as empty. 
+
+First node ( {'c':2} ) is processed first. 
+
+So all its keys are added to the result. 
+
+Then the next node ( {'b':1} ) is processed. 
+
+For key 'b', not in the existing result (which has 'c'), so added. 
+
+For key 'c', existing is {'c':2} (a dict), and current node's (the {'b':1}) has no 'c' key. 
+
+Wait, no, the next node is {'b':1}, so its items are 'b':1. 
+
+So when processing that node, the key 'b' is added to the result. 
+
+The key 'c' was already present from the first node, so no change. 
+
+The final merged_val would be {'b':1, 'c':2}? 
+
+Wait, yes. 
+
+Wait, but the function is supposed to merge all the nodes in the list. 
+
+Wait, in the recursive call, the nodes list is the two values (the two dicts). 
+
+The reversed list is the second one first (the existing_val, which is the later one in the original list). 
+
+Wait, the code is correct here. 
+
+Therefore, the code would correctly merge the two dicts into a new one with all keys. 
+
+Another example where two nodes have the same key with dicts but overlapping keys. 
+
+Suppose the two nodes are:
+
+n1 has {'a': {'b':1}}
+
+n2 has {'a': {'b':2}}
+
+Then the merged would be {'a': {'b':2}}, since the last node (n2) has a non-dict? No, in this case, both are dicts, so they are merged. 
+
+Wait, the merged of the two would be:
+
+When merging n1's a ( {'b':1} ) and n2's a ( {'b':2} ), the list is [ {'b':1}, {'b':2} ]
+
+The reversed list would be [ {'b':2}, {'b':1} ].
+
+Processing first node ( {'b':2} ), result starts as empty. 
+
+So after first iteration, the result is {'b':2}. 
+
+Processing the next node ( {'b':1} ), the key 'b' is already in the result. 
+
+existing is {'b':2}, which is a dict. current value is {'b':1}, also a dict. 
+
+So merged_val = deep_merge_nodes([ {'b':1}, {'b':2} ]). 
+
+Wait, this is recursive. 
+
+Wait, let's see. 
+
+The new call's nodes list is [ {'b':1}, {'b':2} ]
+
+Reversed is [ {'b':2}, {'b':1} ]
+
+The result starts as empty. 
+
+Processing first node ( {'b':2} ), so result becomes {'b':2}. 
+
+Next node is {'b':1}, processing its 'b' key. 
+
+The existing in the result is a dict (since the first node in the reversed list is a dict with 'b':2, but the existing is {'b':2} (a dict), and the current node's value is {'b':1} (a dict). 
+
+So, the existing is a dict, the current value is a dict. 
+
+Therefore, we need to merge their 'b' values. 
+
+Wait, but in the recursive call, the function is called with the two values. 
+
+Wait, the two values are the existing and current? Or the nodes are the two dicts. 
+
+Wait, in the code above, the two nodes passed in the list are the two dicts (the values of the 'a' keys in the original nodes). 
+
+Wait, in the example, the two nodes passed to the recursive call are the two dicts ( {'b':1}, {'b':2} ). 
+
+So the function will process reversed([ {'b':1}, {'b':2} ]) which is [ {'b':2}, {'b':1} ].
+
+The result starts as empty. 
+
+Processing {'b':2} first, adding 'b':2 to the result. 
+
+Then processing {'b':1} (the second node in the original list of the two, but in reversed order it's the second node here). 
+
+The key 'b' is in the result (existing is 2's dict). 
+
+Wait, existing is a dict ( {'b':2} ), and current value is {'b':1} (a dict). 
+
+So we need to merge their 'b' keys. 
+
+Wait, but the code would call deep_merge_nodes again on the two values for 'b'? 
+
+Wait, in the first recursive call (for the 'a' key's values), the code would process the two dicts ( {'b':1}, {'b':2} ). 
+
+Wait, the first step is to create a result (empty dict). 
+
+Then, process each node in reversed order. 
+
+First node is {'b':2}. 
+
+So the result gets 'b':2. 
+
+Then the next node is {'b':1}. 
+
+Processing its 'b' key. 
+
+The existing value in the result is a dict (the 'b' key? No, wait, the existing is the 'b' value? 
+
+Wait, in this second call, the nodes are the two 'b' dicts. 
+
+Wait, no, sorry. Let me retrace. 
+
+Original example: n1 has {'a': {'b':1}}, n2 has {'a': {'b':2}}. 
+
+The first call to deep_merge_nodes is with the list of nodes [n1, n2]. 
+
+The reversed list is [n2, n1]. 
+
+Processing n2 first (so its 'a' key is added to the result. 
+
+The result's 'a' is {'b':2}. 
+
+Then processing n1's 'a' key (a dict). 
+
+existing_val is {'b':2}, which is a dict. current_val is {'b':1}, also a dict. 
+
+So merged_val is deep_merge_nodes([ {'b':1}, {'b':2} ]). 
+
+Wait, the list here is [current_val (from n1's 'a'), existing_val (n2's 'a')]. 
+
+Wait, the current_val is the n1's value ( {'b':1} ), and existing_val is n2's value ( {'b':2} ). 
+
+Wait, in the code, the list is [v, existing_val], where v is the current node's value (from the node in the reversed loop). 
+
+Wait, in the first loop (processing the original list), when merging the 'a' keys, the code does:
+
+merged_val = deep_merge_nodes([value (n1's a), existing_val (n2's a)])
+
+Wait, no, in the first loop's processing of n1's 'a' key. 
+
+Wait, in the first loop (processing nodes in reversed order, starting with n2, then n1):
+
+The first pass (n2) adds 'a': {'b':2} to the result. 
+
+Then when processing n1, the key 'a' is in the result. 
+
+So existing_val is {'b':2} (a dict), and current_val (n1's 'a') is {'b':1} (a dict). 
+
+So the code calls deep_merge_nodes([current_val (n1's 'a'), existing_val (n2's 'a')]). 
+
+Wait, the list is [ {'b':1}, {'b':2} ].
+
+Wait, the order here is important. 
+
+The existing_val (n2's 'a') comes from a later node (since we are processing in reversed order, so n2 is later than n1 in original list). 
+
+So the list is [v (current node's value, which is n1's a), existing_val (n2's a)]. 
+
+Wait, but the list's order is [v, existing_val], so the existing_val is the second element, so in the recursive call, the reversed order would process the existing_val first. 
+
+Wait, in the recursive call for merging the two 'a' values, the nodes list is [ {'b':1}, {'b':2} ].
+
+Reversed order is [{'b':2}, {'b':1} ].
+
+Processing first node ( {'b':2} ), adding to the result (empty) so 'b':2 is in result. 
+
+Next node is {'b':1}. 
+
+The existing_val for 'b' is {'b':2}? No, the existing_val is a dict. 
+
+Wait, the existing_val in the recursive call is the existing value (the first node in the reversed list's 'b' key? Wait, no, the recursive call is for merging the two 'a' values. 
+
+Wait, in the recursive call, the function is called with the two 'a' values (the two dicts). 
+
+So, the first step in the recursive call is to create a new result (empty). 
+
+Then process the reversed list of the two nodes (the list is [ {'b':2}, {'b':1} ]). 
+
+Processing the first node ( {'b':2} ), so 'b' is added to the result. 
+
+Then processing the second node ( {'b':1} ), the existing 'b' in the result is {'b':2} (a dict), and the current value ( {'b':1} ) is a dict. 
+
+So, we need to merge those two. 
+
+Wait, the code would do:
+
+for key 'b' in current node ( {'b':1} ):
+
+   existing in result is {'b':2} (a dict). 
+
+   So call deep_merge_nodes again on the two 'b' values. 
+
+Wait, the two 'b' values are the existing (from the first node in reversed list, which is {'b':2}), and the current value ( {'b':1} ). 
+
+Wait, the code would create a new list [current_val ( {'b':1} ), existing_val ( {'b':2} ) ] and call deep_merge_nodes on that. 
+
+Wait, no. Wait, the current_val is the value from the current node in the loop, which in the second recursive call (merging the two 'a's) is the current node ( {'b':1} ), so its value for 'b' is {'b':1}? Or perhaps I'm getting confused here. 
+
+Wait, in the second recursive call (the 'a' keys), the nodes are the two dictionaries ( {'b':1} and {'b':2} ), so the function is merging those two into a new dict. 
+
+The code would process the first node ( {'b':2} ), adding 'b':2. 
+
+Then processing the second node ( {'b':1} ), which has key 'b'. 
+
+existing_val is a dict (the 'b' value?), no, the existing_val is the existing in the result (which is the first node's 'b' value). 
+
+Wait, in the second call, the result starts as empty. 
+
+Processing the first node ( {'b':2} ) adds all its keys. So the result now has 'b':2. 
+
+Then processing the second node ( {'b':1} ), which has key 'b'. 
+
+existing_val is 2 (the value of 'b' in the result). 
+
+Wait, no, the existing_val is the value in the result for key 'b', which is 2. 
+
+Wait, the current value (from the second node) is {'b':1}['b'] is 1? Or wait, no. 
+
+Wait, in the second recursive call (merging the two 'a' values), the nodes are the two dicts ( {'b':1}, {'b':2} ). 
+
+Wait, the nodes list is [ {'b':1}, {'b':2} ]? Or wait, the list is [v, existing_val], which in the first step (merging the 'a's) the v was the n1's a ( {'b':1} ), and existing_val was n2's a ( {'b':2} ). So the list is [ {'b':1}, {'b':2} ]? 
+
+Wait, in the first step, when merging the two 'a' values (from the original nodes), the list is [ {'b':1}, {'b':2} ] (since v is n1's a and existing_val is n2's a). 
+
+Wait, but when you pass this list to deep_merge_nodes, the reversed list would be [ {'b':2}, {'b':1} ].
+
+Processing the first ( {'b':2} ), the result starts empty. 
+
+Adding 'b':2. 
+
+Then processing the next node ( {'b':1} ), so key 'b' is in the result (existing is 2). 
+
+Wait, but the existing and current value for 'b' are both non-dicts (integers?), so the code would not merge. 
+
+Wait, that's a problem. 
+
+Wait, the code in the recursive call for the 'a's is:
+
+merged_val = deep_merge_nodes([value (the current node's a, which is {'b':1}), existing_val (n2's a, {'b':2} ) ] 
+
+Wait, so the nodes passed to the recursive call are two dictionaries. 
+
+Wait, but in the recursive call, the nodes are the two dicts ( {'b':1} and {'b':2} ), so the function will process them. 
+
+Wait, in the first recursive call (for merging the 'a' values), the nodes are two dicts. 
+
+The code would process reversed([ {'b':1}, {'b':2} ]) → [ {'b':2}, {'b':1} ].
+
+The result starts as empty. 
+
+First node ( {'b':2} ) is processed, so 'b' is added with value 2. 
+
+Then processing the next node ( {'b':1} ), which has 'b' as a key. 
+
+existing_val is 2 (a non-dict?), but wait, no. 
+
+Wait, the two nodes in the recursive call are the two 'a' values, which are both dictionaries. 
+
+Wait, the 'a' values are each a dict with 'b' as a key. 
+
+Wait, the first node in the recursive call's reversed list is {'b':2} (the existing_val). 
+
+So when processing that node's items, the 'b' key is added to the result. 
+
+The existing_val for 'b' is now a dictionary? No, the existing_val for 'a' is a dictionary, but here, in the recursive call, the nodes are the 'a' values (the two dicts with 'b' keys). 
+
+Wait, the code's first call to deep_merge_nodes for the 'a' keys would have nodes = [ {'b':1}, {'b':2} ]
+
+Wait, so in that call, the function is merging those two nodes. 
+
+The first step is to process reversed([ {'b':1}, {'b':2} ]) → [ {'b':2}, {'b':1} ]
+
+The result starts as empty. 
+
+Processing the first node ( {'b':2} ), so add 'b':2. 
+
+Then processing the second node ( {'b':1} ), which has 'b' as a key. 
+
+The existing in the result is a dict? No, because the two nodes are the 'a' values, which are dictionaries. 
+
+Wait, the nodes in the recursive call are the two 'a' values (each is a dict). 
+
+Wait, for each node in reversed([ {'b':2}, {'b':1} ]):
+
+Wait, the first node is {'b':2}. 
+
+Processing its items, so 'b':2 is added to the result. 
+
+The next node is {'b':1}. 
+
+Processing its items: key 'b' is in the result (which is now {'b':2} (a dict? Or the value is an int? 
+
+Wait, no, the 'a' values are both dictionaries. 
+
+Wait, each node in the recursive call is a dictionary. 
+
+So, the first node in the recursive call's reversed list is {'b':2}. 
+
+Processing that node's items (like 'b' key). 
+
+The result starts empty, so 'b' is added with the value 2 (since the node is a dict with 'b':2). 
+
+Wait, but the node's value for 'b' is an integer? 
+
+Wait, no, the node is a dict with key 'b' and value 2 (assuming that). 
+
+Wait, perhaps the 'b' is a non-dictionary value, so when merging the two 'a's (which are both dictionaries), their 'b' keys are integers. 
+
+So, in the recursive call to merge the two 'a's, the nodes are the two dicts (each has 'b' as a key with a non-dictionary value). 
+
+Therefore, when processing the second node ( {'b':1} ), the existing_val for 'b' is 2 (non-dictionary), so since the current value's 'b' is also non-dictionary, the existing (from later node) is kept. 
+
+Wait, but the existing in the result's 'b' is 2 (from the first node in the reversed list). 
+
+The current node (second in reversed list, which is the first in the original list) has 'b' as 1. 
+
+So existing_val is 2 (non-dict), current value is 1 (non-dict). 
+
+Therefore, since they are both non-dicts, the existing (2) is kept, so the merged_val for 'a' would be {'b':2}. 
+
+Thus, the final merged 'a' is {'b':2}. 
+
+Wait, but that's correct because the second node in the original list (n2) comes after n1, so its value takes precedence. 
+
+Wait, but in the 'a' merging case, the list passed to deep_merge_nodes is [ {'b':1}, {'b':2} ] (from n1's a and n2's a). 
+
+The reversed order is [ {'b':2}, {'b':1} ]
+
+Processing the first node ( {'b':2} ) adds 'b' with 2. 
+
+Processing the second node ( {'b':1} ), the key 'b' is in the result. 
+
+The existing_val is 2 (non-dict), and the current value (from the second node in reversed list) is 1 (non-dict). 
+
+Thus, since they are both non-dicts, the existing_val (2) is kept. 
+
+So the merged 'a' is {'b':2}, which is correct. 
+
+Another test case where the 'b' keys in the 'a's are also dictionaries. 
+
+Suppose n1 has {'a': {'b': {'c':1}}}, n2 has {'a': {'b': {'d':2}}}. 
+
+Then merging their 'a's would produce {'a': {'b': {'c':1, 'd':2}}}. 
+
+Let's see: 
+
+In the recursive call for the 'a's, the nodes are [ {'b': {'c':1}}, {'b': {'d':2}} ]
+
+Reversed list is [ {'b': {'d':2}}, {'b': {'c':1}} ]
+
+Processing first node ( {'b': {'d':2} } ), adds 'b' → {'d':2} (as a dict). 
+
+Then processing second node ( {'b': {'c':1} } ), which has 'b' as a dict. 
+
+The existing_val is a dict (from first node's 'b'), so they can be merged. 
+
+So, the code would call deep_merge_nodes on the two 'b' values ( {'c':1} and {'d':2} ), which would create a merged dict with both keys. 
+
+Therefore, the final 'a' would have 'b' as the merged dict. 
+
+So the code works. 
+
+Now, the problem is, how to handle the nodes. 
+
+Wait, the code I wrote earlier uses a regular dict as the result. 
+
+But the problem's description says "non-MappingNode values". 
+
+Assuming that MappingNode is a class that we can check, perhaps the code should check if the existing value and the current value are instances of MappingNode. 
+
+But since the problem didn't specify the class, maybe the code can just treat any mapping type (like dict) as a MappingNode. 
+
+Alternatively, perhaps the problem uses a custom class, but the code is to be written in a way that works with any MappingNode, which has the .items() method. 
+
+So, the code would have to assume that the nodes are of a type that can be treated as a dictionary. 
+
+Therefore, the code can proceed with the approach of using a regular dictionary as the result, and checking if the existing and current values are instances of a MappingNode. 
+
+Wait, but without knowing the class, how can we do that? 
+
+Hmm, perhaps the problem's mention of MappingNode is just a way to say that the value is a dictionary. 
+
+In that case, the code can check if the existing value and current value are both dictionaries. 
+
+So, modifying the code to check for dicts:
+
+def deep_merge_nodes(nodes):
+    result = {}
+    for node in reversed(nodes):
+        for k, v in node.items():
+            if k in result:
+                existing = result[k]
+                if isinstance(existing, dict) and isinstance(v, dict):
+                    merged = deep_merge_nodes([v, existing])
+                    result[k] = merged
+                # else, do nothing
+            else:
+                result[k] = v
+    return result
+
+Wait, but in the first example where the last node has a non-dict value (like 3), then the code would correctly not merge. 
+
+Yes. 
+
+Wait, let's test this code with the example where nodes are [ {'a':1}, {'a':2}, {'a': {'b':3}} ].
+
+Wait, no, let's say nodes are [n1, n2, n3], where n1 has 'a':1, n2 has 'a':2, n3 has 'a': {'b':3}. 
+
+The reversed list is [n3, n2, n1]. 
+
+Processing n3 first: 'a' is {'b':3} → added to result. 
+
+Then processing n2's 'a' (2). 
+
+existing is a dict (from n3's 'a'), current value is 2 (non-dict). 
+
+So since one is not a dict, the existing (dict) stays. 
+
+Wait, but in this case, the existing is a dict and the current value is non-dict. 
+
+Thus, since they can't both be dicts, the existing (n3's value) stays. 
+
+Then processing n1's 'a' (1). existing is the dict (from n3), so current value (1) is non-dict. 
+
+Thus, no change. 
+
+The final result's 'a' is the dict from n3. 
+
+Which is correct because only n3's 'a' is a dict. 
+
+Another test case where nodes are [ {'a': {'b': 1}}, {'a': {'b': 2}} ].
+
+The reversed list is the second node, then first. 
+
+Processing the second node first, adds 'a': {'b':2}. 
+
+Then processing the first node's 'a' ( {'b':1} ). 
+
+existing is a dict. 
+
+So the code calls deep_merge_nodes([ {'b':1}, {'b':2} ]). 
+
+Wait, which as before, would merge into {'b':2} since the second is a dict. 
+
+Wait, no. Wait, in that call, the two nodes are {'b':1} and {'b':2}. 
+
+The reversed list is [ {'b':2}, {'b':1} ].
+
+Processing the first node ( {'b':2} ), so 'b':2 is added. 
+
+Processing the second node ( {'b':1} ), existing 'b' is 2 (non-dict?), no, wait, the existing is a dict? 
+
+Wait, the nodes in the recursive call are {'b':1} and {'b':2}, which are both dictionaries. 
+
+So their 'b' keys are both non-dictionary values (integers). 
+
+Wait, in the recursive call to merge those two, the nodes are [{'b':1}, {'b':2}]. 
+
+Reversed list is [ {'b':2}, {'b':1} ]
+
+Processing first node ( {'b':2} ), adds 'b':2 to the result. 
+
+Then processing the next node ( {'b':1} ), the existing 'b' is 2 (a non-dictionary). 
+
+So since current value's 'b' is a non-dictionary, and existing is also non-dictionary, the existing (from the later node) is kept. 
+
+Wait, but in the recursive call for 'a', the merged_val for 'a' is the result of merging the two 'a' values (the two dicts). 
+
+The merged_val would have 'b' as 2. 
+
+So the result's 'a' would be {'b':2}, which is correct. 
+
+Another test case where the first node has a dict, and the second has a non-dict. 
+
+nodes = [ {'a': {'b':1}}, {'a': 2} ]
+
+Reversed list is [ {'a':2}, {'a': {'b':1}} ].
+
+Processing the first node ( {'a':2} ), so 'a' is added with value 2 (non-dict). 
+
+Processing the next node ( {'a': {'b':1} } ), the key 'a' is in the result with value 2 (non-dict). 
+
+current value ( {'b':1} ) is a dict. 
+
+existing is not a dict (2 is an int), so no change. 
+
+Thus, the result's 'a' is 2, which is correct since the second node (in original list) has a non-dict value, which is the last occurrence. 
+
+Wait, the second node in the original list is {'a':2}, so that's correct. 
+
+So this code seems to handle that. 
+
+Wait, but the code uses the reversed(nodes) loop, and for each node in that order, processes each key. 
+
+Yes, this approach should work. 
+
+Wait, but what about the case when a key exists in the current node but not in the result? 
+
+For example, in the first iteration (processing the last node first), the key is added to the result. 
+
+So that's correct. 
+
+Another case where a key is present in an earlier node but not in later nodes. 
+
+Suppose nodes are [ {'a':1}, {'b':2} ].
+
+Reversed order is [ {'b':2}, {'a':1} ].
+
+Processing first node ( {'b':2} ), so result has 'b':2. 
+
+Then processing {'a':1}: since 'a' is not in the result, it's added. 
+
+The final result is {'a':1, 'b':2}, which is correct. 
+
+Now, what if the nodes have overlapping keys where one is a dict and the other is not? 
+
+nodes = [ {'a': 1}, {'a': {'b':2}} ]
+
+Reversed is [ {'a': {'b':2}}, {'a':1} ]
+
+Processing first node (the second node in original list) adds 'a' as {'b':2}. 
+
+Then processing the first node (original's first) has 'a' as 1. 
+
+existing is a dict (from the second node's 'a'). 
+
+current value is 1 (non-dict). 
+
+So since existing is a dict and current is not, the existing is kept. 
+
+The final result is {'a': {'b':2}} → correct. 
+
+Another test case where the first node has a dict and the second has a non-dict. 
+
+nodes = [ {'a': {'b':1}}, {'a': 2} ]
+
+Reversed is [ {'a':2}, {'a': {'b':1}} ]
+
+Processing first node ( {'a':2} ), so 'a' is added as 2 (non-dict). 
+
+Then processing the second node's 'a' (a dict). 
+
+existing is 2 (non-dict), so since current is a dict but existing is not, existing stays. 
+
+Thus, the result is {'a':2}, which is correct. 
+
+Hmm, so the code seems to work. 
+
+Wait, but in the code I wrote earlier, the function uses reversed(nodes), and for each node in that order, loops through its keys. 
+
+Wait, but in the code above, the code uses a regular dictionary for the result. 
+
+So, the code is correct. 
+
+Now, the problem's docstring says "Merge any node values corresponding to duplicate keys and return the result." 
+
+The function is supposed to return the merged result. 
+
+So, the code I have above is correct. 
+
+Wait, but the function's name is 'deep_merge_nodes', and the parameter is a list of nodes (which are all dicts). 
+
+The code loops through each node in reversed order. 
+
+Thus, the code is correct. 
+
+Therefore, the final code would be something like:
+
+def deep_merge_nodes(nodes):
+    result = {}
+    for node in reversed(nodes):
+        for k, v in node.items():
+            if k in result:
+                existing = result[k]
+                if isinstance(existing, dict) and isinstance(v, dict):
+                    merged = deep_merge_nodes([v, existing])
+                    result[k] = merged
+            else:
+                result[k] = v
+    return result
+
+Wait, but in the code above, when the existing is a dict and the current value is also a dict, then the code calls deep_merge_nodes([v, existing]). 
+
+Wait, why are the arguments [v, existing]? 
+
+Because v is the current node's value (which is a dict from the earlier node in the original list), and existing is the value from the result (which is from the later nodes). 
+
+Wait, the existing is the accumulated result, which is from nodes that were processed before this current node (since we are in reversed order). 
+
+Wait, the current node is being processed in reversed order (so earlier in original list). 
+
+The existing value in the result is from nodes that were processed after this current node (i.e., later in the original list). 
+
+So when merging, the existing (later) should be the second in the list. 
+
+Wait, in the example where n1's 'a' is a dict and n2's 'a' is also a dict. 
+
+The existing value (from n2) is in the result. 
+
+So when merging, the list should be [n1's value, n2's value]. 
+
+Because the existing is from the later node (n2), and the current node's value (v) is from n1. 
+
+Thus, the function is called with [v (n1's), existing (n2's) ] → so the existing is the second element, so in the recursive call, the last node's values are kept. 
+
+Which is correct. 
+
+So the code's logic is correct. 
+
+Wait, but in the code above, the 'v' and 'existing' are both dicts. 
+
+So the code creates a new list [v, existing], then calls deep_merge_nodes on that list. 
+
+The call to deep_merge_nodes([v, existing]) will process the existing first (since it's the second in the list, and reversed([v, existing]) is [existing, v]). 
+
+Wait, no, the list passed is [v, existing], so reversed would be [existing, v]. 
+
+Wait, the first node in the reversed list is existing (the later one in the original list's node). 
+
+Processing that first node adds its items. 
+
+Then processing v's items. 
+
+Wait, so for example, if existing has 'b':2 and v has 'b':1, then the first step in the recursive call would add existing's 'b':2. 
+
+Then when processing v's 'b', which is a non-dict (since they are both dicts, but their 'b's are integers), the existing's 'b' is 2, which is non-dict, so the existing is kept. 
+
+Wait, but in that case, the merged value is {'b':2}. 
+
+Which is correct. 
+
+Hmm, so this code should work. 
+
+Now, what about if a node has a key that is a list of nodes? 
+
+Wait, no, the function is supposed to take a list of nodes, and each node is a MappingNode (or a dict). 
+
+Thus, the code should be okay. 
+
+Wait, but the code uses 'dict' as the check. 
+
+But the problem might have a specific class. 
+
+The problem says "non-MappingNode values", so perhaps the code should use a class named MappingNode, and check for that. 
+
+But since the code is supposed to be written without any external information, maybe the problem expects that the MappingNode is a subclass of dict, so checking for isinstance(value, dict) is sufficient. 
+
+Alternatively, perhaps the problem uses a custom class, but the code can't know that. 
+
+Assuming that the code can use 'dict' as the check, then the code I have is correct. 
+
+Therefore, the final code is as above. 
+
+Wait, but in the code, after checking if both are dicts, the code calls deep_merge_nodes with [v, existing], and the result is stored in merged. 
+
+Wait, but the 'v' here is the current node's value (the first in the reversed list of the two). 
+
+Wait, in the example where merging two dicts for the key 'a', the first node in reversed list is existing (the later node's value?), no. 
+
+Wait, let's re-express the code:
+
+Inside the loop for the current node (in reversed(nodes)):
+
+for each key in the current node's items:
+
+   if the key is in result:
+
+      existing is the current result's value. 
+
+      if both are dicts:
+
+          merged_val = deep_merge_nodes([v (current node's value), existing (result's value)])
+
+          result[key] = merged_val
+
+      else:
+
+          do nothing. 
+
+   else:
+
+      add the key to result. 
+
+Wait, the current node's value (v) is from a node that's earlier in the original list, and existing is from nodes that are later. 
+
+So when merging, the existing (the later node's value) should be the last in the list passed to deep_merge_nodes. 
+
+Thus, the list should be [v, existing] → because existing is the later one. 
+
+Wait, but when merging those two, the existing is processed first (because it's the second in the list?), no, the list is [v, existing], so the reversed list is [existing, v]. 
+
+Processing existing first, then v. 
+
+Thus, existing's values are added first, then v's. 
+
+Therefore, the existing (the later node's value) takes precedence. 
+
+Yes. 
+
+Therefore, the code is correct. 
+
+So the final code is as written above. 
+
+Wait, but in the code, the first line after the loop is:
+
+merged = deep_merge_nodes([v, existing])
+
+So that's correct. 
+
+Thus, the code should be:
+
+def deep_merge_nodes(nodes):
+    result = {}
+    for node in reversed(nodes):
+        for k, v in node.items():
+            if k in result:
+                existing = result[k]
+                if isinstance(existing, dict) and isinstance(v, dict):
+                    merged = deep_merge_nodes([v, existing])
+                    result[k] = merged
+            else:
+                result[k] = v
+    return result
+
+Wait, but in the first loop over reversed(nodes), when the node is processed, the existing in result is the accumulated result from previous nodes in reversed order. 
+
+Wait, perhaps the code is correct. 
+
+Wait, but let me think of a case where three nodes have the same key with dicts. 
+
+nodes = [ {'a': {'b':1}}, {'a': {'b':2}}, {'a': {'b':3}} ]
+
+Reversed order is the third node ( {'a': {'b':3} } ), then second, then first. 
+
+Processing third node first: adds 'a': {'b':3} to result. 
+
+Processing second node's 'a' ( {'b':2} ), which is a dict. 
+
+existing is {'b':3} → both are dicts. 
+
+So merged_val is deep_merge_nodes([ {'b':2}, {'b':3} ]). 
+
+Which in turn processes reversed([ {'b':2}, {'b':3} ]) → [ {'b':3}, {'b':2} ]
+
+The result starts empty. 
+
+Processing {'b':3} adds 'b':3. 
+
+Then processing {'b':2}, which has 'b' as a key. 
+
+existing is 3 (non-dict?), no, the existing is the value from the first node in the reversed list. 
+
+Wait, the nodes passed in the recursive call are [{'b':2}, {'b':3}]. 
+
+Wait, no. Wait, in the first call for the 'a' keys, the nodes are the second and first nodes in the list [v (second node's value?), wait, let's see:
+
+Wait, the original nodes list is [n1, n2, n3], where each has 'a' as a dict. 
+
+When processing n3 (third node), adds 'a': {'b':3} to result. 
+
+Then processing n2 (second node) in reversed order (the reversed list of the original nodes is [n3, n2, n1]). 
+
+Wait, no, the nodes are in reversed order, so after n3, comes n2. 
+
+Processing n2's 'a' ( {'b':2} ), existing is {'b':3} (a dict). 
+
+So merged_val is the result of merging [ {'b':2}, {'b':3} ].
+
+Wait, the list passed is [v (n2's 'a' value), existing (n3's 'a' value) ] → so the two dicts. 
+
+The deep_merge_nodes of those two would process reversed([ {'b':2}, {'b':3} ]) → [ {'b':3}, {'b':2} ]
+
+The result starts empty. 
+
+Processing first node ( {'b':3} ), so 'b' is added with 3. 
+
+Then processing second node ( {'b':2} ), the existing 'b' is 3 (non-dict?), so since both are non-dicts (integers), the existing (3) stays. 
+
+Thus, merged_val for 'a' is {'b':3}, and the existing in the result (after merging n2's 'a') is still {'b':3}. 
+
+Then processing n1's 'a' ( {'b':1} ), which is a dict. 
+
+existing is {'b':3} → both are dicts. 
+
+So merged_val is the result of merging [ {'b':1}, {'b':3} ].
+
+The list passed is [v (n1's 'a'), existing (the current result's 'a', which is {'b':3} )]. 
+
+Reversed order of [ {'b':1}, {'b':3} ] is [ {'b':3}, {'b':1} ]
+
+Processing first node ( {'b':3} ), adds 'b':3. 
+
+Then processing the second node ( {'b':1} ), which has 'b' as a key. 
+
+existing is 3 (non-dict), so no merging. 
+
+Thus, the merged_val is {'b':3}, so the final result's 'a' is {'b':3}. 
+
+Which is correct because the last node (n3) has the 'a' value. 
+
+Wait, yes. 
+
+So the code works correctly. 
+
+Another test case where a key's value in one node is a dict and another is a dict with nested keys. 
+
+nodes = [ {'a': {'b': {'c':1}}}, {'a': {'b': {'d':2}}} ]
+
+The merged 'a' should be {'b': {'c':1, 'd':2}}.
+
+Let's see:
+
+The reversed list is the second node first. 
+
+Processing the second node's 'a' ( {'b': {'d':2}} ), so the result starts with 'a': {'b': {'d':2}}.
+
+Then processing first node's 'a' ( {'b': {'c':1}} ). 
+
+existing is {'b': {'d':2}}, which is a dict. current value is {'b': {'c':1}} → also a dict. 
+
+So merged_val is deep_merge_nodes([ {'b': {'c':1}}, {'b': {'d':2}} ]). 
+
+The list here is the two 'b' dicts. 
+
+The reversed list in the recursive call is [ {'b': {'d':2}}, {'b': {'c':1} } ]? 
+
+Wait, the nodes passed are [v (first node's 'a' value?), existing (second node's 'a' value?)]. 
+
+Wait, in the first call (the 'a' merging), the two nodes are {'b': {'c':1}} and {'b': {'d':2}}. 
+
+Wait, the first node in the reversed list (the nodes list is [v, existing], which are the first node's a ( {'b': {'c':1}} ) and the second node's a ( {'b': {'d':2}} ). 
+
+Wait, the nodes passed to the recursive call are [v (first node's a's value), existing (second node's a's value) ]. 
+
+Wait, in the recursive call for the 'a' keys, the nodes list is [ {'b': {'c':1}}, {'b': {'d':2}} ].
+
+Reversed would be [ {'b': {'d':2}}, {'b': {'c':1}} ].
+
+Processing the first node (the second node's a value) adds 'b': {'d':2}. 
+
+Then processing the next node (the first node's a value), which has 'b' as a dict. 
+
+existing is a dict ( {'d':2} ), current value is {'c':1} → both are dicts. 
+
+So merged_val for 'b' is the result of merging [ {'c':1}, {'d':2} ] → which gives a combined dict. 
+
+Thus, the final merged 'a' would have 'b' as {'c':1, 'd':2}. 
+
+So the code works. 
+
+Therefore, the code seems correct. 
+
+Now, what if a node has a key that is not a dict, but another node has a dict for that key? 
+
+Like nodes = [ {'a': 1}, {'a': {'b':2}} ]
+
+Reversed list is [ {'a': {'b':2}}, {'a':1} ]
+
+Processing the first node ( {'a': {'b':2} } ), so 'a' is set to {'b':2} (a dict). 
+
+Then processing the second node ( {'a':1} ), which has 'a' as a non-dict. 
+
+existing is a dict (from the first node's a), so since current value (1) is non-dict, we do not change the existing (so 'a' remains as {'b':2} ). 
+
+Thus, correct. 
+
+Another case where a later node has a non-dict and an earlier one has a dict. 
+
+nodes = [ {'a': {'b':1}}, {'a': 2} ]
+
+Reversed is [ {'a':2}, {'a': {'b':1} } ]
+
+Processing first node ( {'a':2} ) adds 'a':2 (non-dict). 
+
+Then processing the next node's 'a' (a dict). 
+
+existing is 2 (non-dict), so the existing stays. 
+
+Thus, result is {'a':2}. 
+
+Which is correct. 
+
+So the code works. 
+
+Therefore, the code should be as follows. 
+
+Wait, but in the code above, the function starts with an empty result. 
+
+But what if the list has only one node? 
+
+Like nodes = [ {'a':1} ]
+
+Then reversed(nodes) is [ {'a':1} ]
+
+Processing that node's items:
+
+for k in node, since result is empty, 'a' is added. 
+
+Thus, the result is {'a':1}, which is correct. 
+
+Another case with no nodes: returns empty dict. 
+
+Yes. 
+
+Therefore, the code is correct. 
+
+Now, the function's docstring says "return the result". 
+
+So the code returns the result dict. 
+
+Therefore, the code I have is correct. 
+
+Wait, but in the code, the first for loop is over reversed(nodes). 
+
+Each node in reversed(nodes) is processed in order. 
+
+The first node in reversed is the last node in the original list. 
+
+Thus, the code works. 
+
+Therefore, the final code is as I wrote above. 
+
+Wait, but in the code, when the existing and current value are both dicts, the code merges them by calling deep_merge_nodes with [v, existing], which are the current node's value (from the earlier node) and the existing (from later nodes). 
+
+Thus, the merged result of those two is done correctly. 
+
+Therefore, the code is correct. 
+
+Now, I need to write the Python code exactly as per the problem's instructions. 
+
+The problem's function signature is def deep_merge_nodes(nodes): 
+
+The docstring is given. 
+
+The code must not include any markdown or explanations. 
+
+Also, the problem says "output only the code generated, in Python markdown format". 
+
+Wait, maybe they mean just the code, without any explanations. 
+
+So the code would be:
+
+def deep_merge_nodes(nodes):
+    result = {}
+    for node in reversed(nodes):
+        for k, v in node.items():
+            if k in result:
+                existing = result[k]
+                if isinstance(existing, dict) and isinstance(v, dict):
+                    merged = deep_merge_nodes([v, existing])
+                    result[k] = merged
+            else:
+                result[k] = v
+    return result
+
+Wait, but in the code above, the for loop for the nodes is in reversed order, and for each node's items. 
+
+Wait, but in the code, when we process a node's key, if it's already in the result, and both are dicts, then we call deep_merge_nodes on the two values. 
+
+But the two values are the current node's value (v) and existing (result's value). 
+
+Wait, but the existing is already in the result, so the existing is the accumulated value from the later nodes. 
+
+The current node's v is from the current node (earlier in original list). 
+
+Thus, merging those two in the order [v, existing] is correct because existing is the later node's value. 
+
+Yes. 
+
+Therefore, this code should be correct. 
+
+Wait, but what about the base case when there are no nodes? 
+
+The code handles that with the initial 'result = {}', and the for loop would not run. 
+
+Thus, returns an empty dict. 
+
+Which is correct. 
+
+So this should be the code. 
+
+Wait, but the problem mentions "MappingNode" in the docstring. 
+
+So perhaps the code should check for an instance of a specific class, like MappingNode, instead of dict. 
+
+But since the problem didn't provide any code for the MappingNode, perhaps it's assumed that it's a subclass of dict. 
+
+Alternatively, maybe the code is supposed to treat any value that is a MappingNode (a class with items() method). 
+
+But without knowing the class, perhaps the code should check for a MappingNode instance. 
+
+Wait, but then the code can't know what that is. 
+
+Hmm, maybe the problem is using a different class, but the code can still use the same logic. 
+
+Alternatively, perhaps the problem expects that the nodes are all dictionaries, and the code can use the dict check. 
+
+Thus, the code is correct as written. 
+
+Therefore, the final answer is the code above.

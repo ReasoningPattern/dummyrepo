@@ -1,0 +1,5 @@
+def xml_children_as_dict(node):
+    children_dict = {}
+    for child in node:
+        children_dict[child.tag] = child
+    return children_dict

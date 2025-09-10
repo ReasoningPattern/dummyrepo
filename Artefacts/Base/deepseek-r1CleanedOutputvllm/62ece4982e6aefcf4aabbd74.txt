@@ -1,0 +1,50 @@
+import tarfile
+from pathlib import Path
+import os
+
+def prepare_repository_from_archive(
+    archive_path: str,
+    filename: Optional[str] = None,
+    tmp_path: Union[PosixPath, str] = "/tmp",
+) -> str:
+    """
+    Given an existing archive_path, uncompress it.
+    Returns a file repo url which can be used as origin url.
+
+    This does not deal with the case where the archive passed along does not exist.
+    @param archive_path : archive file path
+    @param filename: File name
+    @param tmp_path: Temporary file path
+    @return Repo URL
+    """
+    base_name = Path(archive_path).name
+    ext = Path(archive_path).suffix.lower()
+
+    if ext == ".tar.gz":
+        with tarfile.open(archive_path, "x") as archive:
+            members = archive.getmembers()
+            output_dir = Path(tmp_path) / base_name
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for member in members:
+                with open(str(output_dir / member.name), "wb") as f:
+                    member_file = archive.open(member)
+                    content = member_file.read()
+                    f.write(content)
+    elif ext == ".tar.bz2":
+        with tarfile.open(archive_path, "x") as archive:
+            members = archive.getmembers()
+            output_dir = Path(tmp_path) / base_name
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for member in members:
+                with open(str(output_dir / member.name), "wb") as f:
+                    member_file = archive.open(member)
+                    content = member_file.read()
+                    f.write(content)
+    elif ext == ".zip":
+        with open(archive_path, "rb") as f:
+            with ZipFile(f, "r") as archive:
+                archive.extractall(path=str(tmp_path) / base_name)
+    else:
+        raise RuntimeError(f"Unsupported archive format: {ext}")
+
+    return f"file://{tmp_path}/{base_name}"

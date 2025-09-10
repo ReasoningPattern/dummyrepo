@@ -1,0 +1,60 @@
+from functools import wraps
+from types import evoke, FrameType, unhashable_type
+from collections import deque
+
+def mru_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm.
+    """
+    def decorator(func):
+        func.__name__ = '<lambda>'
+        wrapped = wraps(func)
+        original = wrapped()
+
+        cache = {}
+        hits = 0
+        misses = 0
+        maxsize = maxsize or None
+        MRU = deque()
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not unhashable_type(args):
+                raise TypeError(f'args of type {type(args).__name__} are not hashable')
+            
+            key = args if typed else kwargs
+            try:
+                res = cache[key]
+            except KeyError:
+                hits = 0
+                misses += 1
+                if len(MRU) >= maxsize:
+                    MRU.popleft()
+                cache[key] = wrapped.func(*args, **kwargs)
+                if typed:
+                    if not isinstance(cache[key], func.returntype):
+                        raise TypeError(f'return value of {func.__name__} must be an instance of {func.returntype}')
+                else:
+                    if hasattr(func, 'returntype'):
+                        if not isinstance(cache[key], func.returntype):
+                            raise TypeError(f'return value of {func.__name__} must be an instance of {func.returntype}')
+                MRU.append((args, kwargs))
+                return cache[key]
+            else:
+                hits += 1
+                misses = 0
+                return cache[key]
+
+        if maxsize is not None and len(MRU) > maxsize:
+            MRU.popleft()
+        else:
+            MRU = deque()
+
+        cache = {}
+        hits = 0
+        misses = 0
+        return wrapped
+
+    return decorator

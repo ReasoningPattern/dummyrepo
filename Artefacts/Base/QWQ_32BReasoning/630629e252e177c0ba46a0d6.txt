@@ -1,0 +1,585 @@
+Okay, I need to write a Python function called retrieve_diaspora_host_meta that takes a host as an argument and returns an XRD instance. Let me think about how to approach this.
+
+First, what's a Diaspora host-meta document? Oh right, Diaspora* uses host-meta files to discover the XML.Xrds endpoint, which contains the XRD data. The host-meta file is usually located at /host-meta, /.well-known/host-meta, or similar URLs on the server. The function's purpose is to fetch this document from the given host and parse it into an XRD object.
+
+So the steps I need to do are: 
+
+1. Construct the URL for the host-meta file. The host is provided, so I should form the URL as http://host/host-meta or https://host/.well-known/host-meta. Wait, maybe I should try both http and https, but perhaps the function should just use https? Or maybe check both possibilities? Hmm, but the problem says to retrieve from the given host, so maybe the host already includes the scheme? Wait, no, the parameter is just the host, like 'example.com', so I need to prepend the protocol. Probably, using https is better since it's more common now. Alternatively, maybe the host can be a domain without the protocol, so the function should construct URLs with both http and https and try them in order? Or maybe just assume https? The problem doesn't specify, so maybe the code should handle both? But maybe it's better to just use https first, and if it fails, try http. But how to handle that in the code?
+
+Alternatively, perhaps the host is given as a full URL, but the function's parameter says "host", so I think it's just the domain. So the URL would be 'https://' + host + '/.well-known/host-meta' or similar. Wait, the standard location for host-meta is /host-meta or /.well-known/host-meta? I should check the spec. Oh right, according to the host-meta specification, the URL is https://example.com/.well-known/host-meta. So the correct URL is https://{host}/.well-known/host-meta.
+
+But maybe the server uses http instead. So perhaps the function should try both. Or maybe just try https first, and if that's not found, fall back to http. How to handle that?
+
+Hmm, the function's docstring says "Retrieve a remote Diaspora host-meta document", so I think the code should make an HTTP GET request to the appropriate URL and then parse the response into an XRD instance.
+
+So first, I need to construct the URL. Let's see, the host is given as a string. The base URL would be 'https://' + host + '/.well-known/host-meta'. But maybe some sites use http, so perhaps we should try that as a fallback if the https request fails. But how to handle that in the code without getting into too much complexity? Maybe the function should just try the https URL first, and if there's an error (like 404 or connection refused), then try the http one. Alternatively, maybe the code should just use https and not handle http. Since the problem doesn't specify, perhaps I should just go with the standard https URL.
+
+Next, making the HTTP request. I can use the requests library for that. The function will need to send a GET request to the URL. But I should set the User-Agent header to something appropriate, maybe 'Python Diaspora Client' or similar. Also, handle exceptions like connection errors or HTTP errors. Wait, but what if the server doesn't respond? The function should probably raise an exception in that case, but the docstring says it returns an XRD instance, so maybe it's expected to return None if not found? Or maybe just raise an error. The problem's returns clause says it returns an XRD instance, so perhaps it's required to return one, but how to handle cases where the document isn't found?
+
+Alternatively, the function might just return the parsed XRD, and if there's an error, let the exception propagate. But the user might want to handle that, so maybe it's better to let the requests exceptions (like ConnectionError, HTTPError) be raised, and the caller can handle them. So in the code, after making the request, check if the response is okay, and if not, raise an exception or return None? Hmm, the problem says to return an XRD instance. So if the request fails, maybe the function should raise an appropriate error, but I'm not sure. Let me proceed.
+
+Once the response is obtained, the content is the host-meta file. The next step is to parse that into an XRD object. The XRD module: I need to use a library that can parse XRD documents. The standard Python library for this might be xrd, but I'm not sure. Alternatively, perhaps the code should use the python-xrd library, which has an XRD class. Wait, but maybe the user expects the code to use a particular library. Since the problem doesn't specify, perhaps I can assume that there's an XRD class available from some imported module. Let's say that the function will parse the XML into an XRD instance. So the code would involve parsing the XML response.
+
+So the steps are:
+
+- Construct the URL.
+- Make a GET request to that URL.
+- If the request is successful, parse the XML into an XRD object.
+- Return the XRD instance.
+
+But let's think about possible errors. If the URL can't be reached, or returns a 404, the function should probably handle that. However, according to the docstring's return, it must return an XRD instance. So if the host-meta isn't found, perhaps the function should raise an exception? Or maybe return None? The docstring says returns XRD instance, so maybe the function is supposed to handle that and return it, but in case of failure, perhaps it's up to the caller to handle exceptions. So perhaps the function will just return the parsed XRD, and if there's an error, it will throw an exception.
+
+Now, the code structure. Let me outline:
+
+Import necessary modules: requests and the XRD parser. Let's assume the XRD parser is from a module called xrd. Maybe the XRD class is in xrd.XRD or something like that.
+
+Wait, perhaps the code should use the xrd module, but I'm not sure. Alternatively, maybe the code is supposed to use the xml.etree.ElementTree to parse the XML. But since the return is an XRD instance, there must be a class that represents XRD. So I need to have that class. Let me check standard libraries. Oh, perhaps the code is supposed to use the python-xrd library. Let me see if that's the case. But I don't know if that's installed. Since the user is a Python engineer, maybe they have it. Alternatively, maybe the function uses a custom parser. Hmm, but I need to make the code work. Let me proceed under the assumption that there is an XRD class available from a module, perhaps called xrd. 
+
+Alternatively, maybe the code is supposed to return an instance of a class named XRD, so perhaps I can just create a simple one. Wait, no, the code must parse the actual host-meta file. So the XRD instance is probably created by parsing the XML response.
+
+So the code steps:
+
+Construct the URL.
+
+Make a request to that URL. Let's use requests.get. 
+
+Check the response's status code. If it's 200, proceed. Otherwise, maybe raise an exception? Like, if it's 404, perhaps the host isn't valid. But the function's docstring doesn't mention exceptions, so perhaps it's okay to let requests exceptions be raised.
+
+Once the response is obtained, parse the XML into an XRD instance. 
+
+Wait, the host-meta file is an XRD document. So the XRD parser should take the XML content and return the XRD object. Let's assume that there is a parse function in the xrd module. For example, maybe from xrd import XRD, and then XRD.parse(response.text) or something like that.
+
+Putting this together:
+
+Import requests and XRD.
+
+def retrieve_diaspora_host_meta(host):
+
+    url = f"https://{host}/.well-known/host-meta"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as err:
+        # Maybe check the status code here? Like, if 404, try another URL?
+        # Wait, perhaps the host-meta could be at /host-meta instead? The spec says that the .well-known is the preferred location, but maybe some older servers have it at /host-meta. So perhaps the function should try both URLs.
+
+Hmm, that's a good point. The standard is /.well-known/host-meta, but maybe the server has it at /host-meta. So maybe the code should first try the .well-known path, and if that's not found (HTTP 404), try the other path. Let me see.
+
+The Host-meta spec says that the URL is /.well-known/host-meta. So the first try would be that. But perhaps some servers still use /host-meta. So perhaps the code should first try the well-known path, then the /host-meta path if the first fails with a 404. Let me adjust the code to do that.
+
+So the plan is:
+
+Construct the primary URL (https://{host}/.well-known/host-meta).
+
+Try to get it. If it returns a 404, then try the alternative URL (https://{host}/host-meta).
+
+If that also fails, then perhaps try http for both paths. Because maybe the server doesn't support HTTPS. 
+
+This could get complicated, but perhaps the code can handle that. Let me structure it as follows:
+
+First, try the https well-known path. If that's a 404, try the https host-meta path. If both https paths fail, then try the http versions of those. Or perhaps just try the two paths in order, first with https, then http. 
+
+Alternatively, perhaps the code can use a list of possible URLs and try them in order until one works. Let's see:
+
+urls = [
+    f"https://{host}/.well-known/host-meta",
+    f"https://{host}/host-meta",
+    f"http://{host}/.well-known/host-meta",
+    f"http://{host}/host-meta",
+]
+
+Then loop through each url, try to get it, and if any of them returns a 200, parse it. Otherwise, raise an error.
+
+Hmm, that's a better approach. Because some servers might not have the .well-known path, or might be using HTTP instead of HTTPS. So the code can try all four possibilities in order. Let's do that.
+
+So, in the code:
+
+for url in urls:
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        break
+    except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
+        pass
+else:
+    raise some error, maybe a custom one or just return None?
+
+Wait, the else clause here would execute if all URLs failed. Since the function is supposed to return an XRD instance, but if none of the URLs work, perhaps raise an exception like "Host meta not found". Or maybe the function is supposed to return None in that case. But according to the docstring's returns, it must return an XRD instance, so maybe the function should raise an error if none of the URLs work.
+
+Alternatively, perhaps the function can return an empty XRD? No, probably not. The user expects to get the XRD from the host, so if it's not found, it's an error. So, in the else case, maybe raise a custom exception, or just let the last error propagate?
+
+Wait, the code in the loop catches the exceptions, so the loop would suppress them. So in the else clause, we can raise an exception. For example:
+
+raise Exception(f"Could not retrieve host-meta from {host}")
+
+But perhaps the user wants to handle that, so maybe a more specific exception. Alternatively, perhaps just return None. But the docstring says returns an XRD instance, so the function must return that. So if none of the URLs work, then the function can't return anything, so it should raise an error.
+
+So the code structure would be:
+
+Construct the list of URLs.
+
+Loop through each, trying to get the response. If any succeeds, break and parse it. 
+
+If all fail, raise an exception.
+
+Once a successful response is obtained, parse the XML into an XRD instance.
+
+Parsing the XML: Assuming that the XRD module has a parse function. For example, perhaps from the xrd module, there's a parse function. Let's say that the XRD class has a parse method. 
+
+Wait, perhaps the code uses the xrd library. Let me check. Suppose that the XRD class is in a module called xrd, and the parse function is something like XRD.parse(response.text). 
+
+Alternatively, maybe the code uses the xrdparser library. I'm not entirely sure, but for the purposes of the code, I can proceed with the assumption that there's a parse method. 
+
+So, after getting the response, we do something like:
+
+from xrd import XRD
+
+xrd = XRD.parse(response.text)
+return xrd
+
+Wait, but in the code, I need to include the necessary imports. But the user said to output only the code generated, in Python markdown format. Wait, the user's instruction says to output the code in Python markdown format, but the thinking is in /think. Wait, the user wants the code without any explanations, just the code. So perhaps I need to structure the code with the necessary imports.
+
+Wait, but the problem didn't mention any dependencies. The user is a Python engineer, so perhaps they have the requests and xrd libraries installed. 
+
+Putting it all together:
+
+The code would need to import requests and the XRD module. 
+
+Wait, but if the XRD is from a different package, maybe I should first install that. But the code can't have that, so I'll just proceed with the necessary imports. Let me see:
+
+First, the code would start with:
+
+import requests
+from xrd import XRD
+
+def retrieve_diaspora_host_meta(host):
+    urls = [
+        f"https://{host}/.well-known/host-meta",
+        f"https://{host}/host-meta",
+        f"http://{host}/.well-known/host-meta",
+        f"http://{host}/host-meta",
+    ]
+    for url in urls:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            break
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
+            continue
+    else:
+        raise Exception(f"Could not retrieve host-meta from {host}")
+    
+    return XRD.parse(response.text)
+
+Wait, but the loop structure here: the for loop tries each URL in order. The first successful request (200 OK) will break out of the loop. If all URLs fail, the else clause is triggered (since the for loop didn't break), and then we raise an exception. 
+
+This seems reasonable. 
+
+But maybe the order is not optimal. The spec says the preferred location is the .well-known path, so first try https with that. If that 404s, then try the other https path. Then, if that also 404, try http versions. Or perhaps, the first two URLs (https) can be tried, and if they return 404, proceed to the http ones. 
+
+Wait, in the code above, the exceptions include HTTPError (which includes 404) and ConnectionError. So when we try the first URL (https://...), if the server isn't reachable (connection error), then it proceeds to the next URL. But if the server is up but returns a 404, it also proceeds. 
+
+So this code will loop through all four URLs, trying each in order, until one returns a successful status code (2xx). Once found, it parses the response text as XRD and returns it. 
+
+But what about the headers? The host-meta file is typically served with the correct Content-Type. The XRD parser might require that, but perhaps the code can handle it regardless. 
+
+Another thing: the requests.get might have a timeout. Maybe add a timeout parameter to avoid hanging indefinitely. Let's say 5 seconds. 
+
+So modifying the code:
+
+response = requests.get(url, timeout=5)
+
+That's a good idea. 
+
+Now, the code structure with the imports and the loop. Also, the XRD parser. Let me check if the XRD.parse function is the correct way. Alternatively, maybe the XRD class is initialized with the XML string. Like XRD(response.text). 
+
+I'm not sure. Let's assume that there's a parse method. 
+
+Alternatively, perhaps the code should use the xml.etree.ElementTree to parse the XML and then create an XRD instance. But since the return is an XRD instance, I think there's a library that provides that. 
+
+Alternatively, maybe the XRD is a dictionary or some custom object. But given the problem's description, the user probably expects that the XRD is parsed via some existing library. 
+
+So the code as above is probably okay. 
+
+Wait, but maybe the XRD parser expects the XML to be in a specific format. Let me think. The host-meta response is an XRD document. The Diaspora host-meta typically points to the XRD endpoint which contains the list of handles. The host-meta document is an XML file that has the necessary links. 
+
+The code's XRD.parse would take the XML string and create an instance. 
+
+Another possible point: the host may have a path that requires a specific user agent. The problem didn't mention that, so perhaps the code doesn't need to handle that. 
+
+Putting all that into code:
+
+Wait, the function's docstring says it returns an XRD instance. So the code must return that. 
+
+So the code would look like this, with the necessary imports:
+
+Wait, but in the code, I need to include the imports. So the full code would be:
+
+import requests
+from xrd import XRD
+
+def retrieve_diaspora_host_meta(host):
+    urls = [
+        f"https://{host}/.well-known/host-meta",
+        f"https://{host}/host-meta",
+        f"http://{host}/.well-known/host-meta",
+        f"http://{host}/host-meta",
+    ]
+    for url in urls:
+        try:
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            break
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
+            continue
+    else:
+        raise Exception(f"Could not retrieve host-meta from {host}")
+    
+    return XRD.parse(response.text)
+
+Hmm, but maybe the xrd module is called something else. Let me think again. 
+
+Alternatively, perhaps the XRD parsing is done via a different method. Maybe the code uses a different library, but I can proceed with what I have. 
+
+Wait, perhaps the XRD module is from a package like python-xrd, which has a parse function. Let me see. Suppose the correct way is to import XRD from the xrd module. 
+
+Alternatively, maybe the code should use the ElementTree to parse the XML and build the XRD instance manually. But that would require writing code to parse the XML elements, which might be more involved. But the problem states to return an XRD instance, so probably there's a library that can do that. 
+
+Assuming that the xrd module is available, the code should work. 
+
+Another possible issue: the host may have a port. For example, if the host is 'example.com:8080', then the URL would be https://example.com:8080/.well-known/host-meta. But the code as written would handle that, since the host variable is just inserted into the URL string. 
+
+So that's okay. 
+
+Testing the code: if the host is 'example.com', it tries the four URLs in order. The first two are https, then http. 
+
+Wait, but the first two are https, but the second URL (without .well-known) might not exist. So the code tries all four possibilities. 
+
+Now, what about the content type? The host-meta file is usually application/xrd+xml, but the requests library can handle that. The parsing should work as long as the XML is valid. 
+
+The code as written should work. 
+
+So I think that's the code. Let me make sure I didn't miss any steps. 
+
+Wait, the function should return an XRD instance, so after parsing the XML, the code must return that. 
+
+Yes. 
+
+Another possible edge case: the response is not XML, but the code still tries to parse it. That would cause an error in the XRD.parse step. But perhaps that's part of the error handling. 
+
+Alternatively, maybe check the content type? But the problem's docstring doesn't mention that, so perhaps it's okay to proceed without. 
+
+So the code above should be correct. 
+
+Wait, but the 'xrd' module might not have a parse method. Let me think again. 
+
+Suppose the XRD class is in a different package. Maybe I need to use from xrd import XRD and then create an instance by passing the XML. 
+
+Alternatively, perhaps the code should use the parse_xrd function from some module. 
+
+Alternatively, perhaps the code uses the xrdlib module. Let me check. 
+
+Assuming that the XRD is parsed via a method like XRD.parse(), then the code is okay. 
+
+Alternatively, perhaps the XRD class is initialized with the XML content. Like XRD(response.text). 
+
+So perhaps the code should be:
+
+    return XRD(response.text)
+
+But then, I need to see how the xrd module is structured. 
+
+Alternatively, maybe the code is using the xrd module's parse function. So:
+
+from xrd import parse as parse_xrd
+
+def retrieve...:
+    ...
+    return parse_xrd(response.text)
+
+Hmm, I'm not entirely sure. Since the exact library isn't specified, I'll proceed with the code as above, using the XRD.parse method. 
+
+Alternatively, perhaps the code is using a different approach. Maybe the XRD is a class that can be created from a string. 
+
+In any case, the code I have seems reasonable. 
+
+Wait, but maybe the XRD instance is created via a constructor. So:
+
+xrd = XRD()
+xrd.load(response.text)
+return xrd
+
+But I don't know the exact API. 
+
+Alternatively, perhaps the code uses the xrd module's parse function. 
+
+Let me adjust the code to use a parse function from xrd. 
+
+from xrd import parse
+
+return parse(response.text)
+
+That might be better. 
+
+Hmm, perhaps I should use that. Let me try that version. 
+
+So the imports would be:
+
+import requests
+from xrd import parse
+
+def retrieve_diaspora_host_meta(host):
+    ...
+    return parse(response.text)
+
+Alternatively, if the xrd module is structured differently. 
+
+Well, since the problem doesn't specify, I'll proceed with that. 
+
+Wait, in the code above, the XRD class is imported from xrd, but if the parse function is in the module, then the code would be better with that. 
+
+Alternatively, perhaps the code should have from xrd.parser import parse or something else. 
+
+But given the information, I'll proceed with the code as written. 
+
+Another thing: the code uses a timeout of 5 seconds, which is good to avoid hanging indefinitely. 
+
+So the final code would look like this, with the necessary imports. 
+
+Wait, the user's instruction says to output the code in Python markdown format, so perhaps with a code block? Or just the code itself? The user says "Output ONLY the code generated, in python markdown format." 
+
+Hmm, Python markdown format might mean that the code is enclosed in triple backticks. Like:
+
+```python
+import requests
+from xrd import XRD
+
+def retrieve_diaspora_host_meta(host):
+    urls = [
+        f"https://{host}/.well-known/host-meta",
+        f"https://{host}/host-meta",
+        f"http://{host}/.well-known/host-meta",
+        f"http://{host}/host-meta",
+    ]
+    for url in urls:
+        try:
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            break
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
+            continue
+    else:
+        raise Exception(f"Could not retrieve host-meta from {host}")
+    
+    return XRD.parse(response.text)
+```
+
+Yes, that's the code. 
+
+Wait, but I'm not 100% sure about the XRD parsing part. Maybe I should use a different method. Let me see if there's a standard way. 
+
+Alternatively, perhaps the XRD instance is constructed using the XML data. So maybe the code uses the XRD class's from_string method. 
+
+In that case, return XRD.from_string(response.text). 
+
+But I don't know the actual API. 
+
+Alternatively, maybe the code should use the xrd module's parse function. Let me adjust the imports and function accordingly. 
+
+Let me assume that the correct way is to import parse from xrd, so:
+
+from xrd import parse
+
+then the return is parse(response.text). 
+
+So the code would be:
+
+import requests
+from xrd import parse
+
+def retrieve_diaspora_host_meta(host):
+    urls = [
+        f"https://{host}/.well-known/host-meta",
+        f"https://{host}/host-meta",
+        f"http://{host}/.well-known/host-meta",
+        f"http://{host}/host-meta",
+    ]
+    for url in urls:
+        try:
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            break
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
+            continue
+    else:
+        raise Exception(f"Could not retrieve host-meta from {host}")
+    
+    return parse(response.text)
+
+That might be better if the parse function is in the xrd module. 
+
+Hmm, which is more likely? 
+
+Well, the problem states that the function returns an XRD instance, so perhaps the parse function returns an instance of that class. 
+
+Alternatively, maybe the XRD is a class with a parse method. 
+
+Either way, the code should work as long as the library is correctly imported. 
+
+I think this is the best I can do without knowing the exact library. 
+
+Alternatively, perhaps the code should use the xrd module's XRD class and its parse method. 
+
+Well, let's go with the first version. 
+
+Wait, but in the first version, the code imports XRD from xrd, then uses XRD.parse. 
+
+Alternatively, maybe the XRD class is in the xrd module, so perhaps:
+
+from xrd import XRD
+
+def retrieve...:
+    ...
+    xrd = XRD()
+    xrd.parse(response.text)
+    return xrd
+
+But that's less likely. 
+
+Hmm, perhaps I should check the standard way. 
+
+Looking up, the host-meta is an XRD document, and the python-xrd library's documentation says that you can parse an XRD from a string using XRD.parse(). 
+
+Alternatively, maybe the code uses the xrd module's parse function. 
+
+I think the first approach is okay. 
+
+So I'll proceed with the first code. 
+
+Wait, but in the code above, the XRD.parse is called. Let me see:
+
+In the xrd module, perhaps the XRD class has a class method called parse. 
+
+Alternatively, maybe it's a function in the module. 
+
+Well, given the problem's wording, I think either is acceptable. 
+
+The code I have is correct. 
+
+Now, to make sure that the code loops through all URLs until one works. 
+
+The for loop with the else clause is correct. 
+
+Another thing: the URLs may have different cases, but I think the code is okay. 
+
+So the final code is as above, with the correct imports and the try-except blocks. 
+
+Wait, but in the except block, are we catching all exceptions? Like, if the URL is invalid (maybe host has some invalid characters), the requests.get might throw a different exception, like a URL error. 
+
+So perhaps the except should also catch requests.exceptions.RequestException, which is a base class for all exceptions raised by requests. 
+
+So, instead of (HTTPError, ConnectionError), catch the broader RequestException. 
+
+Because, for example, if the host is not a valid URL (like, contains spaces?), but the host parameter is supposed to be a valid host, maybe that's not the case. 
+
+Alternatively, perhaps the code should catch all exceptions, but maybe it's better to be specific. 
+
+Wait, let's see. The requests.get can raise various exceptions, like ConnectTimeout, ReadTimeout, etc. 
+
+The current except clause catches HTTPError and ConnectionError. But maybe a better approach is to catch all exceptions except those that we want to propagate (like exceptions from the loop). 
+
+Alternatively, perhaps just catch the exceptions that indicate the URL is not found or inaccessible. 
+
+Hmm, perhaps it's better to catch all exceptions from requests.get and then proceed. 
+
+Wait, in the code, the except is for HTTPError and ConnectionError. But maybe the ConnectionError is raised when the server is not reachable, like no DNS. 
+
+The HTTPError is raised for 4xx or 5xx status codes. 
+
+So, in the loop, if the URL is valid and returns a 404, that's an HTTPError. 
+
+The code would proceed to the next URL. 
+
+But what about other exceptions, like a timeout? 
+
+The code has a timeout parameter, so a timeout would raise a requests.exceptions.Timeout, which is a subclass of RequestException. 
+
+So the current except clause would not catch that, so the loop would proceed. 
+
+Hmm, so perhaps I should catch the broader exception. 
+
+Changing the except line to:
+
+except requests.exceptions.RequestException:
+
+That way, all exceptions from the request (timeout, connection errors, HTTP errors) are caught, and the loop continues to the next URL. 
+
+Yes, that's better. 
+
+So modifying the code:
+
+except requests.exceptions.RequestException:
+
+This will catch any exception that occurs during the request, allowing the code to try the next URL. 
+
+So the corrected code would have that exception. 
+
+Putting it all together again:
+
+import requests
+from xrd import XRD
+
+def retrieve_diaspora_host_meta(host):
+    urls = [
+        f"https://{host}/.well-known/host-meta",
+        f"https://{host}/host-meta",
+        f"http://{host}/.well-known/host-meta",
+        f"http://{host}/host-meta",
+    ]
+    for url in urls:
+        try:
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            break
+        except requests.exceptions.RequestException:
+            continue
+    else:
+        raise Exception(f"Could not retrieve host-meta from {host}")
+    
+    return XRD.parse(response.text)
+
+Wait, but in this case, the except clause catches any RequestException, which includes things like timeouts, connection errors, and HTTP errors. 
+
+That way, the code tries all URLs until one works. 
+
+Yes, this is better. 
+
+So this code should work. 
+
+Now, I need to make sure that the code is written correctly. 
+
+Wait, the 'else' clause in the for loop is triggered only if the loop completes normally (i.e., the 'break' is never hit). So if after all URLs are tried, none succeeded, then the else block runs. 
+
+That's correct. 
+
+Another point: the order of the URLs. The first two are HTTPS, the next two HTTP. The first in the list is the preferred path. 
+
+So the order is correct. 
+
+Now, the code may also need to handle redirects? Or maybe the XRD parser can handle it. 
+
+Alternatively, perhaps the requests.get is okay with following redirects. The default for requests is to allow redirects, so that's fine. 
+
+So the code is okay. 
+
+Now, the imports. The user might need to have the requests and xrd modules installed. 
+
+But the problem doesn't mention that, so the code is written as is. 
+
+I think that's the code required. 
+
+Let me check again the function's return. The XRD instance is returned after parsing the response. 
+
+Yes. 
+
+So this should be the correct code.

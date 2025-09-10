@@ -1,0 +1,175 @@
+Okay, I need to write a Python function called is_ipv4 that checks if a given target is a valid IPv4 address. Let me think about how to approach this.
+
+First, I remember that an IPv4 address consists of four octets separated by dots. Each octet must be a number between 0 and 255. So, the function should split the target string by dots and check each part.
+
+Wait, but what if the target isn't a string? Oh, right, because if someone passes an integer, it won't have dots. So maybe I should handle that by returning False immediately if it's not a string.
+
+So, the first step is to check if the target is a string. If not, return False.
+
+Next, I'll split the string into parts using the dot as a delimiter. If the resulting list doesn't have exactly four elements, it's not an IPv4 address. So, I'll check the length of the split result.
+
+Then, for each part in the split list, I need to make sure it's a string that can be converted to an integer. If any part isn't a valid string representation of a number, return False.
+
+Also, each part must be between 0 and 255, inclusive. So, I'll convert each part to an integer and check its value. If any part is outside this range, the function returns False.
+
+Putting it all together, the function will:
+
+1. Check if target is a string. If not, return False.
+2. Split the string into parts. If the length isn't 4, return False.
+3. Iterate over each part:
+   a. Check if it's a string. If not, return False.
+   b. Convert to integer and check if it's between 0 and 255.
+4. If all parts pass these checks, return True; else, False.
+
+Wait, but what about cases where the part has leading zeros? Like '01' is 1, but in IPv4, is that allowed? I think leading zeros are allowed as long as the numeric value is correct. So, '01' is treated as 1, which is valid.
+
+So, no special handling is needed for leading zeros because converting to int takes care of that.
+
+Let me think about some test cases. For example:
+
+- '192.168.0.1' should return True.
+- '192.168.0.1a' should return False because of the 'a'.
+- '192.168.0.192' is valid.
+- '256.168.0.1' is invalid because 256 is too big.
+- '192.168.0.' would split into 3 parts if the last is empty, so it's invalid.
+- '192.168.01.1' is valid because 01 is 1, but wait, in Python, '01' is a string, and converting to int would be 1, which is allowed.
+
+Wait, but in the function, each part is checked as a string. So, '01' is a string, which when converted to int is 1, so it's valid. So the function would correctly return True for '0.0.0.0' or '00.00.00.00' because each part is a string that can be converted to 0.
+
+Another case: '123.456.789.abc' would fail because 'abc' can't be converted to int.
+
+So, the function should handle all these cases correctly.
+
+Now, writing the code step by step.
+
+First, check if target is a string:
+
+if not isinstance(target, str):
+    return False
+
+Then, split into parts:
+
+parts = target.split('.')
+if len(parts) != 4:
+    return False
+
+Then, loop through each part:
+
+for part in parts:
+    if not isinstance(part, str):
+        return False
+    num = int(part)
+    if num < 0 or num > 255:
+        return False
+
+If all checks pass, return True.
+
+Putting it all together:
+
+def is_ipv4(target):
+    if not isinstance(target, str):
+        return False
+    parts = target.split('.')
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not isinstance(part, str):
+            return False
+        num = int(part)
+        if num < 0 or num > 255:
+            return False
+    return True
+
+I think that covers all the cases. Let me test it with some examples.
+
+Test 1: '192.168.0.1' → should return True. The function splits into four parts, each is a string, and each num is between 0 and 255.
+
+Test 2: '192.168.0.1a' → split into ['192', '168', '0', '1a'] → part 4 is not a string? Wait, no, '1a' is a string, but converting to int would throw an error. Wait, no, in Python, int('1a') raises a ValueError. Oh, right, so in the code above, when we do int(part), it will raise an error if part is not a valid integer string. So, the function as written would crash for invalid parts. That's a problem.
+
+Oh, right, that's a mistake. So, the code as written doesn't handle cases where a part is not a numeric string, like 'abc'. So, when part is 'abc', int(part) would throw a ValueError, which would cause the function to crash instead of returning False.
+
+So, I need to modify the code to handle that. So, in the loop, after checking that part is a string, I should also check if it's a valid integer string.
+
+How can I do that? Maybe try to catch the ValueError when converting to int.
+
+Alternatively, I can check if the part consists only of digits. But that's not entirely correct because parts like '-1' would have a '-', but in IPv4, each part must be non-negative.
+
+Wait, in the code, after checking part is a string, I can attempt to convert it to an integer. If that conversion fails, it's invalid.
+
+So, perhaps in the loop, I should do:
+
+try:
+    num = int(part)
+except ValueError:
+    return False
+if num < 0 or num > 255:
+    return False
+
+But wait, what about parts like '+123'? In IPv4, leading '+' is not allowed, so '123' is valid, '+123' is invalid. So, the code as written would accept '+123' because int('+123') is 123, but in reality, it's not a valid IPv4 address. So, the function would incorrectly return True for '192.168.0.+1'.
+
+Hmm, that's a problem. So, the code needs to ensure that each part is a string of digits without any signs.
+
+So, perhaps before converting, check if the part is composed solely of digits. That is, each part must match the regex ^\d+$.
+
+So, in the loop:
+
+if not part.isdigit():
+    return False
+
+But wait, part.isdigit() returns False if the string contains any non-digit characters. So, for example, '123' is True, '12a' is False, '0' is True, etc.
+
+But what about empty strings? Well, in the split, if the target ends with a dot, like '192.168.0.', it would split into ['192', '168', '0', ''] which is invalid because the last part is empty.
+
+So, in the loop, after splitting, each part must be a non-empty string of digits.
+
+So, in the loop:
+
+if not part.isdigit():
+    return False
+
+But wait, what about leading zeros? As discussed earlier, leading zeros are allowed, so '01' is fine.
+
+So, the code should be modified to:
+
+for part in parts:
+    if not isinstance(part, str):
+        return False
+    if not part.isdigit():
+        return False
+    num = int(part)
+    if num < 0 or num > 255:
+        return False
+
+But wait, part.isdigit() returns False if part is an empty string. So, for example, if the target is '192.168..1', the split would be ['192', '168', '', '1'], and part is the third element, which is empty. So, part.isdigit() is False, function returns False, which is correct.
+
+Another case: '192.168.0.00' → each part is a string of digits, so it's valid. The function would return True.
+
+But what about part being '0'? That's allowed, as 0 is a valid octet.
+
+So, the modified code now correctly handles cases where parts are not numeric strings.
+
+Wait, but what about parts like '255' which is allowed, or '256' which is invalid.
+
+So, in the code, after checking that part is a string of digits, it converts to int and checks if it's between 0 and 255.
+
+So, putting it all together, the code should now correctly handle all cases, including invalid parts like 'abc', '+123', etc.
+
+So, the final code is:
+
+def is_ipv4(target):
+    if not isinstance(target, str):
+        return False
+    parts = target.split('.')
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not isinstance(part, str):
+            return False
+        if not part.isdigit():
+            return False
+        num = int(part)
+        if num < 0 or num > 255:
+            return False
+    return True
+
+I think this should work correctly now.

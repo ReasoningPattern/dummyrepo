@@ -1,0 +1,1319 @@
+Okay, I need to create a Python decorator called ttl_cache. The goal is to wrap a function so that it uses a memoizing cache. The cache should store up to maxsize results, using an LRU algorithm, and each item in the cache has a time-to-live (TTL) specified by the ttl parameter. The timer defaults to time.monotonic, which is good because it's not affected by system time changes. The typed parameter is a boolean that, if True, will consider different argument types as different keys.
+
+First, I remember that Python already has an lru_cache decorator in functools, but that one doesn't support TTL. So I need to build something similar but with the added TTL functionality. The decorator should track the time each result is stored and check if it's still valid when accessed.
+
+Hmm, how to structure this. The decorator needs to take parameters maxsize, ttl, timer, and typed. Then, it should return the actual wrapper function that handles the caching.
+
+I think the approach is to create a class that acts as the cache. The class would manage the entries, each entry having a key, value, and expiration time. The entries can be stored in a dictionary, and to track the LRU order, maybe use an ordered dictionary or a linked list. Oh right, in Python there's collections.OrderedDict which can help with maintaining the order and easily popping the least recently used item.
+
+Wait, but since we need to handle expiration, perhaps each time we access the cache, we should check if the entry has expired. Also, when the cache is full, we need to remove the oldest entries until there's space.
+
+So the steps would be:
+
+1. The decorator function ttl_cache will return a wrapper that uses this cache class.
+2. The cache class needs to handle storing the key-value pairs along with their expiration times.
+3. When the wrapped function is called, the wrapper checks the cache for the key (built from the arguments, considering typed if needed).
+4. If the key exists and hasn't expired, return the value. Otherwise, remove expired entries and then check again. If still expired or not present, compute the result and add it to the cache.
+5. Also, when the maxsize is reached, we need to evict the least recently used entry that hasn't expired yet. Wait, but even expired entries take up space? Or do we count only non-expired entries towards the maxsize?
+
+Hmm, the problem says "saves up to maxsize results based on LRU algorithm with a per-item TTL". So probably, when the cache is full, we first check if any items have expired and remove them, then if still over capacity, evict the oldest non-expired item. Or maybe the maxsize includes all entries, but the TTL ensures that each entry is only kept until it's expired, so when adding a new entry, we have to remove expired ones first, then check the size.
+
+Alternatively, maybe the maxsize is the total number of entries allowed, but each entry can expire. So whenever the cache is accessed, we first clear out expired entries, then check the current size. That way, the maxsize is the maximum number of current (non-expired) entries allowed.
+
+Wait, the standard lru_cache in Python uses an OrderedDict to track the order. Maybe here, I can use a similar approach but add an expiration check.
+
+So here's the plan:
+
+The decorator will create a cache object. The cache has:
+
+- A dictionary to store the keys and their expiration times and values.
+- Or perhaps two dictionaries: one for the values and one for the expiration times. Or maybe a single dictionary where each entry is a tuple of (value, expiration_time).
+
+Alternatively, using an OrderedDict where each key is the function's arguments (as a tuple), and the value is a tuple (result, expiration_time). The order of the keys in the OrderedDict will track the LRU order.
+
+Wait, but when we check for expiration, we have to get the expiration time each time. So maybe the entries are stored in the ordered dict as key: (value, expiration_time). The timer is provided, so we can use that to get the current time.
+
+The wrapper function would do the following steps:
+
+- Create a key from the function's arguments. If typed is True, then the types of the arguments are part of the key. So for example, 1 and 1.0 would be considered different if typed is True.
+- Check if the key exists in the cache.
+- If it does, check if the current time is before the expiration time. If yes, return the value.
+- If it's expired, remove it from the cache and proceed.
+- If the key is not present or expired, compute the new value.
+- Before storing, check if the cache has reached maxsize. If so, remove the oldest entries (from the start of the ordered dict) until there's space. But first, remove any expired entries in the cache.
+
+Wait, but how do we efficiently manage the LRU and TTL together? Because when you access an entry, you need to check if it's expired, and also update its position in the LRU order if it's still valid.
+
+Alternatively, every time you access the cache, you first go through all entries and remove expired ones. But that could be slow if the cache is big. Maybe better to check the current entry's expiration and then re-insert it to the end of the ordered dict to mark it as recently used.
+
+Hmm, perhaps the steps are:
+
+When the function is called with arguments:
+
+1. Generate the key (including types if typed is True).
+2. Check the cache for the key.
+   a. If found, check the expiration time. If not expired, move the key to the end of the ordered dict (to mark it as recently used) and return the value.
+   b. If expired, remove the entry.
+3. If not found or expired, compute the new value.
+4. Create a new expiration time (current_time + ttl)
+5. If the cache is at maxsize, remove the oldest entries (from the beginning of the ordered dict) until there's space. But need to check each of those for expiration first? Or just remove them regardless?
+
+Wait, no. Because when you're adding a new entry, you first need to check if there's space. To do that, you should first remove all expired entries. Then, if the size is still over maxsize, you evict the oldest (LRU) entries until you have space. Because expired entries are already invalid and should be removed.
+
+So the process would be:
+
+- Before accessing or modifying the cache, clear out expired entries. But doing that every time might be expensive. Maybe instead, when checking an entry, we can see if it's expired, but when adding new entries, we first have to clean up expired ones to make space.
+
+Alternatively, when the cache is accessed, we check the current entry's expiration. But when adding a new entry, we need to make sure that all entries in the cache are either non-expired and within maxsize, or expired and can be removed.
+
+Hmm, perhaps the ordered dict is maintained with only non-expired entries. So whenever we add a new entry, first we remove expired entries from the cache (checking all existing entries?), then check the size again.
+
+Wait, but checking all entries each time would be O(n), which is not efficient for large maxsize. Maybe we can track expiration times in a way that allows us to quickly find the expired ones. Alternatively, when we access an entry, we check its expiration and then either keep it or remove it. But when adding a new entry, we need to make sure that the cache size is under maxsize, so first we remove expired entries, then evict the oldest if needed.
+
+Alternatively, perhaps the cache entries are stored in an ordered dict, and each time before adding a new entry, we first go through the ordered dict and remove any expired entries. Then, if the size is still over maxsize, we pop the first item (oldest) and add the new one. Wait, but how do we check if entries are expired when adding?
+
+Hmm, here's a possible structure:
+
+The cache will be an instance of a class, say _TTLCache, which holds an ordered dict (to track LRU) and a dictionary for the keys to (value, expiration_time). Wait, maybe the ordered dict can store the keys in order, and the actual data is in another dictionary. Or perhaps the ordered dict can hold the key as the key, and the value is a tuple (result, expiration_time). That way, we can use the ordered dict's order to track LRU.
+
+So the _TTLCache class would have:
+
+- An ordered dict (like collections.OrderedDict) where each entry is key: (value, expire_time)
+- A timer function (probably passed in)
+- maxsize and ttl parameters.
+
+The methods would be:
+
+- get(key): returns the value if it's not expired. If it is expired, removes the key and returns None. Also, moves the key to the end of the ordered dict to mark it as recently used if it's still valid.
+- set(key, value): creates a new entry with the current time + ttl. If the cache is full, first removes expired entries, then pops the oldest (first in ordered dict) until there's space.
+- Maybe also a clear_expired() method that iterates through all entries and removes expired ones. But that might be O(n) each time, which could be slow if maxsize is large. Alternatively, check each entry as you go.
+
+Alternatively, when you call get, you can check the expiration of that specific key. But when adding a new entry, you need to check if the cache is full, then remove the oldest entries (checking their expiration) until you can fit the new one.
+
+Hmm, perhaps the get method would first check if the key exists, then check its expiration. If it's expired, it removes it from the ordered dict and the value dict. Then returns the value if not expired. Also, when you get a key, you should mark it as recently used, so move it to the end of the ordered dict.
+
+Wait, but the ordered dict's order is maintained by insertion and access. So for the LRU part, whenever a key is accessed (and is valid), it should be moved to the end. So each time you get a key, you check its expiration. If it's still valid, you move it to the end of the ordered dict to indicate that it's been recently used. If expired, you remove it.
+
+So here's the structure:
+
+The cache is an instance of a class. The wrapper function will check the cache for the key, using the get method of the cache. If it's not there, compute the value, set it in the cache, and return it.
+
+Now, the problem is how to implement this in the decorator.
+
+The standard approach for decorators with parameters is to have the outer function take the parameters and return the actual decorator that wraps the function.
+
+So, the ttl_cache decorator function would return a wrapper that uses this cache class.
+
+Wait, let me think step by step.
+
+First, the decorator function:
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    # create the cache object here
+    cache = _TTLCache(maxsize, ttl, timer, typed)
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # create the key based on args and kwargs, considering typed
+            key = _make_key(args, kwargs, typed, func)
+            # check the cache
+            value = cache.get(key)
+            if value is not None:
+                return value
+            # not in cache, call the function
+            result = func(*args, **kwargs)
+            # set the result in the cache
+            cache.set(key, result)
+            return result
+        return wrapper
+    return decorator
+
+Wait, but how to implement the _make_key function. The standard lru_cache uses _make_key to create a hashable key from the args and kwargs, considering the types if typed is True. So that function would need to handle that. For example, if typed is True, then the types of each argument are part of the key. So for a parameter 1 and 1.0, their keys would be different.
+
+So the key is made by combining the args and kwargs, with their types. The function _make_key would have to take the args, kwargs, the typed flag, and perhaps the function's parameters (but maybe not necessary here). Wait, maybe the standard approach is to create a tuple of the args, and then the kwargs sorted by key, each with their values. And if typed is True, each element in the tuple is (value, type(value)), so that even if two values are equal but of different types, they are different keys.
+
+Yes, so for example, in the _make_key function:
+
+def _make_key(args, kwargs, typed, func):
+    # args are the positional arguments, converted to a tuple
+    # kwargs are sorted by key and converted to a tuple of (key, value)
+    key = (args, tuple(sorted(kwargs.items())))
+    if typed:
+        new_args = []
+        for arg in args:
+            new_args.append( (arg, type(arg)) )
+        new_kwargs = []
+        for k, v in sorted(kwargs.items()):
+            new_kwargs.append( (k, (v, type(v))) )
+        key = ( tuple(new_args), tuple(new_kwargs) )
+    return key
+
+Wait, maybe I should include the types of each argument in the key. So for each argument in args and kwargs, their type is part of the key.
+
+Alternatively, the standard lru_cache's _make_key function does something like:
+
+def _make_key(args, kwds, typed):
+    # If any of the arguments are not hashable, return None
+    key = args
+    if kwds:
+        key += (object(),) + tuple(sorted(kwds.items()))
+    if typed:
+        key += tuple(type(arg) for arg in args)
+        if kwds:
+            key += tuple( (type(v) for k, v in sorted(kwds.items())) )
+    return key
+
+Hmm, perhaps I need to handle that properly. The key must be hashable and unique for each combination of arguments and types if typed is True.
+
+So the _make_key function should return a tuple that includes both the arguments and their types when typed is True.
+
+Now, the cache class. Let's define it as _TTLCache:
+
+class _TTLCache:
+    def __init__(self, maxsize, ttl, timer, typed):
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self.timer = timer
+        self.cache = collections.OrderedDict()
+        self.typed = typed
+
+    def get(self, key):
+        # check if the key exists in the cache
+        if key in self.cache:
+            # get the (value, expire_time) tuple
+            val, expire = self.cache[key]
+            now = self.timer()
+            if now < expire:
+                # move to end to show it was recently used
+                self.cache.move_to_end(key, last=True)
+                return val
+            else:
+                # expired, remove it
+                self.cache.pop(key, None)
+        return None
+
+    def set(self, key, value):
+        now = self.timer()
+        expire = now + self.ttl
+        # add to the cache
+        # first check if the key is already present, and if so, remove it to update its position and expire time
+        if key in self.cache:
+            self.cache.pop(key)
+        # now check if we need to evict
+        # first remove expired entries
+        while len(self.cache) > 0:
+            # iterate through the items in order (but how to get the first item?)
+            # perhaps we can loop through all items and remove expired ones. Wait, but that would be O(n) each time.
+            # Maybe better to check each time when adding, but perhaps we can do this more efficiently.
+            # Alternatively, just check the first item, but that might not be enough. Hmm, not sure.
+            # Alternatively, when the cache is full, we need to check all the items. Maybe this is manageable.
+
+            # Wait, perhaps the first step in the set method is to remove all expired entries. Because when adding a new entry, the current cache may have expired entries that are taking up space. So first, we need to clean those up.
+
+            # Let's see: to check for expired entries, we can loop through all the items and check their expiration. But that's O(n) every time.
+
+            # Hmm, maybe that's necessary. Alternatively, we can keep track of the expiration times in another structure, like a priority queue, but that might complicate things.
+
+            # Let's proceed with the straightforward approach for now.
+
+            # So, first, remove expired entries from the cache:
+            # To do this, iterate over the cache items. But since we need to maintain the LRU order, perhaps we can loop through the items and remove any that are expired. The problem is that when you loop through an ordered dict, you get the items in LRU order, so the first ones are the oldest.
+
+            # Wait, but the ordered dict is ordered from least to most recently used. So when you iterate through it, the first items are the ones that are older.
+
+            # To remove expired entries, we can iterate through the items and check if each's expiration time has passed. If so, we remove them from the cache. But since we have to check all items, this might be slow for large caches. Maybe there's a better way, but perhaps for the purposes here, this is acceptable.
+
+            # Let me think again. Maybe the get method already takes care of removing expired entries when accessed. But the set method is adding a new entry, so before adding, we need to make sure that the cache is cleaned of expired entries, then check if we have space.
+
+            # So in the set method, before adding, we need to clean up expired entries first.
+
+            # So here's the approach for set:
+
+            # Iterate through all the items in the cache (maybe in a list to avoid modifying the dict during iteration)
+            # Wait, but how to do that without O(n) time? Hmm, perhaps the best way is to loop through the items, and remove any expired ones.
+
+            # So first, we create a list of keys to check.
+            # Or perhaps, iterate through the cache and check each entry's expiration. But since we can't modify the dict while iterating, maybe collect the keys to remove.
+
+            # Alternatively, we can do this:
+
+            # Get the current time
+            now = self.timer()
+            # Create a list of expired keys
+            expired = []
+            for k in list(self.cache.keys()):
+                val, exp = self.cache[k]
+                if exp <= now:
+                    expired.append(k)
+            # Remove them from the cache
+            for k in expired:
+                self.cache.pop(k, None)
+            # Now, check the size. If it's over maxsize, then we need to remove the oldest entries (the first ones in the ordered dict)
+            while len(self.cache) >= self.maxsize:
+                # pop the first item (the oldest)
+                self.cache.popitem(last=False)
+            # Now, add the new key at the end (as most recently used)
+            self.cache[key] = (value, expire)
+            # Wait, but if the key was already present (we popped it earlier if expired), then adding it again is okay. But when you do set, you might have popped it if expired, so the new entry is added.
+
+        Wait, but in the code above, the 'while' loop might not be correct. Let me see:
+
+        After removing expired entries, the length of self.cache is the number of non-expired items. So, if adding the new entry would exceed maxsize, we need to evict until we are under.
+
+        So the steps are:
+
+        1. Remove all expired entries (those with expiration_time <= now). This is done by looping through all items, checking each.
+
+        2. Check if the current length (non-expired) plus 1 (the new entry) exceeds the maxsize. If so, we need to remove the oldest (the first in the ordered dict) entries until there is space.
+
+        Wait, but after step 1, the cache is already cleaned of expired entries, so the current length is the number of valid entries. Adding the new entry may push it over maxsize, so we need to evict the oldest until we are under.
+
+        So:
+
+        while len(self.cache) >= self.maxsize:
+            self.cache.popitem(last=False)
+
+        Wait, but that would remove until it's below maxsize. Let me think: suppose maxsize is 3. The cache has 3 entries. When adding a new one, after step 1, the cache has 3 entries. So the loop runs when len is 3 (>=3). Then we pop one (now it's 2), loop again? No, because 2 is less than 3, so loop stops. So that's okay.
+
+        So the code for the set method would be:
+
+        def set(self, key, value):
+            now = self.timer()
+            expire = now + self.ttl
+
+            # Remove expired entries
+            # Iterate over a list copy of the keys to avoid modifying the dict during iteration
+            to_remove = []
+            for k in self.cache:
+                val, exp = self.cache[k]
+                if exp <= now:
+                    to_remove.append(k)
+            for k in to_remove:
+                del self.cache[k]
+
+            # Now check if we have to evict
+            if len(self.cache) >= self.maxsize:
+                # Evict the oldest (first in the ordered dict)
+                self.cache.popitem(last=False)
+
+            # Now add the new key-value pair
+            self.cache[key] = (value, expire)
+
+            Wait, but this may not handle all cases. For example, after removing expired entries, the current length could be less than maxsize, so no need to evict. But if it's equal, then pop one. Hmm, perhaps it's better to do:
+
+            while len(self.cache) >= self.maxsize:
+                self.cache.popitem(last=False)
+
+            But that could be a loop, but since after removing expired entries, the length is already the valid entries, so the loop may not run many times.
+
+            Alternatively, the code could be:
+
+            after cleaning expired entries, if the length is at maxsize, then evict the oldest.
+
+            Wait, but the code above would first remove expired entries, then check if the current length is >= maxsize. So, if after removing expired entries, the length is exactly maxsize, then we have to evict. So in that case, we pop the first item (the oldest) once.
+
+            So the code might work.
+
+            But wait, in the get method, when a key is found and it's expired, we remove it. So the cache's length is the number of non-expired items. So in the set method, after removing expired entries, the length is correct. So adding the new entry may need to evict if the length (after adding) would exceed.
+
+            Hmm, perhaps the code should be:
+
+            current_length = len(self.cache)
+            if current_length >= self.maxsize:
+                self.cache.popitem(last=False)
+            self.cache[key] = (value, expire)
+
+            But that would not account for the case where after removing expired entries, the length is less than maxsize. So the better approach is:
+
+            after removing expired entries, if adding the new entry would push the length over, then evict.
+
+            So:
+
+            current_length = len(self.cache)
+            if current_length + 1 > self.maxsize:
+                # remove as many as needed, but probably just one
+                self.cache.popitem(last=False)
+            # add the new entry
+            self.cache[key] = (value, expire)
+
+            Wait, but what if after removing expired entries, the length is exactly maxsize, then adding would need to evict one. So yes, that would work.
+
+            But this approach may not handle all cases. Let's see:
+
+            Suppose the maxsize is 2, and the cache has two entries, both non-expired. Adding a third would need to evict the oldest (first in the ordered dict). So the code would work.
+
+            However, in the code above, the popitem is called once, which is correct.
+
+            So that's okay.
+
+            But how to track the LRU order? The ordered dict should automatically track the insertion order, and when you access a key (like in get), you move it to the end, so it's marked as most recently used.
+
+            Wait, in the get method, when the key is found and not expired, we do self.cache.move_to_end(key, last=True). That ensures that the key is moved to the end of the ordered dict, so it's considered the most recent. The popitem in set would then remove the first item (the oldest) in the ordered dict.
+
+            So the order is maintained correctly.
+
+            Now, the problem is how to handle the key creation. The _make_key function must be correct.
+
+            Let's think about the parameters. The standard lru_cache uses a key made of the args and sorted kwargs, and adds types if typed is True.
+
+            For example:
+
+            If the function is called with args (1, 2) and kwargs {'x':3}, then the key is ( (1,2), ( ('x',3), ) )
+
+            If typed is True, then each element in the args tuple would be a (value, type) pair. So the key would be ( ( (1, <class 'int'>), (2, <class 'int'>) ), ( ( 'x', (3, <class 'int'>) ), ) )
+
+            Wait, but maybe the standard way is to include the types of each argument in the key. So for each positional argument, we have (arg, type(arg)), and for each keyword argument, ( (k, (v, type(v)) ), etc.
+
+            So the _make_key function would need to take the args and kwargs, and for each argument in args and the values in the keyword arguments, include their types if typed is True.
+
+            Let's code that:
+
+            def _make_key(args, kwds, typed):
+                # combine args and sorted kwds into a tuple
+                key = args
+                if kwds:
+                    key += (object(),) + tuple(sorted(kwds.items()))
+                if typed:
+                    new_args = []
+                    for arg in args:
+                        new_args.append( (arg, type(arg)) )
+                    key = tuple(new_args)
+                    if kwds:
+                        key += (object(),)
+                        new_kwds = []
+                        for k, v in sorted(kwds.items()):
+                            new_kwds.append( (k, (v, type(v))) )
+                        key += tuple(new_kwds)
+                return key
+
+            Wait, maybe I need to structure it as a tuple where each element of args is wrapped with its type, and same for the kwargs items. The object() is used as a separator between args and kwds.
+
+            So in the case of typed=True, the key would include each argument's type. So different types for the same value would result in different keys.
+
+            Okay, so the _make_key function would need to be inside the decorator or as a helper function. Since it's needed both in the get and in the set, perhaps it's better to have it as a helper inside the _TTLCache class? Or maybe outside, but the parameters need to know the 'typed' flag.
+
+            Wait, the typed flag is part of the cache's initialization. So the _TTLCache can have the 'typed' parameter, and the _make_key function can be part of the cache's methods.
+
+            Alternatively, the _make_key is a separate function that is passed the typed flag.
+
+            Hmm, perhaps the _make_key is a helper function inside the ttl_cache function, so it can access the typed parameter. But since the cache is a class, maybe it's better to have the _make_key be part of the cache.
+
+            Wait, the cache is created with the typed parameter. So in the _TTLCache class's __init__, we can store self.typed = typed. Then, the _make_key can be a method of the cache.
+
+            So the _TTLCache class can have a _make_key method.
+
+            Wait, but the key is made based on the function's arguments. The cache doesn't know the function, but the decorator's wrapper does. So maybe the _make_key is a helper function inside the decorator's closure.
+
+            Let me structure it again. The outer decorator function (ttl_cache) takes the parameters, then defines the _make_key function based on the typed flag, and then the wrapper uses that key function.
+
+            For example:
+
+            def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+                def _make_key(args, kwds):
+                    key = args
+                    if kwds:
+                        key += (object(),) + tuple(sorted(kwds.items()))
+                    if typed:
+                        new_args = []
+                        for a in args:
+                            new_args.append( (a, type(a)) )
+                        key = tuple(new_args)
+                        if kwds:
+                            key += (object(),)
+                            new_kwds = []
+                            for k, v in sorted(kwds.items()):
+                                new_kwds.append( (k, (v, type(v))) )
+                            key += tuple(new_kwds)
+                    return key
+                class _TTLCache:
+                    def __init__(self):
+                        self.cache = collections.OrderedDict()
+                        self.maxsize = maxsize
+                        self.ttl = ttl
+                        self.timer = timer
+                        self.make_key = _make_key
+
+                    # then the get and set methods use self.make_key to create keys?
+
+                    Wait no, the make_key is already defined in the outer scope. Wait, the _make_key is defined inside the ttl_cache function. So when the _TTLCache is created, it can have access to that function via closure.
+
+                    Hmm, but in the code above, the _TTLCache class is inside the decorator function. So the _make_key can be referenced as the function.
+
+                    So in the get method, when the key is passed, that's already the key made by _make_key. Wait, no. The key is computed in the wrapper function, not in the cache.
+
+                    Wait, in the code structure I outlined earlier, the wrapper would compute the key using the _make_key function (based on typed) and then call cache.get(key). So the key is already made correctly. So the _TTLCache doesn't need to know about typed, because the key is already including the types when needed.
+
+                    So the _make_key is a helper inside the decorator's outer scope, and the cache class doesn't need to know about it. The key is made in the wrapper before querying the cache.
+
+                    So, the _make_key function is part of the decorator's closure.
+
+                    Now, putting this all together:
+
+                    The _make_key function is defined inside the ttl_cache function, which uses the 'typed' parameter from the decorator's arguments.
+
+                    The _TTLCache class is also defined inside the decorator. The class has the cache as an ordered dict, and stores maxsize, ttl, timer.
+
+                    The get method would check if the key is present, then check expiration, etc.
+
+                    The set method would first remove expired entries from the cache, then check the size and evict if necessary.
+
+                    Wait, but in the set method of the _TTLCache, when adding a new key, we need to check if it's already there. Because when you call set, perhaps the key was already present but expired, so you have to remove it before adding again.
+
+                    Alternatively, the set method would first check if the key is present and not expired, then update it? Or just overwrite it?
+
+                    Probably, when you call set, you want to replace any existing entry for that key, even if it's expired. So in the set method, before adding, you can remove the existing key (if it exists) first. Because when you remove expired entries, the existing key may still be present but expired, so you have to check.
+
+                    Wait, no. The existing key may have been expired and already removed in the first step of the set method (removing expired entries). So when adding, the key is not present in the cache anymore. So in that case, you can just proceed.
+
+                    But perhaps the existing key is not expired. So when you set it, you need to replace it with the new value and new expiration time (based on current time). Because the new call would reset its expiration, so the new entry should have its own expiration.
+
+                    So in the set method, first, the key may already be present. So we need to remove it first. Wait, but after removing expired entries, the key may still be in the cache (if it's not expired). So in that case, we should remove it before adding the new entry, because when you set a new value, you want to update the existing entry and reset its expiration.
+
+                    So the code for set would first check if the key is present and not expired, then remove it so that the new entry takes its place. Alternatively, just proceed to add it, and the existing key would be popped because when you add it again, it's moved to the end as the most recent.
+
+                    Hmm, perhaps the best way is to first remove the existing key (if present), so that when you add the new key-value pair, it's considered as a new entry, thus moving to the end. Wait, but that might not be necessary. Let me think:
+
+                    Suppose the key is already in the cache and is valid. When we call set again, perhaps we want to update the value and reset the expiration. Or maybe we just want to add it again, but since the existing entry is still valid, the new entry would replace it, and the expiration would be set to now + ttl. So the existing entry's expiration is not important anymore. So the code should first remove the existing key if it's present (regardless of expiration?), but no, because if it's present but expired, it would have been removed in the first step.
+
+                    Wait, in the set method, the key is being added as a new entry. So if it's already in the cache (and not expired), then when we add the new entry, it's overwriting the existing one, but we also need to move it to the end to mark it as recently used. Because when you call set, you are updating the value (maybe not necessary if the function is pure?), but in a cache, we might want to allow for the same arguments to be called again, and the new result (if any) would replace the old one.
+
+                    Alternatively, perhaps the set method should first check if the key exists, and if so, remove it, then add the new entry. That way, any existing entry is replaced with the new one, which has a new expiration time.
+
+                    But in the current code structure, the set method is called only when the key is not present or expired, right? Because the wrapper first calls cache.get(key), and if it returns None, then it proceeds to compute the value and call cache.set(key, value).
+
+                    Wait, no. Let's see:
+
+                    In the wrapper function:
+
+                    key = _make_key(args, kwargs)
+                    value = cache.get(key)
+                    if value is not None:
+                        return value
+                    else:
+                        compute the value, then call cache.set(key, result)
+
+                    So when you call set, the key is not present in the cache (either because it wasn't there or was expired and removed). So in the set method, the existing key (if present) would have been expired and already removed in the first step (the expired check). So the key is not in the cache. So the code can proceed.
+
+                    Therefore, the set method can proceed as:
+
+                    def set(self, key, value):
+                        now = self.timer()
+                        expire = now + self.ttl
+
+                        # first, remove expired entries
+                        to_remove = []
+                        for k in self.cache:
+                            val, exp = self.cache[k]
+                            if exp <= now:
+                                to_remove.append(k)
+                        for k in to_remove:
+                            del self.cache[k]
+
+                        # Now check if we need to evict
+                        if len(self.cache) >= self.maxsize:
+                            # evict the oldest (first in ordered dict)
+                            self.cache.popitem(last=False)
+                        # add the new key at the end
+                        self.cache[key] = (value, expire)
+
+                    Wait, but in the code above, the 'for k in self.cache' would loop through all the keys, but since it's an ordered dict, the order is maintained. However, this is O(n) for each set call, which could be slow for large caches. But maybe that's the best way given the constraints.
+
+                    Alternatively, perhaps we can track the expiration times in a more efficient way, but that might complicate things.
+
+                    For now, let's proceed with this approach.
+
+                    Now, the problem is that in the get method, we are checking for the key in the cache, but after that, we need to move it to the end of the ordered dict if it's valid. However, in the current code for get:
+
+                    if key in self.cache:
+                        val, exp = self.cache[key]
+                        now = self.timer()
+                        if now < exp:
+                            self.cache.move_to_end(key, last=True)
+                            return val
+                        else:
+                            del self.cache[key]
+                    return None
+
+                    Wait, but in the _TTLCache's cache, the key is the key made by the _make_key function. The ordered dict is used to track the order of insertion and access. When you access a valid key, you move it to the end, so it's considered the most recently used. That's correct.
+
+                    So the get method works as intended.
+
+                    Now, the _TTLCache's cache is an ordered dict. The keys are the ones generated by _make_key, and the values are tuples (result, expire_time).
+
+                    Now, the problem is that in the set method, when you add a new key, you have to do so in the ordered dict, so it's added at the end. But when you first remove expired entries, you are deleting them from the ordered dict, which maintains the order of the remaining entries. Then, when you evict, you pop the first item (the oldest). Then adding the new key would place it at the end, which is correct.
+
+                    So that should work.
+
+                    Now, putting this all into code.
+
+                    Also, the decorator needs to handle the case when the function is called, and the cache is checked. So the steps are:
+
+                    - The wrapper function creates the key using _make_key with the typed flag.
+                    - Calls cache.get(key). If it's there and not expired, returns it.
+                    - Else, compute the result, then call cache.set(key, result), then return the result.
+
+                    Now, the _TTLCache class's __init__ should have the parameters passed in.
+
+                    Wait, the _TTLCache class in the code above would have to take maxsize, ttl, timer, and the _make_key function. Wait, no. Let me see the code structure again.
+
+                    The original code outline:
+
+                    The outer function is ttl_cache, which returns a decorator. The decorator then wraps the function and returns the wrapper. The cache is an instance of _TTLCache, initialized with the parameters from the outer function.
+
+                    So inside the ttl_cache function:
+
+                    cache = _TTLCache(maxsize, ttl, timer, typed)
+
+                    Wait, no. The _TTLCache class should be inside the outer function, and have __init__ with those parameters. Also, the _make_key is defined inside the outer function, so the _TTLCache can access it?
+
+                    Hmm, perhaps the _make_key is not part of the _TTLCache, but the key is created in the wrapper, so the _TTLCache doesn't need it. So the _TTLCache just needs to know the maxsize, ttl, timer, but the typed is already handled in the key creation.
+
+                    Therefore, the _TTLCache's __init__ would be:
+
+                    class _TTLCache:
+                        def __init__(self, maxsize, ttl, timer):
+                            self.maxsize = maxsize
+                            self.ttl = ttl
+                            self.timer = timer
+                            self.cache = collections.OrderedDict()
+
+                    Wait, but the timer is passed in. So yes.
+
+                    So the outer function would create the cache with the parameters.
+
+                    But how does the _make_key function get defined?
+
+                    The _make_key function is defined inside the outer function, using the typed parameter. So in the wrapper function, when it gets the arguments, it calls _make_key(args, kwargs) to create the key.
+
+                    So the _make_key is not part of the cache class, but part of the outer scope.
+
+                    So putting this together:
+
+                    The code would start by importing necessary modules.
+
+                    So, need to import functools and collections.OrderedDict, and time.
+
+                    Wait, the code must use the timer parameter, which defaults to time.monotonic. So the code should import time.
+
+                    Also, the decorator must use the @functools.wraps to preserve the function's name, etc.
+
+                    So the full code would be something like:
+
+                    import functools
+                    import collections
+                    import time
+
+                    def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+                        def _make_key(args, kwds):
+                            key = args
+                            if kwds:
+                                key += (object(),) + tuple(sorted(kwds.items()))
+                            if typed:
+                                new_args = []
+                                for a in args:
+                                    new_args.append((a, type(a)))
+                                key = tuple(new_args)
+                                if kwds:
+                                    key += (object(),)
+                                    new_kwds = []
+                                    for k, v in sorted(kwds.items()):
+                                        new_kwds.append((k, (v, type(v))))
+                                    key += tuple(new_kwds)
+                            return key
+
+                        class _TTLCache:
+                            def __init__(self):
+                                self.maxsize = maxsize
+                                self.ttl = ttl
+                                self.timer = timer
+                                self.cache = collections.OrderedDict()
+
+                            def get(self, key):
+                                now = self.timer()
+                                if key in self.cache:
+                                    val, exp = self.cache[key]
+                                    if exp > now:
+                                        # move to end to mark as recently used
+                                        self.cache.move_to_end(key, last=True)
+                                        return val
+                                    else:
+                                        # expired, remove it
+                                        self.cache.pop(key, None)
+                                return None
+
+                            def set(self, key, value):
+                                now = self.timer()
+                                expire = now + self.ttl
+                                # first remove expired entries
+                                to_remove = []
+                                for k in self.cache:
+                                    val, exp = self.cache[k]
+                                    if exp <= now:
+                                        to_remove.append(k)
+                                for k in to_remove:
+                                    del self.cache[k]
+                                # Now check size
+                                if len(self.cache) >= self.maxsize:
+                                    # remove the oldest (first item)
+                                    self.cache.popitem(last=False)
+                                # add the new key to the end
+                                self.cache[key] = (value, expire)
+
+                        # create an instance of the cache
+                        cache = _TTLCache()
+
+                        def decorator(func):
+                            @functools.wraps(func)
+                            def wrapper(*args, **kwargs):
+                                key = _make_key(args, kwargs)
+                                result = cache.get(key)
+                                if result is not None:
+                                    return result
+                                # compute the value
+                                result = func(*args, **kwargs)
+                                # store it
+                                cache.set(key, result)
+                                return result
+                            return wrapper
+                        return decorator
+
+                    Wait, but in the class _TTLCache's __init__ method, the parameters are not being set. Because the class is defined inside the outer function, which has maxsize, ttl, timer, etc. So perhaps the class's __init__ doesn't take parameters, and the instance can just use the outer variables.
+
+                    Wait, no. Because the outer function's variables are in the closure. So the _TTLCache can have an __init__ that takes no parameters and uses the outer variables.
+
+                    Wait, but in the code above, the _TTLCache is a class inside the outer function, so when we create an instance of it, it can access the variables from the outer function. So:
+
+                    class _TTLCache:
+                        def __init__(self):
+                            self.maxsize = maxsize
+                            self.ttl = ttl
+                            self.timer = timer
+                            self.cache = collections.OrderedDict()
+
+                    But that way, each instance of _TTLCache would have those variables. But when the outer function is called, the parameters are fixed (maxsize, etc.), so this should work.
+
+                    Alternatively, perhaps the class should take those parameters in __init__, but since it's defined inside the outer function, which already has the variables, maybe not necessary. Hmm, perhaps the code above would work.
+
+                    Wait, let's see: the outer function has parameters maxsize, ttl, timer, typed. The _TTLCache class's __init__ can refer to those variables in the outer scope. So yes, that's possible.
+
+                    But in the code above, the _TTLCache's instance doesn't have a 'typed' parameter, but the _make_key function is using the 'typed' variable from the outer function.
+
+                    That's okay because the key is created in the wrapper, not in the cache class.
+
+                    So the code structure is:
+
+                    The outer function (ttl_cache) defines the _make_key function based on the typed parameter.
+
+                    Then, the _TTLCache class has an __init__ that takes no parameters and uses the outer variables.
+
+                    The cache instance is created with cache = _TTLCache().
+
+                    Wait, but the class's __init__ needs to have access to the maxsize, ttl, and timer variables from the outer scope. Since the outer function is the closure, yes.
+
+                    So that's okay.
+
+                    Now, let me check for possible errors.
+
+                    For example, when the key is made, the _make_key function must return a hashable type (like a tuple) so that it can be used as a key in the ordered dict.
+
+                    The code above for _make_key returns a tuple, so that's okay.
+
+                    Also, in the set method, when we loop through the cache (which is an ordered dict), the for loop will iterate over the keys in LRU order (from first to last). So when we check if they are expired, and collect them into to_remove, we can delete them. But after that, the remaining items are in order, and the new item is added at the end.
+
+                    Wait, but when you delete keys from the ordered dict during iteration, the loop might be affected. So by iterating over a list of the keys, like for k in list(self.cache.keys()), that way we don't modify the dict while iterating.
+
+                    In the current code, in the set method:
+
+                    to_remove = []
+                    for k in self.cache:
+                        ... check if expired, then add to to_remove list
+                    Then, for each in to_remove, delete.
+
+                    Wait, the for loop here is iterating over the keys of the cache, but when you loop through the cache (the ordered dict), it's the same as iterating through keys, and that's okay. But since the ordered dict is being modified (deleting keys in the to_remove loop), the loop would not be affected because we have a list copy.
+
+                    So that's okay.
+
+                    Now, the problem is that the set method may have to remove expired entries before checking the size. That way, the current cache only has non-expired entries, so when adding the new entry, the eviction is only needed if the remaining non-expired entries are at the maxsize.
+
+                    So this approach should work.
+
+                    Now, testing edge cases. For example, maxsize=0 (no caching?), or maxsize=1, and entries expiring.
+
+                    Also, when the timer is time.monotonic, which is correct.
+
+                    Now, in the code above, the _TTLCache's get method uses the key to look up in the cache. The key is generated by _make_key in the wrapper function, so that's correct.
+
+                    Another possible issue: the ordered dict's move_to_end method. When we call it in get, we move the key to the end when it's valid. So the next time it's accessed, it's still in the cache but not expired, so it's moved again. That maintains the LRU order correctly.
+
+                    The set method adds the new key at the end, so that's correct as the most recent.
+
+                    Now, the code may have an issue in the _make_key function. Let me recheck the code for the key creation.
+
+                    Let's see:
+
+                    The key starts as the args tuple. Then, if there are keyword arguments, we append (object(),) followed by the sorted items of the kwds.
+
+                    So for example, if the function is called with (1,2) and {'a':3}, then the key is (1,2, object(), ('a',3)). Wait, but the sorted items would be a list of tuples, so when you add them, the key becomes a tuple of args plus the object and the sorted items.
+
+                    Wait, the line key += (object(),) + tuple(sorted(kwds.items())).
+
+                    Wait, args is a tuple. So key is initially the tuple of args. Then, if there are kwds, we add (object(),) followed by the sorted items as a tuple. So the total key is (args_tuple) + (object(), (k1,v1), (k2,v2), ...).
+
+                    That should work as a unique key for the same parameters but different kwds.
+
+                    Then, when typed is True, each element in args is wrapped with its type, so for each arg in args, (arg, type(arg)), then the key becomes a tuple of those. Then, for the keyword arguments, after the object separator, each (k, (v, type(v))) is added as part of the tuple.
+
+                    So the key will be different for the same values but different types, which is correct.
+
+                    Okay, now the code structure.
+
+                    Wait, in the code above, the _TTLCache is a class inside the outer function, so when you create an instance, it has access to the variables maxsize, etc. But the __init__ is taking no parameters, so perhaps the code should pass those parameters?
+
+                    Wait, no. Because in the outer function, the parameters are fixed when the decorator is created. So the _TTLCache's __init__ can just refer to those variables. So that's okay.
+
+                    Wait, but in the code above, the _TTLCache's __init__ is using maxsize, ttl, timer from the outer scope. So yes.
+
+                    So the code should work.
+
+                    Now, there's a possible problem with the way the cache is handled in the set method. Let me see:
+
+                    When you call set, you first loop through all keys in the cache (the ordered dict) and collect the expired ones. Then, you delete them. After that, the remaining entries are non-expired.
+
+                    Then, check if the length is >= maxsize. Wait, if the length is equal to maxsize, then you have to remove one.
+
+                    So, for example, if the maxsize is 2 and after removing expired entries, the cache has exactly two entries, then adding a new one would require removing one (the oldest). So that's correct.
+
+                    The code in the set method's loop:
+
+                    to_remove = []
+                    for k in self.cache:
+                        val, exp = self.cache[k]
+                        if exp <= now:
+                            to_remove.append(k)
+                    for k in to_remove:
+                        del self.cache[k]
+
+                    Wait, but in the for loop over self.cache, which is an ordered dict, the keys are in LRU order. So the expired entries are being collected, but in any case, all expired entries are removed, not just some. So that's correct.
+
+                    Now, in the set method, after removing expired entries, the code checks the length and pops the first item (oldest) if needed. Then adds the new key to the end.
+
+                    Okay.
+
+                    Now, the problem is that the _TTLCache's cache is an ordered dict, but when you delete a key via del self.cache[k], the ordered dict's order is maintained correctly. The popitem(last=False) removes the first item.
+
+                    So, this should work.
+
+                    Now, code formatting. Also, in the _TTLCache's get method, the key is checked in the cache, and if it's valid, then moved to end. So the order is maintained.
+
+                    Now, let's think about the parameters. The timer is passed in, and the code uses self.timer().
+
+                    Now, in the code above, the _make_key function is inside the outer function, so the wrapper can use it. The _TTLCache's instance can also refer to it?
+
+                    No, the _make_key is used in the wrapper to create the key, not in the cache. So the cache doesn't need to know about it. So the code is okay.
+
+                    Now, the code may have a problem with the way the cache is stored. Because in the _TTLCache's cache, the key is stored as a tuple from _make_key, but the ordered dict must have the keys as the tuples, which they are.
+
+                    So, this should work.
+
+                    Now, possible issues:
+
+                    - The cache is an instance of _TTLCache, which is created once per decorated function. So each decorated function gets its own cache instance. That's correct.
+
+                    - The _make_key function is defined inside the outer function, so each call to the decorator will have its own _make_key, based on the typed parameter. So if two different functions use the decorator with different typed values, their _make_key functions are different. That's correct.
+
+                    Now, the code may have an error in the _make_key function's logic for typed. Let's see:
+
+                    When typed is True, the args are converted into a list of (arg, type(arg)), then the key is made into a tuple of that list. For the keyword arguments, the key is also adding types to each value.
+
+                    So for example, if args is (1,), then new_args is [(1, int)], so the key becomes ( (1, int), )
+
+                    Then, if there are keyword arguments, like 'x' = 3.0, then the new_kwds would be [ ('x', (3.0, float)) ], so the key would be ( (1, int), object(), ('x', (3.0, float)) )
+
+                    So that's correct. Different types would produce different keys.
+
+                    Okay, now let's think about the code structure again. The problem is that in Python, when you have a class inside a function, each time the function is called, the class is redefined. So that's okay, as each decorator instance will have its own cache.
+
+                    Now, the code as written may have an error in the _TTLCache's __init__ method. Because the class is inside the outer function, so when the outer function is called, the class is defined with the current parameters. So when a function is decorated with ttl_cache(maxsize=...), the cache instance is created with the correct parameters.
+
+                    So that's okay.
+
+                    Now, the code uses the ordered dict. When you do del self.cache[k], that removes the key from the ordered dict, and the remaining keys are in order except for those removed. The popitem would remove the first remaining key.
+
+                    Another possible optimization: in the set method, after removing expired entries, the cache is now cleaned. So the current length is the number of non-expired entries. So adding the new entry would make it length +1. So the check is if (len(cache) +1) > maxsize, then evict. But the code currently checks if len is >= maxsize. Let's see:
+
+                    Suppose the maxsize is 2. After cleaning, the cache has 1 entry. Then adding a new one would make it 2, which is okay. But if after cleaning it has 2 entries, adding the new one would make 3, so need to evict one (so that it becomes 2 again). So in that case, the code's check is:
+
+                    if len(self.cache) >= self.maxsize:
+
+                    So when len is 2 (equal to maxsize), then we pop one, making it 1, then add the new one (total 2). That's correct.
+
+                    Wait, no. Let me think: the code does:
+
+                    if len(cache) >= maxsize:
+
+                        then popitem (which removes one, so len becomes maxsize-1)
+
+                    then adds the new key. So the total becomes (maxsize -1) +1 = maxsize. So that's okay.
+
+                    So the code is correct.
+
+                    Now, possible code errors.
+
+                    Wait, in the set method's for loop, when looping through self.cache, the code uses 'for k in self.cache', which iterates over the keys. Then, for each key, we get val and exp by self.cache[k], but since the cache is an ordered dict, that's okay. However, since we are iterating through the keys and collecting the expired ones, then deleting them in a separate loop, that should work.
+
+                    Now, another possible error: in the _make_key function, when combining the args and the kwds. The args are a tuple, and adding (object(), ...) would create a new tuple. But when typed is True, the new_args is a list of tuples, then converted to a tuple. Wait, the code for the typed case:
+
+                    key = args becomes a list? No, let me see:
+
+                    The code in _make_key:
+
+                    key = args (which is a tuple of the positional arguments)
+
+                    if there are kwds, then key is extended with (object(),) + tuple of sorted items.
+
+                    But when typed is True, the code does:
+
+                    new_args = []
+                    for a in args:
+                        new_args.append( (a, type(a)) )
+                    key = tuple(new_args)
+
+                    Then, if there are kwds, it appends (object(),) followed by the new_kwds elements.
+
+                    Wait, the code for the typed case:
+
+                    if typed:
+
+                        new_args = []
+                        for a in args:
+                            new_args.append( (a, type(a)) )
+                        key = tuple(new_args)  # this is correct for the args part.
+
+                        if kwds:
+                            key += (object(),)  # but tuples are immutable. You can't do += here. Wait, that's a problem.
+
+                    Oh right! Because key is a tuple. So when you have key = tuple(new_args), and then try to add (object(),) followed by new_kwds, you can't do that with += because tuples are immutable. So you have to create a new tuple by concatenating.
+
+                    Wait, in the code above, after key is set to tuple(new_args), then if there are kwds:
+
+                    key += (object(),) + tuple(new_kwds)
+
+                    But that's not correct because the 'new_kwds' is a list of tuples (k, (v, type(v))), so converting to a tuple would make those elements part of the key.
+
+                    Wait, let me re-express the _make_key function properly.
+
+                    Let me re-express that:
+
+                    def _make_key(args, kwds):
+                        key_parts = []
+                        # process args
+                        for a in args:
+                            if typed:
+                                key_parts.append( (a, type(a)) )
+                            else:
+                                key_parts.append(a)
+                        # process kwds
+                        if kwds:
+                            # add a separator between args and kwds
+                            key_parts.append( object() )
+                            for k, v in sorted(kwds.items()):
+                                if typed:
+                                    key_parts.append( (k, (v, type(v))) )
+                                else:
+                                    key_parts.append( (k, v) )
+                        # make the key as a tuple of all these parts
+                        return tuple(key_parts)
+
+                    Wait, that's a better way. Let me think again.
+
+                    Let me rework the _make_key function to handle both cases (with and without typed) more cleanly.
+
+                    So, the key is constructed by taking each argument and, if typed is True, appending its type. For positional args, each element is (a, type(a)) if typed, else a. For keyword arguments, each (k, v) becomes (k, (v, type(v))) if typed, else (k, v). And the separator is object() between args and kwds.
+
+                    So, the code can be written as:
+
+                    def _make_key(args, kwds):
+                        parts = list(args)
+                        if typed:
+                            new_parts = []
+                            for a in parts:
+                                new_parts.append( (a, type(a)) )
+                            parts = new_parts
+                        if kwds:
+                            parts.append( object() )
+                            for k, v in sorted(kwds.items()):
+                                if typed:
+                                    parts.append( (k, (v, type(v))) )
+                                else:
+                                    parts.append( (k, v) )
+                        return tuple(parts)
+
+                    That would be better. Let me see:
+
+                    For example, if typed is False, then the args are as is. The keywords are added as (k, v) after the separator. So the key is (args_tuple) followed by (object(), (k1,v1), (k2,v2)), etc.
+
+                    If typed is True, then each arg becomes (a, type(a)), and each keyword becomes (k, (v, type(v))).
+
+                    That's correct.
+
+                    So the previous code for _make_key had an error in the way it was building the key when typed is True. The original code tried to build a key by adding tuples, but using += on a tuple is possible only with another tuple. So in the original code, the line:
+
+                    key += (object(),) + tuple(sorted(kwds.items())) 
+
+                    would work when typed is False, but when typed is True, the key is a tuple of ( (a, type(a)), ... ), then adding (object(), ...) would create a new tuple. But in the original code's typed block, after setting key to tuple(new_args), then when appending the object and the new_kwds, the code was doing key += (object(),) + ... which is okay, but in the original code, the code for the kwds part when typed is True had a syntax error. Let me check:
+
+                    In the original code's typed block:
+
+                    if kwds:
+                        key += (object(),)
+                        new_kwds = []
+                        for k, v in sorted(kwds.items()):
+                            new_kwds.append( (k, (v, type(v))) )
+                        key += tuple(new_kwds)
+
+                    Wait, that's not correct. Because key is a tuple, and you can't do key += something unless the something is a tuple. So first, key is a tuple (new_args). Then, the first line adds (object(),), which is a tuple. But when you do key += (object(),), since key is a tuple and (object(),) is a tuple, this works. Then, the next part adds the new_kwds as a tuple. So the total key is correct.
+
+                    But in the code above, the code for the _make_key function when typed is True:
+
+                    key = tuple(new_args) → which is a tuple of ( (a, type(a)), ... )
+
+                    then, if there are kwds:
+
+                    key += (object(),) → but this is adding a single-element tuple. So the key becomes ( (a, type(a)), ... ) + (object(),) → that's okay.
+
+                    Then, for the new_kwds:
+
+                    new_kwds is a list of tuples (k, (v, type(v))). So converting to a tuple and adding to key.
+
+                    So, the code would work. But in the original code, there was a mistake in the way the parts were combined. Let me see:
+
+                    The initial code had:
+
+                    key = args → which is a tuple of the args.
+
+                    Then, if there are kwds, key += (object(),) + tuple(sorted(kwds.items())) → but when typed is True, the args part was changed to new_args (a list of tuples), then key is set to tuple(new_args), then adding the rest.
+
+                    So in the case where typed is True and there are keyword arguments, the code would be:
+
+                    key = tuple(new_args) → for the args part.
+
+                    then, key += (object(),) → that's a tuple (a, type(a)), ...) + (object(),). That's okay.
+
+                    then, key += tuple(new_kwds) → which is adding each of the keyword items ( (k, (v, type(v))) )
+
+                    So the final key is a tuple of all those parts.
+
+                    So this should work.
+
+                    So, to correct the code's _make_key function, perhaps better to use list comprehensions or a list to build the parts, then convert to a tuple.
+
+                    So here's a revised version of the _make_key function:
+
+                    def _make_key(args, kwds):
+                        key = []
+                        for arg in args:
+                            if typed:
+                                key.append( (arg, type(arg)) )
+                            else:
+                                key.append(arg)
+                        if kwds:
+                            key.append(object())
+                            for k, v in sorted(kwds.items()):
+                                if typed:
+                                    key.append( (k, (v, type(v))) )
+                                else:
+                                    key.append( (k, v) )
+                        return tuple(key)
+
+                    That's better. Because building a list and appending all parts, then converting to a tuple. This avoids the problem of trying to modify a tuple.
+
+                    So this would be the correct way.
+
+                    So putting that into code:
+
+                    Inside the outer function:
+
+                    def _make_key(args, kwds):
+                        parts = []
+                        for a in args:
+                            if typed:
+                                parts.append( (a, type(a)) )
+                            else:
+                                parts.append(a)
+                        if kwds:
+                            parts.append( object() )
+                            for k, v in sorted(kwds.items()):
+                                if typed:
+                                    parts.append( (k, (v, type(v))) )
+                                else:
+                                    parts.append( (k, v) )
+                        return tuple(parts)
+
+                    That's correct.
+
+                    Now, in the code above, the _TTLCache's get and set methods need to check the key in the cache.
+
+                    Now, another possible problem: the cache is an ordered dict, but the key may be a large tuple, so for large maxsize, this could be memory intensive, but that's a trade-off of the decorator.
+
+                    Now, putting all this together into code.
+
+                    Also, the standard lru_cache uses a separate cache for each function, so this approach is correct here.
+
+                    Now, the code should also include the necessary imports. Let me see:
+
+                    The code needs to import functools for wraps, collections.OrderedDict, and time for timer.
+
+                    So the code should start with:
+
+                    import functools
+                    import collections
+                    import time
+
+                    Then, the function:
+
+                    def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+                        def _make_key(args, kwds):
+                            parts = []
+                            for a in args:
+                                if typed:
+                                    parts.append( (a, type(a)) )
+                                else:
+                                    parts.append(a)
+                            if kwds:
+                                parts.append( object() )
+                                for k, v in sorted(kwds.items()):
+                                    if typed:
+                                        parts.append( (k, (v, type(v))) )
+                                    else:
+                                        parts.append( (k, v) )
+                            return tuple(parts)
+                        class _TTLCache:
+                            def __init__(self):
+                                self.maxsize = maxsize
+                                self.ttl = ttl
+                                self.timer = timer
+                                self.cache = collections.OrderedDict()
+                            def get(self, key):
+                                now = self.timer()
+                                if key in self.cache:
+                                    val, exp = self.cache[key]
+                                    if exp > now:
+                                        self.cache.move_to_end(key, last=True)
+                                        return val
+                                    else:
+                                        del self.cache[key]
+                                return None
+                            def set(self, key, value):
+                                now = self.timer()
+                                expire = now + self.ttl
+                                # Remove expired entries
+                                to_remove = []
+                                for k in self.cache:
+                                    val, exp = self.cache[k]
+                                    if exp <= now:
+                                        to_remove.append(k)
+                                for k in to_remove:
+                                    del self.cache[k]
+                                # Check if we need to evict
+                                if len(self.cache) >= self.maxsize:
+                                    self.cache.popitem(last=False)
+                                # Add the new key to the end
+                                self.cache[key] = (value, expire)
+                        cache = _TTLCache()
+                        def decorator(func):
+                            @functools.wraps(func)
+                            def wrapper(*args, **kwds):
+                                key = _make_key(args, kwds)
+                                result = cache.get(key)
+                                if result is not None:
+                                    return result
+                                result = func(*args, **kwds)
+                                cache.set(key, result)
+                                return result
+                            return wrapper
+                        return decorator
+
+                    Wait, but in the set method of the _TTLCache, when you do 'for k in self.cache', self.cache is an ordered dict, so the loop is over the keys in the order of insertion (LRU order). But when you remove those keys, the remaining ones are still in the correct order.
+
+                    Also, in the set method, after removing the expired entries, the code checks if the current length is >= maxsize. Then pops the oldest (first item). So that's correct.
+
+                    Now, in the code above, the _TTLCache's __init__ is taking the parameters from the outer function's scope. Since the class is inside the outer function, that's okay.
+
+                    But what if the outer function is called multiple times with different parameters? Each time, the class is redefined, so each instance will have the correct parameters.
+
+                    Yes, that's correct.
+
+                    Now, testing for possible errors. For example, when the function is called with the same arguments but different types, and typed is True, the key would be different, so they are stored separately. That's correct.
+
+                    Another test case: when the function is called again before the TTL, the key is found and the value is returned. The get method moves it to the end, so it's marked as recently used. So even if other entries are added, this one won't be evicted as long as it's still within the TTL.
+
+                    Now, the code may have a problem in the set method when multiple expired entries are present. The loop collects all expired keys and deletes them, so that's okay.
+
+                    Now, in the code, the _TTLCache's set method's first step is to loop through all keys in the cache and collect expired ones. So for each key in the cache, it checks if it's expired. Then deletes them all. But since the cache is an ordered dict, this is O(n), but for the purposes of this decorator, it's manageable.
+
+                    Now, the code uses 'del self.cache[k]' which is correct, but in the for loop, iterating over the keys in the cache, which is an ordered dict. So that's okay.
+
+                    Now, the code uses 'self.cache.popitem(last=False)' to remove the first item (oldest).
+
+                    Now, the code also uses 'collections.OrderedDict()' which is correct.
+
+                    Now, the code is written as per the problem's instructions. The user wants the code in markdown format, but just the code, no explanations. So I should write the code as per the above, but make sure that all parts are correctly implemented.
+
+                    Wait, in the _TTLCache's get method, when the key is found and is valid, the code moves it to the end, so the next time it's accessed, it's again moved to the end, maintaining the LRU order. That's correct.
+
+                    Now, in the set method, after removing expired entries, the code checks the length and pops if needed. Then adds the new key. The new key is added at the end of the ordered dict, so it's the most recently added.
+
+                    Now, the code may have an error in the set method's loop for removing expired entries. The 'for k in self.cache' is looping over the keys, but when you delete them, the loop continues. However, since we're using a list of the keys, that's okay.
+
+                    So the code should work.
+
+                    Now, possible edge cases: when maxsize is 0. The standard lru_cache ignores the cache when maxsize is 0. But in this code, when maxsize is 0, the set method would first remove expired entries, then check len(cache) >= 0 (which is always true, since even if there are 0 entries, len is 0, which is equal to maxsize). So the popitem would be called, but the cache is empty, leading to KeyError.
+
+                    Oh right! That's a problem. So the maxsize=0 case needs to be handled specially.
+
+                    Because if maxsize is zero, the cache should not store anything. So the set method should not add anything. Let's see.
+
+                    So in the _TTLCache's set method, when maxsize is zero:
+
+                    The first check after removing expired entries would have len(cache) = 0. Then, the if condition is 0 >= 0 → True, so it would try to pop an item from an empty cache → error.
+
+                    So the code needs to handle maxsize=0.
+
+                    The standard lru_cache with maxsize=0 disables caching, so the code should do the same. Let me think how to handle that.
+
+                    The _TTLCache's __init__ has self.maxsize = maxsize. So when maxsize is 0, the set method would see that, and perhaps not add anything. Or maybe in the decorator, when maxsize is zero, the wrapper just calls the function directly.
+
+                    So in the decorator function, perhaps we need to check if maxsize is 0, and return a different wrapper that doesn't use the cache.
+
+                    Alternatively, in the _TTLCache class, when maxsize is zero, the set method does nothing. Let's see:
+
+                    The code for set method's check:
+
+                    if len(self.cache) >= self.maxsize:
+
+                    So if maxsize is 0, then len is 0, which is equal, so the code would popitem, but the cache is empty. So it would throw an error.
+
+                    To fix this, perhaps the _TTLCache should not store anything when maxsize is 0. So in the set method, if maxsize is 0, just return. Or in the decorator, handle that case.
+
+                    So the best approach is to have the decorator check if maxsize is 0, and if so, just return the function unwrapped?
+
+                    Let me see. In the standard lru_cache, if maxsize is set to 0, it disables the cache. So perhaps in the decorator, when maxsize is 0, the wrapper just returns the function's result each time without using the cache.
+
+                    So, in the code's outer function:
+
+                    if maxsize == 0:
+                        return decorator that returns the function's result each time, not using the cache.
+
+                    So adding that:
+
+                    def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+                        if maxsize == 0:
+                            def null_decorator(func):
+                                return func
+                            return null_decorator
+                        else:
+                            # proceed with the rest of the code
+                            # ... (the previous code here)
+
+                    But in the current code structure, that would require modifying the code to add that check.
+
+                    So the code should first check if maxsize is zero, and return a no-op decorator.
+
+                    Otherwise, proceed.
+
+                    So adding that check.
+
+                    So modifying the code:
+
+                    import functools
+                    import collections
+                    import time
+
+                    def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+                        if maxsize == 0:
+                            def null_decorator(func):
+                                return func
+                            return null_decorator
+                        def _make_key(args, kwds):
+                            parts = []
+                            for a in args:
+                                if typed:
+                                    parts.append( (a, type(a)) )
+                                else:
+                                    parts.append(a)
+                            if kwds:
+                                parts.append( object() )
+                                for k, v in sorted(kwds.items()):
+                                    if typed:
+                                        parts.append( (k, (v, type(v))) )
+                                    else:
+                                        parts.append( (k, v) )
+                            return tuple(parts)
+                        class _TTLCache:
+                            def __init__(self):
+                                self.maxsize = maxsize
+                                self.ttl = ttl
+                                self.timer = timer
+                                self.cache = collections.OrderedDict()
+                            def get(self, key):
+                                now = self.timer()
+                                if key in self.cache:
+                                    val, exp = self.cache[key]
+                                    if exp > now:
+                                        self.cache.move_to_end(key, last=True)
+                                        return val
+                                    else:
+                                        del self.cache[key]
+                                return None
+                            def set(self, key, value):
+                                now = self.timer()
+                                expire = now + self.ttl
+                                to_remove = []
+                                for k in list(self.cache.keys()):
+                                    val, exp = self.cache[k]
+                                    if exp <= now:
+                                        to_remove.append(k)
+                                for k in to_remove:
+                                    del self.cache[k]
+                                if self.maxsize > 0:
+                                    if len(self.cache) >= self.maxsize:
+                                        self.cache.popitem(last=False)
+                                    self.cache[key] = (value, expire)
+                                else:
+                                    # but if maxsize is 0, which is handled in the outer if, so this case won't be reached
+                                    pass
+                        cache = _TTLCache()
+                        def decorator(func):
+                            @functools.wraps(func)
+                            def wrapper(*args, **kwds):
+                                key = _make_key(args, kwds)
+                                result = cache.get(key)
+                                if result is not None:
+                                    return result
+                                result = func(*args, **kwargs)
+                                cache.set(key, result)
+                                return result
+                            return wrapper
+                        return decorator
+
+                    Wait, but in the case where maxsize is 0, the code returns the null_decorator. So the rest of the code is only executed when maxsize is not zero. Therefore, in the set method, since the code is only used when maxsize is non-zero, the check can be omitted. So the set method's code for the maxsize=0 case is already handled.
+
+                    Therefore, the code with the initial check is okay.
+
+                    Also, in the set method's loop, the code uses list(self.cache.keys()) to iterate through a copy of the keys. So that's safe.
+
+                    Now, in the set method, the code after removing expired entries:
+
+                    if self.maxsize > 0 (which it is, since we have the initial check), then:
+
+                    if len(cache) >= maxsize, pop the first item, then add the new one.
+
+                    So the new entry will be added even if the maxsize is reached after popping.
+
+                    So that's correct.
+
+                    Now, the code for the _make_key function must handle **kwargs correctly. Wait, in the parameters, the function is called with **kwargs in the wrapper, so in the code, the wrapper's arguments are (args, **kwds) → so the kwds is a dictionary.
+
+                    So the code is okay.
+
+                    Now, I think that's all. Let me now write the code as per the problem's instructions, making sure that it's correct.

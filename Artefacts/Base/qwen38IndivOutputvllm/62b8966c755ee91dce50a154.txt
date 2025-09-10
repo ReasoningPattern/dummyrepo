@@ -1,0 +1,114 @@
+
+
+```python
+import datetime
+import re
+from dateutil.tz import tzoffset, tzutc
+
+def isoparse(self, dt_str):
+    if 'T' in dt_str:
+        date_part, time_part = dt_str.split('T', 1)
+    else:
+        date_part = dt_str
+        time_part = None
+
+    if 'W' in date_part:
+        parts = date_part.split('W')
+        year_str = parts[0]
+        rest = parts[1]
+        if '-' in rest:
+            week_str, day_str = rest.split('-', 1)
+            day = int(day_str) if day_str else 0
+        else:
+            week_str = rest
+            day = 0
+        year = int(year_str)
+        week = int(week_str)
+        first_day = datetime.date(year, 1, 1)
+        days_to_monday = (7 - first_day.weekday()) % 7
+        first_monday = first_day + datetime.timedelta(days=days_to_monday)
+        if day == 0:
+            day = 1
+        date = first_monday + datetime.timedelta(days=(week - 1) * 7 + (day - 1))
+    else:
+        try:
+            date = datetime.datetime.strptime(date_part, '%Y-%m-%d').date()
+        except ValueError:
+            try:
+                date = datetime.datetime.strptime(date_part, '%Y%m%d').date()
+            except ValueError:
+                try:
+                    date = datetime.datetime.strptime(date_part, '%Y-%m').date()
+                except ValueError:
+                    try:
+                        date = datetime.datetime.strptime(date_part, '%Y%m').date()
+                    except ValueError:
+                        date = datetime.datetime.strptime(date_part, '%Y').date()
+
+    if time_part is not None:
+        time_str = time_part.replace(',', '.')
+        if time_str.endswith('Z'):
+            time_str = time_str[:-1]
+            timezone_str = 'Z'
+        else:
+            timezone_match = re.search(r'([+-]?\d{2}(:\d{2})?|Z)$', time_str)
+            if timezone_match:
+                timezone_str = timezone_match.group(0)
+                time_str = time_str[: -len(timezone_str)]
+            else:
+                timezone_str = None
+
+        time_parts = time_str.split(':')
+        if len(time_parts) == 1:
+            hours = int(time_parts[0])
+            if hours == 24:
+                hours = 0
+            minutes = 0
+            seconds = 0
+        elif len(time_parts) == 2:
+            hours = int(time_parts[0])
+            minutes = int(time_parts[1])
+            seconds = 0
+        elif len(time_parts) == 3:
+            hours = int(time_parts[0])
+            minutes = int(time_parts[1])
+            seconds = int(time_parts[2])
+        else:
+            raise ValueError("Invalid time format")
+
+        if '.' in time_str:
+            time_part, fractional_part = time_str.split('.', 1)
+            fractional_digits = fractional_part[:6].ljust(6, '0')[:6]
+            microseconds = int(fractional_digits) * 1000
+        else:
+            microseconds = 0
+
+        time_obj = datetime.time(hours, minutes, seconds, microseconds)
+        dt = datetime.datetime.combine(date, time_obj)
+    else:
+        dt = datetime.datetime.combine(date, datetime.time(0, 0, 0, 0))
+
+    if timezone_str == 'Z':
+        dt = dt.replace(tzinfo=tzutc())
+    elif timezone_str is not None:
+        sign = 1 if timezone_str[0] == '+' else -1
+        offset_str = timezone_str[1:]
+        if ':' in offset_str:
+            hours_offset, minutes_offset = offset_str.split(':', 1)
+            hours_offset = int(hours_offset)
+            minutes_offset = int(minutes_offset)
+        else:
+            if len(offset_str) == 2:
+                hours_offset = int(offset_str)
+                minutes_offset = 0
+            elif len(offset_str) == 4:
+                hours_offset = int(offset_str[:2])
+                minutes_offset = int(offset_str[2:])
+            else:
+                raise ValueError("Invalid timezone offset format")
+        offset_seconds = (hours_offset * 3600 + minutes_offset * 60) * sign
+        tz = tzoffset(None, offset_seconds)
+        dt = dt.replace(tzinfo=tz)
+
+    return dt
+```

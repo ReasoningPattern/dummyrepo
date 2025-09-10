@@ -1,0 +1,95 @@
+
+
+```python
+import inspect
+from warnings import warn
+from zope.interface import Candidate, Interface
+
+def _verify(iface, candidate, tentative=False, vtype=None):
+    """
+    Verify that *candidate* might correctly provide *iface*.
+
+    This involves:
+    
+    - Making sure the candidate claims that it provides the
+      interface using ``iface.providedBy`` (unless *tentative* is `True`,
+      in which case this step is skipped). This means that the candidate's class
+      declares that it `implements <zope.interface.implementer>` the interface,
+      or the candidate itself declares that it `provides <zope.interface.provider>`
+      the interface
+
+    - Making sure the candidate defines all the necessary methods
+
+    - Making sure the methods have the correct signature (to the
+      extent possible)
+
+    - Making sure the candidate defines all the necessary attributes
+
+    :return bool: Returns a true value if everything that could be
+                  checked passed.
+    :raises zope.interface.Invalid: If any of the previous
+                                  conditions does not hold.
+    """
+    errors = []
+
+    if not tentative:
+        with warn("Using verify() with tentative=False is deprecated; use "
+                  "verify() with tentative=True instead.", DeprecationWarning):
+            if not (isinstance(candidate, Candidate) and iface in candidate.getProvidedInterfaces()):
+                raise Invalid("Candidate does not implement interface")
+
+    if not hasattr(iface, 'methods'):
+        raise Invalid("Interface does not have methods attribute")
+
+    for method_name in iface.methods:
+        if not hasattr(candidate, method_name):
+            errors.append(Invalid("Method %s not defined" % method_name))
+
+    for method_name in iface.methods:
+        method = getattr(candidate, method_name)
+        sig = inspect.signature(method)
+        parameters = list(sig.parameters.values())
+        
+        if not parameters:
+            continue
+        
+        for i, param in enumerate(parameters):
+            if not isinstance(param, inspect.Parameter):
+                continue
+            
+            param_name = param.name
+            if not param_name:
+                continue
+            
+            if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                errors.append(Invalid("Method %s has *args parameter" % method_name))
+                continue
+            
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                errors.append(Invalid("Method %s has **kwargs parameter" % method_name))
+                continue
+            
+            if param.default == inspect.Parameter.empty:
+                continue
+            
+            if param.default == inspect.Parameter.NO_DEFAULT:
+                errors.append(Invalid("Method %s has parameter without default value" % method_name))
+                continue
+            
+            if not param.annotation:
+                errors.append(Invalid("Method %s has no annotation" % method_name))
+                continue
+            
+            if param.annotation != param kinds[0].annotation:
+                errors.append(Invalid("Method %s has inconsistent annotation" % method_name))
+    
+    if not hasattr(iface, 'attributes'):
+        raise Invalid("Interface does not have attributes attribute")
+
+    for attr_name in iface.attributes:
+        if not hasattr(candidate, attr_name):
+            errors.append(Invalid("Attribute %s not defined" % attr_name))
+
+    if errors:
+        raise Invalid("\n".join([str(e) for e in errors]))
+```

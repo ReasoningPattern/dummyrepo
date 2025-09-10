@@ -1,0 +1,64 @@
+
+
+```python
+class LFUCache:
+    def __init__(self, user_function, maxsize, typed):
+        self.user_function = user_function
+        self.maxsize = maxsize
+        self.typed = typed
+        self.cache = {}
+        self.hits = 0
+        self.misses = 0
+        self.curr_time = 0
+        self.__name__ = user_function.__name__
+        self.__doc__ = user_function.__doc__
+
+    def __call__(self, *args, **kwargs):
+        if self.maxsize == 0:
+            return self.user_function(*args, **kwargs)
+        key = self._make_key(args, kwargs)
+        if key in self.cache:
+            self.hits += 1
+            result, count, _ = self.cache[key]
+            new_time = self.curr_time
+            self.cache[key] = (result, count + 1, new_time)
+            self.curr_time += 1
+            return result
+        else:
+            self.misses += 1
+            result = self.user_function(*args, **kwargs)
+            new_time = self.curr_time
+            self.cache[key] = (result, 1, new_time)
+            self.curr_time += 1
+            if len(self.cache) > self.maxsize:
+                evict_key = None
+                min_count = float('inf')
+                oldest_time = float('inf')
+                for k in self.cache:
+                    count, time = self.cache[k][1], self.cache[k][2]
+                    if count < min_count or (count == min_count and time < oldest_time):
+                        min_count = count
+                        oldest_time = time
+                        evict_key = k
+                del self.cache[evict_key]
+            return result
+
+    def _make_key(self, args, kwargs):
+        parts = []
+        for arg in args:
+            if self.typed:
+                parts.append((type(arg), arg))
+            else:
+                parts.append(arg)
+        for k, v in sorted(kwargs.items()):
+            if self.typed:
+                parts.append((k, (type(v), v)))
+            else:
+                parts.append((k, v))
+        return tuple(parts)
+
+def lfu_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        return LFUCache(user_function, maxsize, typed)
+    return decorating_function
+```

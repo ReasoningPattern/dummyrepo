@@ -1,0 +1,35 @@
+import yaml
+from some_module import IRValidatorException
+import inspect
+
+def validate_from_file(cls, yaml_file=None):
+    """
+    Validates that a YAML file contains all required fields as defined by the class's __init__ method.
+
+    :param cls: The class used to determine required fields.
+    :param yaml_file: Path to the YAML file.
+    :raises IRValidatorException: If any required field is missing.
+    :return: The loaded data as a dictionary.
+    """
+    if yaml_file is None:
+        raise ValueError("yaml_file must be provided")
+    
+    with open(yaml_file, 'r') as f:
+        data = yaml.safe_load(f)
+    
+    if hasattr(cls, '__init__'):
+        sig = inspect.signature(cls.__init__)
+        parameters = sig.parameters.values()
+        required_fields = set()
+        for param in parameters:
+            if param.kind in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD, param.KEYWORD_ONLY):
+                if param.name != 'self' and param.default == param.empty:
+                    required_fields.add(param.name)
+    else:
+        required_fields = set()
+    
+    for field in required_fields:
+        if field not in data:
+            raise IRValidatorException(f"Missing required field: {field}")
+    
+    return data

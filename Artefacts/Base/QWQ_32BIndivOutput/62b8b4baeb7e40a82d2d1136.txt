@@ -1,0 +1,63 @@
+
+
+```python
+from zope.interface import implementedBy, providedBy
+from zope.interface.exceptions import Invalid
+import inspect
+
+def _verify(iface, candidate, tentative=False, vtype=None):
+    errors = []
+    if not tentative:
+        if isinstance(candidate, type):
+            implemented = implementedBy(candidate)
+            if implemented is None or iface not in implemented:
+                errors.append(f"Class {candidate} does not implement interface {iface}")
+        else:
+            provided = providedBy(candidate)
+            if provided is None or iface not in provided:
+                errors.append(f"Object {candidate} does not provide interface {iface}")
+    for name in iface.names():
+        method = iface.queryMethod(name)
+        if method is not None:
+            if not hasattr(candidate, name):
+                errors.append(f"Missing method {name}")
+                continue
+            candidate_method = getattr(candidate, name)
+            if isinstance(candidate, type):
+                candidate_func = candidate_method
+            else:
+                candidate_func = candidate_method.__func__
+            try:
+                candidate_sig = inspect.signature(candidate_func)
+            except ValueError:
+                continue
+            params = list(candidate_sig.parameters.values())
+            if len(params) < 1:
+                errors.append(f"Method {name} has no self parameter")
+                continue
+            interface_sig = method.getSignatureInfo()
+            required = interface_sig['required']
+            candidate_rest = params[1:]
+            candidate_required = 0
+            for p in candidate_rest:
+                if p.default == inspect.Parameter.empty and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                    candidate_required += 1
+            if candidate_required != required:
+                errors.append(f"Method {name} has incorrect required parameters count (expected {required}, got {candidate_required})")
+                continue
+            interface_required_names = interface_sig['positional_or_keyword'][:required]
+            candidate_required_names = [p.name for p in candidate_rest[:required]]
+            if interface_required_names != candidate_required_names:
+                errors.append(f"Method {name} has incorrect parameter names in required positions (expected {interface_required_names}, got {candidate_required_names})")
+        else:
+            attr = iface.queryAttribute(name)
+            if attr is not None:
+                if not hasattr(candidate, name):
+                    errors.append(f"Missing attribute {name}")
+    if errors:
+        if len(errors) == 1:
+            raise Invalid(errors[0])
+        else:
+            raise Invalid('; '.join(errors))
+    return True
+```

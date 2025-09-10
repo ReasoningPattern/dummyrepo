@@ -1,0 +1,49 @@
+import re
+
+def find_tags(text: str, replacer: Optional[Union[callable, None]] = None) -> Tuple[Set, str]:
+    tags = set()
+    result_text = []
+    state = 'normal'  # can be 'normal' or 'inside_code'
+    current_segment = []
+    
+    for char in text:
+        if state == 'normal':
+            if char in ('#', '//', '"', '`'):
+                # End of normal text, start code block
+                if current_segment:
+                    result_text.append(''.join(current_segment))
+                    current_segment = []
+                state = 'inside_code'
+        elif state == 'inside_code':
+            if char in ('#', '//', '"', '`', '\n'):
+                # End of code block, add to result
+                result_text.append(''.join(current_segment))
+                current_segment = []
+                state = 'normal'
+        else:
+            current_segment.append(char)
+    
+    # Add the last segment if any
+    if current_segment:
+        result_text.append(''.join(current_segment))
+    
+    # Now process each segment
+    for segment in result_text:
+        if not segment.strip():
+            continue  # skip empty segments
+        if segment.startswith('//') or segment.startswith('"""') or segment.startswith('`'):
+            # It's a code block, add to result_text
+            result_text.append(segment)
+        else:
+            # Extract tags from normal text
+            tags_in_segment = re.findall(r'\b\w+\b', segment)
+            tags.update(tags_in_segment)
+            # Replace tags in the segment
+            if replacer is not None:
+                modified_segment = re.sub(r'\b\w+\b', lambda m: replacer(m.group(0)), segment)
+            else:
+                modified_segment = segment
+            result_text.append(modified_segment)
+    
+    final_text = ''.join(result_text)
+    return (tags, final_text)

@@ -1,0 +1,408 @@
+
+Okay, I need to generate Python code for the ansible_playbook function based on the given function signature and docstring. Let me start by understanding the parameters.
+
+The function takes ir_workspace, ir_plugin, playbook_path, and optional parameters verbose, extra_vars, and ansible_args. The docstring explains that it wraps the 'ansible-playbook' CLI. So the goal is to create a function that runs an Ansible playbook with these parameters.
+
+First, I should think about how to execute the ansible-playbook command. Since it's a CLI wrapper, probably using subprocess to run the command. But I need to make sure to handle the parameters correctly.
+
+The ir_workspace and ir_plugin might be used to get the necessary paths or configurations. For example, maybe the playbook_path is relative to the workspace directory. So I should combine the workspace path with the playbook_path to get the full path.
+
+Next, the verbose parameter. Ansible's verbosity is controlled by the -v flag. The number of v's depends on the level. So if verbose is 1, it's -v, 2 is -vv, etc. But I need to check if verbose is None or a valid integer. Also, the default for verbose in Ansible is 0, but maybe the function should default to a certain level. Wait, the docstring says verbose is optional, so perhaps the function should handle that. Let me think: if verbose is provided, use it; else, maybe default to 0. But the user might expect that if not specified, it uses the default from the plugin or workspace. Hmm, but the parameters are passed as is. So maybe just convert the verbose to the appropriate flags.
+
+Then, extra_vars is a dictionary that needs to be passed to Ansible. The way to do that is using the --extra-vars option, which takes a JSON string. So I can use json.dumps(extra_vars) to convert the dict to a JSON string and pass it as an argument.
+
+The ansible_args is a dict of arguments to pass directly to ansible-playbook. So those would be additional command-line arguments. For example, if ansible_args has 'check: true', that would translate to --check.
+
+So putting it all together, the function should construct the command as a list of strings. The base command is 'ansible-playbook'. Then add the playbook path. Then add the verbosity flags. Then handle extra-vars and other args.
+
+Wait, but how to handle the verbosity? Let's see: the verbose parameter can be None, which means no verbosity, or an integer. So if verbose is not None, we add '-v' multiplied by the value. For example, verbose=2 would be '--vv'.
+
+Wait, the Ansible CLI uses -v, -vv, -vvv, etc., for verbosity. So the function should map the verbose parameter to these flags. So if verbose is 1, add '-v'; if 2, add '-vv', and so on. But what if the user passes a string? The docstring says verbose is an Ansible verbosity level, which is typically an integer. So perhaps we should check if it's an integer and then generate the appropriate flags.
+
+But the function's parameters allow verbose to be None, so we need to handle that. Let's assume that if verbose is provided, it's an integer, and we generate the corresponding number of 'v's. If it's None, we don't add any verbosity flags.
+
+Then, for the extra_vars, if provided, we need to pass them as --extra-vars followed by the JSON string. Also, the ansible_args should be converted into their respective command-line options. For example, if ansible_args is {'check': True}, then we add '--check'.
+
+But how to handle the ansible_args? Each key in the dict should be a command-line argument. So for each key-value pair, we can create a string like '--key value' or '--key' if the value is None. Wait, but in Ansible, some arguments take flags, like --check, which is a flag without a value. So perhaps the function should process the ansible_args dictionary to generate the appropriate command-line arguments.
+
+Wait, the ansible_args is a dict of arguments to plumb down directly to Ansible. So maybe the keys are the argument names, and the values are their corresponding values. For example, {'check': True} would become '--check'.
+
+So, the steps are:
+
+1. Construct the command list starting with 'ansible-playbook'.
+2. Add the playbook path.
+3. Add verbosity flags based on the verbose parameter.
+4. Add --extra-vars with the JSON string if extra_vars is provided.
+5. Add all the ansible_args as command-line arguments.
+
+But how to handle the verbosity? Let me think. The verbose parameter is passed as an integer. So if verbose is 1, add '-v'; if 2, add '-vv', etc. But what if the user passes a string? The docstring says it's the verbosity level, which is typically an integer. So we can assume that verbose is an integer or None.
+
+So, code steps:
+
+- Check if verbose is not None. If so, append '-v' * verbose to the command.
+- For extra_vars, if provided, append '--extra-vars ' + json.dumps(extra_vars).
+- For ansible_args, iterate through the key-value pairs and append each as '--key value' or '--key' if the value is None.
+
+Wait, but the ansible_args might have keys that are not in the standard playbook arguments. However, the function is supposed to pass them directly, so we can't validate them. So just process them as is.
+
+But how to handle the case where a value is None? For example, if ansible_args has 'check': None, then we should pass --check.
+
+So, for each key in ansible_args, if the value is not None, append '--key value', else append '--key'.
+
+Wait, but in the function's parameters, the ansible_args is a dict of arguments. So for example, if the user passes {'check': True}, then we need to pass --check. But in Ansible, some arguments are flags (like check, tags, etc.) and others are options with values. However, the function is supposed to pass them directly, so perhaps the code should just take each key and value and format them as command-line arguments. But how to handle that? For example, if the key is 'vault_id', the value would be a string. So the code can just add '--' + key + ' ' + value if value is not None, else just '--' + key.
+
+Wait, but the standard way to pass arguments to ansible-playbook is using --key value. So the code can process each key-value pair in ansible_args as --key value.
+
+But what about the case where the key is a flag, like 'check'? Then, the value is not needed, but the code would still add --check. So that's correct.
+
+So, the code would:
+
+- Start with the command list: ['ansible-playbook', playbook_path]
+- Add verbosity flags: if verbose is not None, add '-v' * verbose
+- Add --extra-vars with the JSON string if extra_vars is provided
+- Add each key from ansible_args as a command-line argument. For each key, value in ansible_args.items(), append '--' + key + ' ' + str(value) if value is not None, else append '--' + key.
+
+Wait, but the playbook_path might be relative. So perhaps we need to get the absolute path using the ir_workspace. For example, maybe the playbook is in the workspace's directory. So the code should combine ir_workspace.path with playbook_path. But how? The ir_workspace is an object, maybe it has a path attribute. So the full path would be os.path.join(ir_workspace.path, playbook_path). But I need to check if the playbook_path is relative. So the code should construct the full path.
+
+But the function's parameters say that playbook_path is the playbook to invoke. So perhaps it's expected to be a full path, but maybe it's relative. To be safe, we can use the ir_workspace to resolve the path. For example, if the playbook is in the workspace's playbook directory, then we can join the workspace path with the playbook path.
+
+But without knowing the exact structure of ir_workspace, maybe the code should just use the playbook_path as is. However, the docstring says that ir_workspace is an Infrared Workspace object, so perhaps it's better to use it to get the correct path. For example, maybe the playbook is located in the workspace's directory, so we can do something like os.path.join(ir_workspace.path, playbook_path).
+
+But I'm not sure. The function's parameters don't specify that, but the docstring says that ir_workspace is part of the parameters. So perhaps the code should use ir_workspace to get the playbook path. Alternatively, maybe the playbook_path is already absolute. But since the function is part of a plugin, maybe the playbook is relative to the workspace.
+
+So, to make it safe, the code should resolve the playbook path using the ir_workspace. For example, maybe the playbook is in the workspace's playbook directory. So, the code could do:
+
+playbook_full_path = os.path.join(ir_workspace.path, playbook_path)
+
+But I need to make sure that the playbook_path is a valid path. However, the function's responsibility is to wrap the CLI, so perhaps it's up to the caller to provide the correct path. But the presence of ir_workspace suggests that it's part of the plugin's context, so maybe the code should use it to construct the full path.
+
+Alternatively, maybe the playbook_path is already absolute, and the ir_workspace is used for other purposes, like environment variables or inventory. But without more info, it's hard to tell. However, the function's parameters include ir_workspace and ir_plugin, which might be used to get the correct playbook path. For example, perhaps the ir_plugin has a method to get the playbook path, or the ir_workspace does. But the docstring doesn't specify that. So perhaps the code should just use the playbook_path as given, but maybe the ir_workspace is used to set the working directory or other options.
+
+Alternatively, maybe the ir_workspace is used to get the inventory or other parameters. But the function's parameters don't mention those. So perhaps the code should just use the playbook_path as is, but the ir_workspace might be used for other things, like setting the environment variables or the working directory. But again, without knowing the exact structure of ir_workspace, it's hard to say.
+
+But the function's parameters are as given, so the code should probably use the playbook_path as is. However, to make it more robust, maybe the code should check if the playbook_path is relative and prepend the workspace path. But again, without knowing the exact structure, perhaps the code should just pass the playbook_path as is. Maybe the ir_workspace is used elsewhere in the plugin, but for this function, the playbook path is provided.
+
+Hmm. Well, the function's docstring says that ir_workspace is an Infrared Workspace object, but the parameters don't mention using it for the playbook path. So maybe the playbook_path is already an absolute path. But perhaps the code should use the ir_workspace's path to resolve it. For example, if the playbook is in the workspace's directory, then the code should use os.path.join(ir_workspace.path, playbook_path). But how to handle that?
+
+Alternatively, maybe the ir_workspace is used to set the working directory. So the code could change the working directory to ir_workspace.path before running the command. But that's not specified in the docstring. The docstring says that the function wraps the CLI, so maybe the ir_workspace is used for other purposes, like environment variables or inventory.
+
+But perhaps the code should just pass the playbook_path as is, and the ir_workspace is used for other things. So maybe the code doesn't need to modify the playbook path. But that's unclear. However, given that the function's parameters include ir_workspace and ir_plugin, but the playbook_path is a separate parameter, perhaps the code should not modify the playbook path. So the code will just use the provided playbook_path.
+
+So, moving forward, the code will construct the command as follows:
+
+command = ['ansible-playbook', playbook_path]
+
+Then, add verbosity flags. So if verbose is not None, append '-v' * verbose.
+
+Then, if extra_vars is provided, append '--extra-vars ' + json.dumps(extra_vars).
+
+Then, for ansible_args, iterate through each key-value pair and append '--' + key + ' ' + str(value) if value is not None, else just '--' + key.
+
+Wait, but some Ansible arguments might require a different format. For example, --vault-id might take a value. But the function is supposed to pass them directly, so the code can't validate that. So we'll just pass them as is.
+
+But how to handle the case where a key is a flag (like 'check') and the value is True or False? In Ansible, --check is a flag, so passing --check True would be incorrect. But the function's parameters allow ansible_args to be a dict, so perhaps the code should process the keys and values accordingly. However, the function's docstring says that ansible_args is a dict of arguments to plumb down directly, so maybe the code should just pass them as is, without any processing. For example, if the key is 'check', the value is True, then the code would add '--check True', which is not correct. Wait, but in Ansible, the --check option is a flag, so it's just --check. So perhaps the code should check if the value is a boolean and if so, omit the value. But that's complicated. Alternatively, the code can pass the arguments as they are, assuming that the user knows how to format them correctly.
+
+But the function's docstring says that ansible_args is a dict of arguments to plumb down directly. So maybe the keys are the argument names, and the values are the arguments. For example, {'check': True} would be passed as --check. But how to handle that in code? Because the code would generate '--check True', which is not correct. So perhaps the code should check if the value is a boolean and if so, just add the flag. But that's not straightforward. Alternatively, maybe the ansible_args are supposed to be passed as-is, but the user is responsible for formatting them correctly. For example, if the user wants to pass --check, they would set ansible_args as {'check': None} or {'check': True}?
+
+This is a bit ambiguous. However, given that the function's parameters are as described, perhaps the code should just pass each key-value pair as --key value, regardless of whether the value is a flag or not. But that might not be correct. Alternatively, maybe the code should pass the arguments as they are, but the user is supposed to format them properly. For example, if the user wants to pass --check, they would set ansible_args as {'check': ''} or {'check': None}? Not sure.
+
+Alternatively, perhaps the code should process the ansible_args by converting keys to lowercase and handling boolean values. But again, without more info, it's hard to say. So maybe the safest way is to pass each key as --key and the value as is, even if it's a boolean. But in Ansible, some flags don't take values. So perhaps the code should check if the value is None, and if so, just add the flag. Otherwise, add the value.
+
+Wait, but in the function's parameters, the ansible_args is a dict. So for example, if the user wants to pass --check, they would have ansible_args as {'check': True} or {'check': None}? Or maybe they should pass it as {'check': ''}?
+
+This is unclear, but perhaps the code should handle the case where the value is a boolean by converting it to a flag. For example, if the value is True, then add '--check', else if False, add '--no-check'? But that's not specified in the docstring. So maybe the code should just pass the arguments as they are, with the key and value. So for each key in ansible_args, add '--' + key + ' ' + str(value) if value is not None, else just '--' + key.
+
+But in practice, when you pass arguments to ansible-playbook via the CLI, you can use --key=value or --key value. So perhaps the code should format the arguments as --key=value if the value is present. But how to handle that in the code? For example, if the value is a string, it's --key=value. If it's a boolean, maybe it's --key (without value) if True, or --no-key if False. But again, without knowing the exact parameters, it's hard to handle all cases.
+
+Alternatively, the code can pass each key-value pair as --key value, which is the standard way. So for example, if the key is 'vault_id' and the value is 'myvault', it would be --vault_id myvault. If the key is 'check' and the value is True, it would be --check True. But in Ansible, --check is a flag, so the value is not needed. However, the code can't know that, so perhaps it's better to pass them as is, and let the user handle the formatting.
+
+But the function's docstring says that ansible_args is a dict of arguments to plumb down directly to Ansible. So perhaps the code should pass them as --key value, even if that's not the correct format. However, that might not be correct. For example, if the user wants to pass --check, they should set the key to 'check' and the value to None, or maybe omit the value. But how to represent that in the dict?
+
+This is a bit of a problem. But given the ambiguity, perhaps the code should pass each key as --key and the value as is, even if it's a boolean. So, for example, if ansible_args is {'check': True}, the code would add '--check True', which is not correct. But maybe the user is supposed to pass the arguments in a way that's compatible with the CLI. For example, for flags, they can set the value to None, and the code would add '--check'.
+
+Alternatively, perhaps the code should check if the value is a boolean and if so, add the flag without the value. But that's not straightforward. Maybe the code can check if the value is a boolean and if so, add the flag. But that's not reliable. For example, if the value is a string 'True', it's not a boolean.
+
+Hmm. Well, given that the user is supposed to pass the arguments directly, perhaps the code should just pass them as they are. So for each key in ansible_args, add '--' + key + ' ' + str(value) if value is not None, else add '--' + key. But how to handle cases where the value is a boolean? For example, if the user wants to pass --check, they should set ansible_args as {'check': None} or {'check': True}? Maybe the code should treat any non-None value as a string to be passed. But that's not correct for flags. However, given the lack of information, perhaps the code should proceed with that approach.
+
+So, putting all together:
+
+Import necessary modules: os, json, subprocess.
+
+Then, construct the command list.
+
+Wait, but the function is supposed to be part of a plugin, so maybe the code should use the ir_workspace to get the correct playbook path. For example, maybe the playbook is in the workspace's directory. So the code could do:
+
+playbook_full_path = os.path.join(ir_workspace.path, playbook_path)
+
+But again, without knowing the structure, it's possible that the playbook_path is already absolute. However, given that it's a plugin, perhaps the playbook_path is relative to the workspace. So the code should resolve it using the workspace's path.
+
+So, the code would start by getting the full path of the playbook.
+
+Then, construct the command as:
+
+command = ['ansible-playbook', playbook_full_path]
+
+Then, add the verbosity flags.
+
+If verbose is not None, then add '-v' * verbose. For example, verbose=1 becomes '-v', verbose=2 becomes '-vv'.
+
+Then, if extra_vars is not None, add '--extra-vars ' + json.dumps(extra_vars).
+
+Then, for each key in ansible_args, add '--' + key + ' ' + str(value) if value is not None, else just '--' + key.
+
+But wait, in Ansible, the --extra-vars is a separate argument. So the code should process the extra_vars first, then the ansible_args.
+
+So, the code would look like:
+
+import os
+import json
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None, extra_vars=None, ansible_args=None):
+    """
+    Wraps the 'ansible-playbook' CLI.
+    :param ir_workspace: An Infrared Workspace object represents the active workspace
+    :param ir_plugin: An InfraredPlugin object of the current plugin
+    :param playbook_path: the playbook to invoke
+    :param verbose: Ansible verbosity level
+    :param extra_vars: dict. Passed to Ansible as extra-vars
+    :param ansible_args: dict of ansible-playbook arguments to plumb down directly to Ansible.
+    """
+    # Resolve playbook path using ir_workspace
+    playbook_full_path = os.path.join(ir_workspace.path, playbook_path)
+    
+    # Prepare command
+    command = ['ansible-playbook', playbook_full_path]
+    
+    # Add verbosity
+    if verbose is not None:
+        command.extend(['-v'] * verbose)
+    
+    # Add extra vars
+    if extra_vars is not None:
+        command.append('--extra-vars')
+        command.append(json.dumps(extra_vars))
+    
+    # Add ansible_args
+    if ansible_args is not None:
+        for key, value in ansible_args.items():
+            if value is not None:
+                command.append('--' + key)
+                command.append(str(value))
+            else:
+                command.append('--' + key)
+    
+    # Execute the command
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result
+
+Wait, but the way to add the ansible_args is a bit off. Because for each key-value pair, if the value is not None, we add '--key' and then the value. But in Ansible, some arguments take a value, others are flags. For example, --vault-id requires a value. So if the user wants to pass --vault-id, they would have to set the value to None? Or maybe they can pass it as a string. But this seems error-prone.
+
+Alternatively, perhaps the code should pass each key-value pair as --key=value. So for example, if the key is 'vault_id' and the value is 'myvault', then it's --vault_id=myvault. But in that case, the code would need to handle the value as a string. However, the user might have a value that's a boolean, which would be passed as a string. For example, if the value is True, it would be passed as 'True'.
+
+But the function's docstring says that ansible_args is a dict of arguments to plumb down directly. So perhaps the code should pass them as --key value, not --key=value. So for each key, if the value is present, add --key and then the value. But in that case, if the value is a boolean, it would be passed as a string. For example, --check True would be passed as --check True, which is not correct. But maybe the user is supposed to handle that.
+
+Alternatively, perhaps the code should pass the arguments as --key=value, regardless of the value. So, for each key in ansible_args, append '--' + key + '=' + str(value). But then, if the value is None, that would be --key=, which is invalid. So perhaps in that case, we just append '--' + key.
+
+But how to handle that? For example, if the key is 'check' and the value is True, then the code would add '--check=True', which is not correct. But maybe the user is supposed to pass the arguments in a way that's compatible with the CLI. For example, if they want to pass --check, they should set the value to None, and the code would add '--check'.
+
+But how to determine that? It's unclear. However, given that the user is passing a dict, maybe the code should treat each key as a flag, and if the value is present, it's passed as a string. But this is not ideal.
+
+Alternatively, perhaps the code should pass the arguments as they are, but in the format that the CLI expects. For example, if the key is 'check', and the value is True, then the code would add '--check' without the value. But how to do that? Well, the code can check if the value is a boolean and if so, add the flag without the value. But again, this is not reliable.
+
+Given the ambiguity, perhaps the code should just pass each key and value as --key value, even if that's not the correct format for some flags. Because the user is supposed to know how to format the arguments. For example, if they want to pass --check, they would set ansible_args as {'check': None}, and the code would add '--check'.
+
+But in that case, the code would append '--check' without a value. However, in the code above, when the value is None, it appends '--key' without a value. But when the value is not None, it appends '--key' and then the value. So that's correct.
+
+Wait, in the code I wrote earlier, for each key-value pair in ansible_args:
+
+if value is not None:
+    command.append('--' + key)
+    command.append(str(value))
+else:
+    command.append('--' + key)
+
+But that would result in, for example, {'check': True} being passed as --check True, which is not correct. Because --check is a flag that doesn't take a value. So the code would generate --check True, which is wrong. But the user is supposed to pass the arguments correctly. So perhaps the code should not add the value if it's a flag. But how to know which keys are flags?
+
+This seems like a problem. However, given the function's parameters, maybe the code should not handle that and just pass them as they are. The user is responsible for formatting the arguments correctly. So if they want to pass --check, they should set the value to None, and the code would add '--check'.
+
+So, in the code, for the ansible_args, the code should check if the value is None. If it is, then add '--key'. Otherwise, add '--key' and the value. But that would require that the user knows to set the value to None for flags. Which is a bit odd, but perhaps that's how it's intended.
+
+Alternatively, maybe the code should pass the arguments as --key=value regardless of the value. But then, if the value is None, it would be --key=, which is invalid. So perhaps the code should only add the value if it's not None. So for example, if the key is 'check' and the value is True, then it's --check True, which is not correct. But maybe the user is supposed to pass the arguments as --key=value, and for flags, they can pass the value as a string like 'True' or 'False'.
+
+But this is getting too complicated. Given that the function's docstring says that ansible_args is a dict of arguments to plumb down directly, perhaps the code should pass them as --key value, which is the standard way. So for example, if the key is 'check' and the value is True, it would be --check True. But in practice, that's not correct. However, the user might be expected to know that for flags, they should pass the value as None, and the code would add just --check.
+
+But how to handle that? Let me think. If the user wants to pass --check, they should set ansible_args as {'check': None}, and the code would append '--check' once. If they want to pass --check with a value, they can set the value accordingly.
+
+So the code should process each key in ansible_args. For each key, if the value is not None, add '--key' and the value. Else, add '--key'.
+
+But in the code above, when the value is not None, it appends '--key' and then the value. So for {'check': True}, it would be --check True, which is not correct. But maybe that's the way the user is supposed to pass it. For example, if they want to pass --check, they can set the value to None. If they want to pass --check with a value, they can set the value accordingly.
+
+Alternatively, perhaps the code should pass the arguments as --key=value, regardless of the value. So for each key, append '--' + key + '=' + str(value). But then, if the value is None, it would be --key=, which is invalid. So maybe the code should check if the value is None and skip adding it. But that's not clear.
+
+Given the ambiguity, perhaps the code should pass the arguments as they are, using the key and value. So the code would generate the command as:
+
+for key, value in ansible_args.items():
+    if value is not None:
+        command.append('--' + key)
+        command.append(str(value))
+    else:
+        command.append('--' + key)
+
+But that would result in --check True if the value is True, which is not correct. But maybe that's the way the user is supposed to pass it. For example, if they want to pass --check, they can set the value to None, and the code would add '--check'. If they want to pass --check with a value, they can set the value accordingly.
+
+But in practice, the ansible-playbook CLI expects flags without values. So perhaps the code should handle that by checking if the value is a boolean and if so, add the flag without the value. But again, without knowing the exact keys, it's not possible.
+
+Alternatively, perhaps the code should pass the arguments as --key=value, and the user is responsible for formatting them correctly. For example, if they want to pass --check, they can set the value to None, and the code would add '--check' without a value. But how to do that? Because in the code, when the value is None, it appends '--key' once. So for {'check': None}, it would be --check. For {'check': 'somevalue'}, it would be --check somevalue. Which is correct.
+
+So the code would handle that correctly. So the code for processing ansible_args is:
+
+if ansible_args is not None:
+    for key, value in ansible_args.items():
+        if value is not None:
+            command.append('--' + key)
+            command.append(str(value))
+        else:
+            command.append('--' + key)
+
+But then, for example, if the key is 'vault_id' and the value is 'myvault', it would be --vault_id myvault. Which is correct. If the key is 'check' and the value is None, it's --check. Which is correct.
+
+So that seems acceptable.
+
+Now, the code would also need to handle the ir_workspace. For example, maybe the playbook path is relative to the workspace. So the code should resolve the full path using os.path.join(ir_workspace.path, playbook_path). But what if the playbook_path is absolute? Then it's okay. But perhaps the function expects the playbook_path to be relative, so using the workspace's path is better.
+
+So, the code would:
+
+playbook_full_path = os.path.join(ir_workspace.path, playbook_path)
+
+But then, if the playbook_path is already absolute, this would append it to the workspace path, which might not be correct. However, the function's responsibility is to wrap the CLI, so perhaps the code should use the playbook_path as is, but the ir_workspace is used for other purposes, like setting environment variables or inventory.
+
+Alternatively, maybe the ir_workspace is used to set the working directory. So the code should change the working directory to ir_workspace.path before running the command. But the function's parameters don't mention that. So perhaps the code should not do that, but just pass the playbook path.
+
+But given that the function is part of a plugin, perhaps the playbook_path is relative to the workspace. So the code should resolve it.
+
+So, the code would use os.path.join(ir_workspace.path, playbook_path) to get the full path.
+
+Now, the code would need to import os, json, and subprocess.
+
+Then, execute the command using subprocess.run, capturing the output and error.
+
+But the function returns the result. However, the docstring doesn't specify what the return value is. Maybe it returns the subprocess result, or some processed output.
+
+But the user hasn't specified, so perhaps the code should return the result of the subprocess.run call.
+
+But the function is supposed to wrap the CLI, so perhaps it's better to use subprocess.run with capture_output=True, text=True, and return the result.
+
+So, the code would be:
+
+import os
+import json
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None, extra_vars=None, ansible_args=None):
+    """
+    Wraps the 'ansible-playbook' CLI.
+    :param ir_workspace: An Infrared Workspace object represents the active workspace
+    :param ir_plugin: An InfraredPlugin object of the current plugin
+    :param playbook_path: the playbook to invoke
+    :param verbose: Ansible verbosity level
+    :param extra_vars: dict. Passed to Ansible as extra-vars
+    :param ansible_args: dict of ansible-playbook arguments to plumb down directly to Ansible.
+    """
+    playbook_full_path = os.path.join(ir_workspace.path, playbook_path)
+    command = ['ansible-playbook', playbook_full_path]
+    
+    if verbose is not None:
+        command.extend(['-v'] * verbose)
+    
+    if extra_vars is not None:
+        command.append('--extra-vars')
+        command.append(json.dumps(extra_vars))
+    
+    if ansible_args is not None:
+        for key, value in ansible_args.items():
+            if value is not None:
+                command.append('--' + key)
+                command.append(str(value))
+            else:
+                command.append('--' + key)
+    
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result
+
+Wait, but in the case of extra_vars, the command is ['--extra-vars', json.dumps(extra_vars)], which is correct. For example, if extra_vars is {'var1': 'value1'}, then it's passed as --extra-vars '{"var1": "value1"}'.
+
+But when you run ansible-playbook, the --extra-vars is followed by the JSON string. So that's correct.
+
+Now, what about the ir_plugin? The parameters include it, but the code doesn't use it. The docstring says that ir_plugin is an InfraredPlugin object of the current plugin. But the function doesn't use it. Maybe it's for logging or other purposes. But the function's code as written doesn't use it. However, the user hasn't specified how to use it, so perhaps it's not needed here. So the code can ignore it for now.
+
+So the final code would be as above.
+
+But wait, the function's parameters are ir_workspace, ir_plugin, playbook_path, verbose, extra_vars, ansible_args. The code uses ir_workspace to resolve the playbook path, but the ir_plugin is not used. Maybe the ir_plugin is used for something else, like getting the playbook path, but that's not clear. However, given the information, the code uses ir_workspace to get the path.
+
+So, the code is as written. But maybe the ir_plugin has a method to get the playbook path. But without knowing that, it's better to use the ir_workspace.path.
+
+So, the code should be as above.
+
+Now, the code needs to be in Python markdown format. So the output should be the code wrapped in triple backticks.
+
+But the user said to output only the code, no explanation. So the final code is:
+
+import os
+import json
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None, extra_vars=None, ansible_args=None):
+    """
+    Wraps the 'ansible-playbook' CLI.
+    :param ir_workspace: An Infrared Workspace object represents the active workspace
+    :param ir_plugin: An InfraredPlugin object of the current plugin
+    :param playbook_path: the playbook to invoke
+    :param verbose: Ansible verbosity level
+    :param extra_vars: dict. Passed to Ansible as extra-vars
+    :param ansible_args: dict of ansible-playbook arguments to plumb down directly to Ansible.
+    """
+    playbook_full_path = os.path.join(ir_workspace.path, playbook_path)
+    command = ['ansible-playbook', playbook_full_path]
+    
+    if verbose is not None:
+        command.extend(['-v'] * verbose)
+    
+    if extra_vars is not None:
+        command.append('--extra-vars')
+        command.append(json.dumps(extra_vars))
+    
+    if ansible_args is not None:
+        for key, value in ansible_args.items():
+            if value is not None:
+                command.append('--' + key)
+                command.append(str(value))
+            else:
+                command.append('--' + key)
+    
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result
+
+But wait, the way the command is constructed for ansible_args may not be correct. For example, if the key is 'vault_id' and the value is 'myvault', the code would add --vault_id myvault. Which is correct. If the value is None, it adds --vault_id. But in Ansible, --vault_id requires a value. So this would be incorrect. However, the user is supposed to pass the arguments correctly. So perhaps the code should not handle that, and it's up to the user to pass the correct values.
+
+But maybe the code should pass the arguments as --key=value regardless of the value. So for example, if the key is 'vault_id' and the value is 'myvault', then it's --vault_id=myvault. But how to do that? The code would need to format each key-value pair as --key=value.
+
+So, changing the code for ansible_args:
+
+if ansible_args is not None:
+    for key, value in ansible_args.items():
+        command.append('--' + key + '=' + str(value))
+
+But then, if the value is None, it would be --key=, which is invalid. So perhaps the code should check if the value is None and skip adding it. But that's not correct for all cases. For example, some arguments might require a value, but the user might want to pass it as None. But this is unclear.
+
+Alternatively, maybe the code should pass the arguments as --key value, which is the standard way. So for example, --vault_id myvault would be passed as --vault_id myvault. Which is correct.
+
+But in the code above, if the value is None, then it appends '--key' once. Which would be --key, which is a flag. For example, if the key is 'check', and value is None, then it adds --check, which is correct.
+
+So the code is correct in that aspect.
+
+But what if the playbook_path is not in the ir_workspace.path? Then the code would try to join it, which might not be correct. However, the function's parameters are as given, so it's up to the caller to provide the correct playbook_path. But the presence of ir_workspace suggests that the playbook path is relative to the workspace. So the code should resolve it.
+
+So the code seems correct. Now, the function returns the result of subprocess.run. But perhaps the user wants to capture stdout and stderr, so the code uses capture_output=True and text=True to get the output as a string.
+
+So, the final code is as written above.

@@ -1,0 +1,496 @@
+Okay, so I need to create a Python decorator called lru_cache that works similarly to the built-in one but I have to write it from scratch. Let's see, the function signature is given as def lru_cache(maxsize=128, typed=False): and the docstring explains that it's a memoizing callable using LRU with a maxsize. Hmm, right.
+
+First, I remember that decorators can be written with parameters, so this function will return another decorator that actually wraps the function. The built-in lru_cache uses a dictionary to store the results, but with an LRU twist. The typed parameter probably means that different types of arguments are considered different keys. Like, if you call the function with 1 and then with 1.0, if typed is True, those are treated as separate calls because one is an int and the other a float.
+
+So the steps are: create a decorator that takes the maxsize and typed parameters. Then, when wrapping a function, it needs to track the cache entries, keeping the most recent ones and evicting the least recently used when the limit is reached.
+
+Wait, how to structure the cache? Maybe a dictionary for the key-value pairs, and a linked list or an ordered structure to track the order of access. Alternatively, using an OrderedDict which has methods to move elements to the end and pop the first, which would help with LRU. Oh right, since in Python 3, there's the collections.OrderedDict, but maybe I can use that here. But since I'm supposed to generate the code without relying on existing implementations, I need to simulate that behavior.
+
+Alternatively, maybe use a list to keep track of the order, but that might be less efficient. Let me think. The standard approach for LRU is to have an ordered dictionary where each access moves the element to the end, and when the size exceeds maxsize, we pop the first element. So using that structure would be efficient. But since the user wants me to generate the code, I have to implement that logic.
+
+Wait, the problem says to generate the code based on the given signature and docstring, so I should proceed.
+
+Let me outline the steps:
+
+1. The lru_cache function is a decorator factory, so it will return a decorator that in turn wraps the actual function.
+
+2. The decorator will need to handle the function's calls, checking if the arguments are in the cache, considering the 'typed' parameter. So when typed is True, the types of the arguments matter, so the key should include the types as well as the values.
+
+3. For each call to the wrapped function, we need to generate a key based on the arguments and the function's name (or not?), wait no, the key is just the arguments. But the function's parameters can be positional or keyword, so we need to handle that. The function signature might have *args and **kwargs, so the key needs to capture all of those, along with their types if typed is True.
+
+Hmm, how to create the key? For a function with positional and keyword args, the standard approach is to use the args and the sorted kwargs as a tuple. But when typed is True, each argument's type is part of the key. Wait, actually, the typed parameter in the original lru_cache means that, for example, f(1) and f(1.0) are considered different calls if typed is True. So the key would be something like (arg1, type(arg1)), etc. Wait, no, maybe the types are part of the key. So for each argument, we include its type in the key. So the key is a tuple that includes all the positional arguments and their types, and the keyword arguments and their types as well. That way, different types would result in different keys.
+
+Wait, perhaps the key is a tuple where each element is (value, type(value)), so that when typed=True, the cache will treat different types as separate entries. For example, (1, <class 'int'>) vs (1.0, <class 'float'>) would be different keys. That makes sense.
+
+So, first, when creating the key, we need to process the *args and **kwargs. Let's see, for the arguments, each element in *args is part of the key, and for the **kwargs, we need to sort them by key to ensure that the same parameters in different orders are considered the same key. So the key would be a tuple combining the function's name? Wait no, the function is the one being wrapped, so the key is just based on the arguments. Wait, actually, the function's identity is part of the cache? Or is the cache per function? Because each decorated function would have its own cache.
+
+Wait, the decorator is applied to a function. So each time the lru_cache is called with maxsize and typed, it returns a decorator that when applied to a function, wraps it with the cache logic.
+
+So the structure would be something like:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        # setup cache here, maybe using a wrapper function
+        cache = {}
+        order = []  # to track the order, but need to manage this properly
+        # but maybe better to use an ordered dict?
+        # but how to track size?
+        # perhaps need a dictionary for the keys and their values, and a list to track the order, and the list's length is checked against maxsize.
+        # but then moving elements around would be O(n), which is not ideal. Hmm.
+        # Alternatively, use an OrderedDict which automatically maintains insertion order. When you access an item, you can move it to the end, and when the length exceeds maxsize, pop the first item.
+        # Oh right, maybe that's the way to go. Let me think.
+
+        # So let's try using an OrderedDict. But the user might not have that, but since the question is for a Python engineer, perhaps we can assume it's available.
+
+        # Wait, but in Python versions before 3.7, the regular dict doesn't track order, so we need to use collections.OrderedDict explicitly.
+
+        from collections import OrderedDict
+        cache = OrderedDict()
+        hits = 0
+        misses = 0
+
+        def wrapper(*args, **kwargs):
+            nonlocal hits, misses
+            # create the key
+            key_args = args
+            key_kwargs = tuple(kwargs.items())
+            # sort the kwargs so that order doesn't matter
+            key_kwargs_sorted = tuple(sorted(key_kwargs))
+            key = (key_args, key_kwargs_sorted)
+            # if typed is True, include the types in the key
+            if typed:
+                # Need to build a key that includes types for each argument
+                # For positional args:
+                typed_args = []
+                for arg in args:
+                    typed_args.append( (arg, type(arg)) )
+                # For keyword args:
+                typed_kwargs = []
+                for k, v in sorted(kwargs.items()):
+                    typed_kwargs.append( (k, v, type(v)) )
+                key = (tuple(typed_args), tuple(typed_kwargs))
+            # check if key exists in cache
+            if key in cache:
+                # move to end to mark as recently used
+                # in an ordered dict, we can pop and re-insert
+                hits +=1
+                val = cache.pop(key)
+                cache[key] = val  # reinsert to the end
+                return val
+            else:
+                # compute the result
+                misses +=1
+                result = func(*args, **kwargs)
+                # add to the cache
+                cache[key] = result
+                # if over maxsize, evict the oldest
+                if len(cache) > maxsize:
+                    cache.popitem(last=False)
+                return result
+
+        # Also, need to add some attributes to the wrapper, like cache_info and cache_clear, similar to the built-in.
+
+        def cache_info():
+            return f'hits={hits}, misses={misses}, maxsize={maxsize}, current size={len(cache)}'
+
+        def cache_clear():
+            nonlocal hits, misses
+            cache.clear()
+            hits = 0
+            misses = 0
+
+        wrapper.cache_info = cache_info
+        wrapper.cache_clear = cache_clear
+
+        return wrapper
+
+    return decorator
+
+Wait, but there's a problem here. The wrapper function is using an ordered dict. When you pop and re-insert, that's O(1) for the popitem, but popping a specific key is O(n). Because in an ordered dict, to pop a specific key, you have to traverse the list until you find it, which is O(n). So that's a problem for the key lookup. So the key lookup would be O(1) if we just check the existence in the dict, but moving the key to the end when it's accessed requires that the ordered dict can do that efficiently. Oh right, the standard way is to use __missing__ and pop then re-add, but maybe in this case, since we are using a regular dict, that's not possible. Wait, no, in the code above, I'm using an ordered dict. Wait, in the code above, the key is stored in an ordered dict, so checking existence is O(1). Then when we pop the key, that's O(1) because the ordered dict can track the position. Wait, no, popping a specific key from an ordered dict is O(n) in the worst case, but maybe in practice it's manageable. Hmm. Alternatively, maybe the standard approach is to have the cache as a regular dictionary, and another structure to track the order, like a list or something. But that might complicate things.
+
+Alternatively, the built-in lru_cache uses a linked list to track the order, so that when you access a key, you can move it to the end in O(1) time, and when you need to evict, you remove the head. So perhaps using an OrderedDict is the way to go here.
+
+Wait, in the code above, I have the cache as an ordered dict, but when we pop the key, then reinsert it, that's O(1) for both steps? Let me think. The pop(key) would be O(1), because in an ordered dict, the nodes are linked. So if you have a reference to the node, you can remove it. But the pop(key) in an ordered dict is O(1) (since it's a dictionary under the hood), but when you pop the key, it's removed from the order list as well. So when you do cache.pop(key), that removes it from the order, then adding it again with cache[key] = val would put it at the end. That way, the access moves the key to the end. So that's correct. And when the size exceeds maxsize, you pop the first item (the oldest), which is O(1) with popitem(last=False).
+
+So that approach should work.
+
+Wait, but in the code I wrote above, the key is built correctly? Let me see. For the non-typed case, the key is (args, sorted(kwargs.items())). That's okay, but the args are a tuple, and the kwargs are sorted, so two calls with the same args and same kwargs but in different order would have the same key. That's correct because the function's parameters would be the same regardless of the order of the keyword arguments. So that's good.
+
+In the typed case, for each positional argument, we have (arg, type(arg)), so the key is a tuple of those. For keyword arguments, each is (k, v, type(v)), sorted by the key. So that should include the types. So yes, that would make 1 vs 1.0 different keys when typed is True.
+
+Wait, but the function's parameters might be of different types. Let's see, for example, if the function is called with (1, 2) and (1.0, 2), then the first element's type would be different, so the keys would be different. That's correct.
+
+Now, the code uses an ordered dict. So the order of insertion and access is tracked. Each time a key is accessed (hit), it's popped and reinserted, so it becomes the last. When a new key is added (a miss), it's inserted at the end. Then, when the cache is full, the first item (the LRU one) is popped.
+
+Now, the problem is that in the code, the key for the non-typed case is (args, sorted_kwargs). Wait, let me check again. For the non-typed case, the key is (key_args, key_kwargs_sorted), where key_kwargs_sorted is the sorted tuple of the items. So the key is a tuple of (args, sorted_kwargs). That's correct because the order of positional args matters, but the order of keyword args in the tuple is sorted, so that {'a':1, 'b':2} and {'b':2, 'a':1} would result in the same key.
+
+Wait, but in the code, when the typed is False, the key is (args, key_kwargs_sorted). So yes, that's right. But when the function is called with different keyword arguments but same keys, the key would be the same. So that's correct.
+
+Now, the code also has to track the number of hits and misses. The nonlocal variables are inside the wrapper and the inner functions. Wait, but the inner functions like cache_info and cache_clear are inside the decorator's function. So they can access hits and misses as nonlocal variables?
+
+Yes, because in Python, nested functions can access variables from the outer scope if they are declared nonlocal. So the variables hits and misses are in the same scope as the wrapper function, so the inner functions can modify them via nonlocal.
+
+Wait, but in the code above, the wrapper is the outer function, and cache_info and cache_clear are defined inside the decorator function. So the nonlocal declarations would refer to variables in the decorator's closure. That should be okay.
+
+Now, the problem is that the original lru_cache also has some more features, like the __wrapped__ attribute, but maybe the user doesn't require that. Since the question's docstring is similar to the standard one but perhaps the code can be simplified.
+
+Another thing: the maxsize can be zero, but the problem says the default is 128, so maybe we need to handle maxsize=0 as no caching. Wait, but the problem says "saves up to `maxsize` results". So if maxsize is zero, it should not cache anything, just work as the original function. So in the code, if maxsize is zero, the cache is not used. So perhaps in the decorator, we need to check if maxsize is zero, and return the original function instead. Otherwise, the code as written would still use a cache even if maxsize is zero, but then immediately evict, which is the same as not caching. Hmm, maybe better to handle that case.
+
+Wait, in the code above, when maxsize is zero, then after adding a new entry, the length would be 1, so it would pop the first item. So the cache would always be empty. So that's okay, but perhaps it's more efficient to just not use the cache. But maybe the code can just proceed as written.
+
+Alternatively, the code can have a check in the wrapper. For example, if maxsize is 0, return the original function. But how?
+
+In the decorator factory:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        if maxsize ==0:
+            return func  # no cache
+        else:
+            # proceed with the wrapper
+            ...
+    return decorator
+
+That would be better. Because otherwise, when maxsize is zero, the code would still do all the checks but the cache is never used. So adding that condition would optimize it.
+
+Hmm, okay, so that's a necessary addition. Let me adjust that.
+
+Wait, also, the original lru_cache has a __doc__ and __name__ preserved. But the user's docstring doesn't mention that, so maybe we can skip that for simplicity. The question doesn't require that, so perhaps it's okay.
+
+So, putting it all together. Let me restructure the code with the maxsize check.
+
+Wait, also, the typed parameter is a boolean. So in the key creation, when typed is True, we include the types of each argument and each keyword argument's value.
+
+Wait, in the code above, for the positional args, each element in key_args is (arg, type(arg)), so that's correct. For the keyword args, each (k, v, type(v)) is part of the tuple. So the key is a tuple of two elements: the positional args (each with their type), and the sorted keyword tuples (each with key, value, and value's type). So that should work.
+
+Wait, but what about the function's parameters that are mutable? Like lists as arguments. Since tuples can't have mutable elements, but that's a problem in the original lru_cache as well. The user is supposed to use hashable arguments. So the decorator should only work with functions that have hashable arguments, but that's beyond the scope here. The code can proceed under the assumption that the keys are hashable.
+
+Another possible issue: when building the key, for the non-typed case, the key is (args, sorted_kwargs). But the args are a tuple, and sorted_kwargs is a tuple of tuples. So the key is a tuple of a tuple and another tuple. That's hashable.
+
+So the code structure would be:
+
+Importing OrderedDict inside the decorator function (since it's in the closure).
+
+Wait, in the code above, from collections import OrderedDict is inside the decorator function. Wait, but that could cause an error if the code is called multiple times. Because each time the decorator is called, the import would run again. But since importing is a module-level operation, it's okay. So that's not an issue. The import is inside the decorator's function, which is okay as long as it's executed once per decorated function.
+
+Wait, no, actually, the import is inside the decorator function (the inner one), which is called once per decorated function. So each time you decorate a function with lru_cache, it would import again. Which is redundant but harmless.
+
+Alternatively, move the import to the top. Since the user is supposed to be a Python engineer, perhaps better to have the import at the top. Wait, but the code starts with the function definition. So maybe the code should have the import at the beginning. Let me see.
+
+Wait, the code as written has the import inside the decorator function. That's okay, but maybe more efficient to do it once. Hmm, but in Python, the import is inside the function, so every time the function is called, it would re-import. But since the function is a decorator factory, the import would be executed once per call to lru_cache, which could be multiple times. So perhaps better to import at the top.
+
+Wait, the code is supposed to be generated, so let me adjust that.
+
+Wait, the code as written in the first attempt has:
+
+def lru_cache(...):
+    def decorator(func):
+        from collections import OrderedDict
+        ...
+
+So that's okay. But maybe better to have the import outside. Let me see the problem's constraints again. The user just wants the code based on the given signature and docstring. So perhaps that's acceptable. Alternatively, maybe better to import at the top of the code.
+
+Wait, the code needs to be in a single block. So I should import at the top. Let me adjust.
+
+Wait, but in the code, the lru_cache function is the outer one. So the code should have:
+
+from collections import OrderedDict
+
+def lru_cache(...):
+
+    def decorator(func):
+
+        cache = OrderedDict()
+
+        ... 
+
+Wait, but then the import is outside. But if the user is using a Python version without collections? Well, that's a given, since the problem is for a Python engineer, and in standard Python, collections is available.
+
+So better to have the import at the top. Let me correct that.
+
+Another thing: the code's cache_info and cache_clear functions are defined inside the decorator, but the wrapper function needs to have those as attributes. So in the code, I added:
+
+wrapper.cache_info = cache_info
+
+wrapper.cache_clear = cache_clear
+
+Yes, that's right. The cache_info returns a string, but maybe the original has a more detailed return. The problem's docstring doesn't specify, so perhaps the code can just return the string as in the example.
+
+Wait, in the original lru_cache, cache_info() returns a named tuple, but maybe for simplicity, the user's code can just return a string. The docstring says "returns based on LRU", so perhaps the info is sufficient as given.
+
+Now, let me test some edge cases. Suppose maxsize is 1. Let's say we call f(1), then f(2), then f(1) again. The first call would be stored, the second would evict the 1's entry, then when accessing the 1 again, since it's not in the cache, it would be a miss again, right? Wait no, in the code above, after the first call, when we call f(1), it's a hit. Let's see:
+
+First call f(1):
+
+Key is made, not in cache, so compute result. Then add to cache. Since maxsize is 1, the length is 1, so no eviction.
+
+Second call f(2):
+
+Key is new. So compute, add. Now the cache has two entries. Since maxsize is 1, we pop the first one (the LRU, which was the first entry). So the first entry (1's key) is removed, and the second (2's key) is added.
+
+Third call f(1):
+
+Check if key exists. It's not there, so miss. Compute again, add. The size becomes 2, so evict the first (which is now the 2's key). So the cache now has the 1 again. That's correct.
+
+Another case: maxsize is None? Wait, the problem says the default is 128, but perhaps the user expects that maxsize can be set to None for unlimited? But the docstring says "saves up to `maxsize` results". So maybe the maxsize can't be None here. The problem's signature specifies maxsize as 128, so perhaps it's okay.
+
+Wait, in the original lru_cache, setting maxsize to None gives an unlimited cache. But the problem's parameters don't mention that. So perhaps in this code, when maxsize is 0, it's not cached, but otherwise, it's limited. So the code as written will handle that.
+
+Now, what about the typed parameter? Let's see a case where typed is True.
+
+Suppose the function is called with f(1) and then f(1.0). Since 1 is int and 1.0 is float, and typed is True, these are two different keys, so they are cached separately. So if the function is called again with f(1), it's a hit, and f(1.0) would also be a hit after their first calls. That's correct.
+
+Another case: when the function has default parameters. Wait, but the decorator should not care about that, since the key is based on the actual arguments passed.
+
+Wait, what about functions with *args and **kwargs? The code should handle those because it's capturing all the args and kwargs.
+
+Now, the code also needs to track the hits and misses correctly. Let's see:
+
+When the key is in the cache, it's a hit. So we pop and reinsert, then return the value. So hits +=1 is correct.
+
+When it's not in the cache, we compute, add, and increment misses. Then check if the length is over maxsize. So that's okay.
+
+Wait, but the initial code for the non-typed case builds the key as (args, key_kwargs_sorted). Let me make sure that's correct. For example, if the function is called with (1,2) and then (2,1), the positional args would have different tuples, so their keys are different, which is correct. The key_kwargs_sorted is for when there are keyword arguments. So for example, if you have f(a=1, b=2) and f(b=2, a=1), the keys would be the same, since the sorted items would be in the same order. So that's handled correctly.
+
+Now, the code's structure. Let me write it properly.
+
+Wait, the code I have in mind would be:
+
+from collections import OrderedDict
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        cache = OrderedDict()
+        hits = 0
+        misses = 0
+
+        def wrapper(*args, **kwargs):
+            nonlocal hits, misses
+            key_args = args
+            key_kwargs = sorted(kwargs.items())
+            key = (tuple(key_args), tuple(key_kwargs))
+            if typed:
+                # build typed key
+                typed_args = []
+                for a in args:
+                    typed_args.append( (a, type(a)) )
+                typed_kwargs = []
+                for k, v in key_kwargs:
+                    typed_kwargs.append( (k, v, type(v)) )
+                key = (tuple(typed_args), tuple(typed_kwargs))
+            # check if key exists
+            if key in cache:
+                # move to end
+                hits +=1
+                val = cache.pop(key)
+                cache[key] = val
+                return val
+            else:
+                misses +=1
+                result = func(*args, **kwargs)
+                cache[key] = result
+                # if over maxsize, remove the first
+                if len(cache) > maxsize:
+                    cache.popitem(last=False)
+                return result
+
+        def cache_info():
+            return f'hits={hits}, misses={misses}, maxsize={maxsize}, current size={len(cache)}'
+
+        def cache_clear():
+            nonlocal hits, misses
+            cache.clear()
+            hits = 0
+            misses = 0
+
+        wrapper.cache_info = cache_info
+        wrapper.cache_clear = cache_clear
+        return wrapper
+    return decorator
+
+Wait, in the non-typed case, the key is (tuple of args, tuple of sorted (k, v) items). But in the code above, key_kwargs is a list of tuples, so sorted returns a list, then converted to a tuple. So that's okay.
+
+Wait, in the original code's key_kwargs_sorted was using sorted(kwargs.items()), but in the code above, key_kwargs is sorted(kwargs.items()), then converted to a tuple. So yes.
+
+Wait, the first part of the key for non-typed is (tuple of args, tuple of sorted kwargs items). That's correct.
+
+Wait, but in the code above, when typed is True, the key_kwargs part is (k, v, type(v)) for each item, sorted by the key's name. Because the list is sorted by k, so the order of the keyword arguments is consistent. So that's okay.
+
+Wait, the code for typed_args and typed_kwargs is correct? Let's see:
+
+For each positional argument a in args, we append (a, type(a)). So the tuple of those is part of the key.
+
+For the keyword arguments, we first sort the items by their key, then for each, we have (k, v, type(v)), so that's correct. Because the key's name is part of the tuple, so sorted by key. So the entire key is consistent even if the same parameters are passed in different orders.
+
+Hmm, that should work.
+
+Another possible issue is that when the maxsize is 1, the cache should store only one item. Let's say the first call is stored. Then a second call with different args, it gets evicted. The next time the first key is accessed, it's not in the cache, so it's a miss again. So the code does that correctly.
+
+Wait, but in the code, after adding the new entry, the cache's length is checked against maxsize. So for example, when adding a new entry when the length is exactly maxsize, then after adding it becomes maxsize+1, so the popitem is called. So that's correct.
+
+Now, what about when the maxsize is 0? Let's see. The code in the decorator function would return the wrapper regardless. So if maxsize is 0, then in the wrapper function, after adding the new entry, the code would check if len(cache) > 0. So whenever a new entry is added, it would immediately be popped. So effectively, the cache is not used. So that works.
+
+Wait, but perhaps the code could handle maxsize=0 by returning the original function. Let me see:
+
+In the decorator function, if maxsize is 0, then return func directly. So in the code:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        if maxsize ==0:
+            return func
+        else:
+            ... create the wrapper ...
+    return decorator
+
+That's better, because otherwise with maxsize=0, every time you call the function, it's a miss and you add to the cache, then immediately evict. Which is O(1) but redundant. So better to just return the function.
+
+So modifying that part.
+
+Let me adjust the code accordingly.
+
+So the updated code would have:
+
+from collections import OrderedDict
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        if maxsize == 0:
+            return func
+        cache = OrderedDict()
+        hits = 0
+        misses = 0
+
+        def wrapper(*args, **kwargs):
+            nonlocal hits, misses
+            # create key here
+            ...
+
+        # then define cache_info and cache_clear, and attach them to wrapper.
+
+        return wrapper
+    return decorator
+
+Yes, that makes sense. So in the case where maxsize is zero, the decorator returns the original function, so no cache is involved. That's better.
+
+Now, in the key creation:
+
+Wait, in the non-typed case, the key is made of (args, sorted(kwargs.items())). But when using an ordered dict, the cache is stored as an ordered dict. So the key is a tuple of the positional args and the sorted keyword items. But in the code above, for the non-typed case, key is (tuple of args, tuple of sorted (k,v)). For typed, the key includes the types. So that's correct.
+
+Wait, but in the code, the key for non-typed is (tuple of args, tuple of sorted (k, v)). So that's okay.
+
+Wait, in the original code, when typed is False, the key is (args, sorted(kwargs.items())). So when the same arguments are passed, even with different types (like 1 as int vs 1 as float), the key would be the same, so they would be considered the same and the cache would return the stored value (even if the types differ). But that's correct because when typed is False, the types are ignored.
+
+Wait, but in the code above, when typed is False, the key is built without the types, so if two calls have same values but different types, the keys would be the same, but the actual function might return different results. But the LRU cache here would not know that, so it would cache the first result and return it again, leading to incorrect results. Wait, but the typed parameter is exactly for that purpose. So when typed is False, the cache treats 1 and 1.0 as the same key (if their values are equal), so the cache would return the same result even if the types are different, which could be wrong. But that's the intended behavior. The typed parameter in the original lru_cache means that the cache will treat different types as separate. So when typed is False, the types are ignored, and the cache key is based on the value only. So if two arguments have the same value but different types, they would be considered the same key, and the cache would return the first result. Which might be incorrect, but that's the user's choice.
+
+Hmm, okay, so the code is correct in that aspect.
+
+Now, putting all that into code. Also, the wrapper function must be returned, and the cache_info and cache_clear must be attached as methods.
+
+Wait, in the code above, the cache_info and cache_clear are functions defined inside the decorator, and then attached as attributes to the wrapper. That should work.
+
+Wait, but in Python, when you do that, the attributes are added correctly. So when someone calls wrapper.cache_info(), it should return the hits and misses.
+
+Yes.
+
+Now, the code also uses nonlocal variables. Since in Python 3, nonlocal allows variables to be accessed from the outer scope. The hits and misses are declared in the decorator's scope, so the inner functions can modify them with nonlocal.
+
+Wait, the variables are declared in the same scope as the wrapper, so the nonlocal declarations are correct.
+
+Hmm, okay. Let me check the code again for syntax and possible errors.
+
+Wait, in the wrapper function, when creating the key for non-typed, the code is:
+
+key_kwargs = sorted(kwargs.items())
+key = (tuple(key_args), tuple(key_kwargs))
+
+Yes, because sorted returns a list, so converting to tuple is correct.
+
+In the typed case:
+
+key_kwargs_sorted is the list after sorted, then for each (k, v) in that list, append (k, v, type(v)). So that's okay.
+
+Wait, in the code above, when typed is True, the code for the key is:
+
+typed_kwargs = []
+for k, v in key_kwargs:
+    typed_kwargs.append( (k, v, type(v)) )
+
+Wait, key_kwargs is the list of (k, v) from the sorted items. So that loop is okay. So the key becomes (tuple of (a, type(a)), tuple of (k, v, type(v)) for each sorted item).
+
+Yes, that's correct.
+
+Now, the problem says to output the code in Python markdown format. Wait, the user's instruction says "Output ONLY the code generated, in python markdown format." So probably just the code with triple backticks?
+
+Wait, the user's example in the first message has:
+
+/think
+def lru_cache(...):
+    ...
+
+So perhaps the code should be enclosed in a markdown code block with Python syntax.
+
+So the final code would be:
+
+```python
+from collections import OrderedDict
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        if maxsize == 0:
+            return func
+        cache = OrderedDict()
+        hits = 0
+        misses = 0
+
+        def wrapper(*args, **kwargs):
+            nonlocal hits, misses
+            key_args = args
+            key_kwargs = sorted(kwargs.items())
+            key = (tuple(key_args), tuple(key_kwargs))
+            if typed:
+                typed_args = []
+                for a in args:
+                    typed_args.append((a, type(a)))
+                typed_kwargs = []
+                for k, v in key_kwargs:
+                    typed_kwargs.append((k, v, type(v)))
+                key = (tuple(typed_args), tuple(typed_kwargs))
+            if key in cache:
+                hits += 1
+                val = cache.pop(key)
+                cache[key] = val
+                return val
+            else:
+                misses += 1
+                result = func(*args, **kwargs)
+                cache[key] = result
+                if len(cache) > maxsize:
+                    cache.popitem(last=False)
+                return result
+
+        def cache_info():
+            return f'hits={hits}, misses={misses}, maxsize={maxsize}, current size={len(cache)}'
+
+        def cache_clear():
+            nonlocal hits, misses
+            cache.clear()
+            hits = 0
+            misses = 0
+
+        wrapper.cache_info = cache_info
+        wrapper.cache_clear = cache_clear
+        return wrapper
+    return decorator
+```
+
+Hmm, I think that's correct. Let me check again for possible errors.
+
+Wait, in the case where the function is called with no arguments, then the key is ((), ()). That's okay. Also, for functions with only keyword arguments, the key_kwargs would be a sorted list of those items.
+
+Another thing: the key must be hashable. So all elements in the tuples must be hashable. So for example, if the function is called with a list as an argument, since lists are not hashable, the key would be invalid and throw an error. But that's the same as the original lru_cache, so it's okay.
+
+I think this code should work. The only thing missing might be the __wrapped__ attribute so that introspection works, but since the problem doesn't require that, it's fine.
+
+Wait, but in the original decorator, the wrapper function's __wrapped__ attribute points to the original function. Here, the wrapper's __wrapped__ isn't set, so when someone uses inspect.unwrap, it might not work. But again, unless the problem requires it, it's okay to omit.
+
+So the code as written should fulfill the requirements based on the given docstring and signature. The key is built correctly, the cache is maintained with maxsize, and the LRU is handled via the ordered dict. The hits and misses are tracked, and the cache_clear and cache_info methods are added to the wrapper.

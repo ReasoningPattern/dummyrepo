@@ -1,0 +1,52 @@
+
+
+```python
+import inspect
+
+def _verify(iface, candidate, tentative=False, vtype=None):
+    """
+    Verify that *candidate* might correctly provide *iface*.
+
+    This involves:
+    - Making sure the candidate claims that it provides the
+      interface using ``iface.providedBy`` (unless *tentative* is `True`,
+      in which case this step is skipped). This means that the candidate's class
+      declares that it `implements <zope.interface.implementer>` the interface,
+      or the candidate itself declares that it `provides <zope.interface.provider>`
+      the interface
+    - Making sure the candidate defines all the necessary methods
+    - Making sure the methods have the correct signature (to the
+      extent possible)
+    - Making sure the candidate defines all the necessary attributes
+
+    :return bool: Returns a true value if everything that could be
+       checked passed.
+    :raises zope.interface.Invalid: If any of the previous
+       conditions does not hold.
+    """
+    if not tentative:
+        if not iface.providedBy(candidate):
+            raise ValueError("Candidate does not provide the interface")
+    
+    # Check methods
+    for name, obj in inspect.getmembers(candidate):
+        if inspect.ismethod(obj) or inspect.isfunction(obj):
+            # Check method signature
+            try:
+                sig = inspect.signature(obj)
+                # Check if method is declared in the interface
+                if not any(name in iface for name in sig.parameters):
+                    raise ValueError(f"Method {name} not declared in interface")
+            except Exception:
+                raise ValueError(f"Method {name} has invalid signature")
+    
+    # Check attributes
+    for name, value in inspect.getmembers(candidate):
+        if not inspect.isattribute(candidate, name):
+            continue
+        # Check attribute is declared in the interface
+        if not any(name in iface for name in inspect.getmembers(iface)):
+            raise ValueError(f"Attribute {name} not declared in interface")
+    
+    return True
+```

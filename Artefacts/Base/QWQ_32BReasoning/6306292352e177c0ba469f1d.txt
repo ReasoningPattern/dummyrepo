@@ -1,0 +1,506 @@
+Okay, I need to write a Python function called find_tags that takes a string and an optional replacer function. The function should find tags in the text, ignoring those inside code blocks. Also, if a replacer is provided, it should replace the tags in the text with the result of the replacer. Finally, it returns a set of all the tags found and the modified or original text.
+
+Hmm, first I should figure out how to identify tags. Usually tags are words starting with a # symbol, right? Like in social media posts. So I need to scan the text for words that start with #. But how do I exclude those inside code blocks?
+
+Code blocks in text are often denoted by being enclosed within triple backticks (```), so the idea is to split the text into sections that are inside code blocks and those that are not. Then, process only the non-code sections for tags.
+
+So the plan is: split the text into parts, keeping track of whether each part is inside a code block or not. For each part not in a code block, extract the tags. Then, if a replacer is given, replace the tags in those parts and combine everything back into the new text.
+
+Let me think about how to split the text. The code blocks start with ``` and end with another ``` later. So I can iterate through the text, splitting on ``` each time. But each occurrence toggles the code block state. Like, the first ``` starts a code block, the next ends it, and so on.
+
+Wait, but there could be multiple code blocks. So maybe I can process the text by splitting on the triple backticks. Each split will alternate between code and non-code sections. So for example, if the text is "Some text #tag1\n```\ncode #not_a_tag\n```\nMore text #tag2", splitting on ``` would give me the parts. The first part is "Some text #tag1\n", then the code block starts, so the next part is the code (including the # which we should ignore), then the third part is "\nMore text #tag2".
+
+So the split would result in a list where even indices (0, 2, 4...) are non-code sections and odd are code. Wait no, actually, the first element would be the non-code before the first ```, then the second is the code block, third is after, etc. So whenever we are in a code section (odd index), we can skip processing tags. The even indices are non-code, so process those.
+
+So the steps would be:
+
+1. Split the text into parts using the triple backticks as delimiters. Let's call this list parts.
+2. Iterate through each part, keeping track of whether we're currently inside a code block. The toggle starts at False, and each part alternates the state. So for part index 0, not in code; part 1, in code; part 2, not, etc.
+3. For each part that is not in a code block, extract the tags (words starting with # followed by letters, numbers, maybe underscores? Or any non-whitespace characters until a space? Need to clarify the regex).
+4. Collect all the tags from the non-code sections into a set.
+5. If a replacer is provided, replace each tag in the non-code sections with the result of replacer(tag). The replacer function should take the tag as an argument and return a string to replace it with.
+6. Reconstruct the text by joining all the parts, applying replacements where appropriate.
+
+Now, how to split the text on triple backticks? Using split("```") but that might split in the middle of code blocks. Wait, let's see. The split method would split on every occurrence of "```", so for example, the first occurrence starts the code block, the next ends it, and so on. So the parts list will have alternating code and non-code sections. So the first element is before the first code block, the second is the code block's content (up to the next ```), the third is the content after the second ```, and so on.
+
+But I have to be careful because the triple backticks can sometimes be part of the text but not actual code blocks. Like, maybe someone has a string with "```" inside. But the problem says "try to ignore tags inside code blocks", so perhaps we can assume that code blocks are properly enclosed with the triple backticks, so splitting on them is okay.
+
+So splitting on every occurrence of "```" gives me all the sections. Then, the even-indexed parts (0, 2, etc.) are non-code sections, and the odd ones are code.
+
+Wait, actually, the first part is non-code, then after the first split, the next part is code, then the next split after that is non-code again. So the indices alternate between code and non-code. So the code starts at index 1, then non-code at 2, code at 3, etc.
+
+Therefore, when looping through the parts, the code_block variable can be toggled each time. So starting at code_block = False, then for each part, check if the index is even or odd. Wait, maybe a better approach is to track the state as we iterate through each part. Let's see:
+
+Initialize code_block as False. Then for each part in parts:
+
+- if code_block is False, then this part is outside code, so process for tags and possibly replace.
+- else, it's inside code, so don't process tags and leave as is.
+
+Then after processing each part, toggle code_block. Because each part after a split comes from the other side of the code block.
+
+Wait, actually, the first element (index 0) is before any code block. The next element (index 1) is between the first and second ``` so it would be the code block. Then the third part (index 2) is after the second ``` so back to non-code. So the code_block state is True for odd indices and False for even indices. So perhaps the index can be used to determine if we're in a code block. So for each part, if the index is even, then it's non-code, else code.
+
+Therefore, the loop can be over the parts with their indices:
+
+tags = set()
+processed_parts = []
+for i, part in enumerate(parts):
+    if i % 2 == 0:  # non-code section
+        current_part, part_tags = process_part(part, replacer)
+        tags.update(part_tags)
+        processed_parts.append(current_part)
+    else:
+        processed_parts.append(part)
+    # ... and then toggle code_block?
+Wait, no, because the index is even or odd. So the code is in the odd parts. So for even indices, process the part, extract tags, and replace if needed. The code parts (odd indices) are left as is. Then, after processing all parts, the processed_parts list can be joined with "```" between them.
+
+Wait, but when you split on "```", the original text is split into parts where each split is at the "```", so the parts are the sequences between them. So when you rejoin them, you need to insert "```" between the parts again. So the parts list after splitting would have elements separated by "```" so to rejoin, the processed parts are joined with "```", but that might not be correct because the original code block's start and end are part of the split. Wait, actually, splitting on "```" will split the text into parts where each code block is between two splits. Let me think of an example.
+
+Suppose the text is:
+
+"This is a #test. \n```\ndef foo():\n    print('#hashtag')\n```\nBack to normal #normal."
+
+Split on "```" gives ["This is a #test. \n", "\ndef foo():\n    print('#hashtag')\n", "\nBack to normal #normal."].
+
+So the first part is non-code, the second is code, the third is non-code again. So the indices 0,1,2. So when joining back, we need to alternate between parts and the "```". So the processed parts are:
+
+processed_parts[0] + "```" + processed_parts[1] + "```" + processed_parts[2]
+
+Wait, that's correct. Because each split is after the "```". So the first part is up to the first "```", then the second part is the code, then the third part comes after the next "```".
+
+So the way to rejoin is by inserting "```" between the parts. So the full text is the concatenation of parts[0] + "```" + parts[1] + "```" + parts[2] etc. So when processing each part, after splitting, the order is correct.
+
+So processing the parts at even indices (0, 2, etc.) for tags, and the code parts (odd indices) are left as is. So that's the approach.
+
+Now, how to process each part (non-code sections) to find the tags. The tags are words starting with a #. So perhaps using a regular expression to find all such words. The regex could be something like #\w+ but maybe more permissive? Like any sequence of characters after the # until a whitespace or punctuation? Or maybe the entire word until the next whitespace or end of string. Let me think: perhaps the standard is that a hashtag is a word starting with # followed by letters, numbers, underscores, etc., but until the next whitespace. So the regex could be r'#\w+'.
+
+Alternatively, maybe it's better to split on whitespace and check each word. But using regex is probably more efficient. Let's go with regex.
+
+So for each non-code part, find all occurrences of the pattern #\w+ (case sensitive?), but perhaps the problem doesn't specify, so maybe we should keep case as is.
+
+Wait, the problem says "tags", so probably case-sensitive. So the regex will find all such tags in the part.
+
+But when replacing, we need to replace each tag in the part with the replacer's result. So perhaps using re.sub with a function.
+
+The replacer function is called with the tag as an argument, so for each match, we can call replacer(match.group()) if replacer is not None.
+
+So the processing function for a part would be:
+
+def process_part(part, replacer):
+    if replacer is None:
+        # just find the tags, don't replace
+        tags = set(re.findall(r'#\w+', part))
+        return (part, tags)
+    else:
+        # find and replace
+        def replace(match):
+            tag = match.group()
+            new_tag = replacer(tag)
+            return new_tag
+        new_part, num_subs = re.subn(r'#\w+', replace, part)
+        # collect the tags that were replaced
+        # but how to get the original tags?
+        # maybe we need to find all matches first, then do substitution
+        # perhaps better to first find all the tags, then do the substitution
+        # so first collect the tags in the part
+        found_tags = set(re.findall(r'#\w+', part))
+        # then replace each occurrence with replacer(tag)
+        # but the subn approach would do the replacement, but to collect the tags, we need to do both steps.
+
+        # so perhaps first, find all the tags, then perform the substitution using a lambda or a function that also collects them.
+
+        # Alternatively, process the part in two steps: first collect all tags, then do the substitution.
+
+        # Wait, in the first case, when replacer is not None, we can first collect the found tags, then replace each occurrence with replacer applied to the tag. The problem is that the substitution function can also collect the tags. But how?
+
+        # Maybe better to first find all the tags, and then in the substitution process, we can collect them. Alternatively, in the substitution, we can capture the tags and add to the set.
+
+        # Hmm, perhaps the approach is:
+
+        # when replacer is provided, use re.sub with a function that captures the tag and adds it to the set, then returns the replacement.
+
+        # But since the processing is part of the function, how to do that?
+
+        # Wait, in the function, the process_part would need to return both the modified part and the set of tags found in it. So in the case where replacer is used, when we process the part, the regex can find all the tags, and then replace them.
+
+        # So perhaps:
+
+        # first, find all the tags in the part (using findall)
+        found_tags = set(re.findall(r'#\w+', part))
+        # then, if replacer is present, replace each occurrence
+        if replacer:
+            # create a substitution pattern where each match is replaced by replacer(match)
+            # so use re.sub with a function
+            new_part = re.sub(r'#\w+', lambda m: replacer(m.group()), part)
+            # but then the found_tags would be the original tags, so we can add those to the overall set
+            return (new_part, found_tags)
+        else:
+            return (part, found_tags)
+
+Wait, but the replacer is passed as a parameter, and in the function, it's a callable. So in the code, for each part (non-code):
+
+found_tags = re.findall(r'#\w+', part)
+
+Then, if replacer is not None, we need to replace each of those tags in the part with replacer(tag). So the substitution would replace each occurrence of a hashtag with replacer's result.
+
+So the regex substitution can be done with re.sub, using a lambda function that takes a match, gets the group, and calls replacer on it. But in this way, the tags are found during substitution, so perhaps the found_tags can be collected first, then replaced. But to get the tags, we can first find them, then replace, but that might be inefficient. Alternatively, during substitution, collect the tags as we go.
+
+Hmm, perhaps the findall approach is better. Let me think:
+
+First, collect all the tags in the part (non-code) using re.findall(r'#\w+', part). Then add those to the tags set. If replacer is given, then perform a substitution where each hashtag is replaced by replacer(tag). So the substitution can be done by replacing each occurrence with replacer applied to the matched tag.
+
+But in the substitution, the replacer is called with the actual tag. For example, if the part has "#test", then the replacer is called with "#test".
+
+Wait, but the problem says the replacer is called with the tag word. So the replacer's parameter is the tag (like "#test"), so the code would pass the entire matched string (the tag) to the replacer function.
+
+Therefore, the steps would be:
+
+For each non-code part (i even):
+
+1. Find all hashtags in the part (using findall).
+2. Add those to the overall tags set.
+3. If replacer is not None, replace each hashtag in the part with replacer(hashtag).
+
+So the code can be written as follows.
+
+Now, the regex: #\w+ would match a # followed by word characters (letters, digits, underscores). But what if the hashtag has other characters, like hyphens or apostrophes? The problem doesn't specify, so maybe just stick with \w, or maybe a more flexible regex. Alternatively, perhaps the hashtag is any sequence of non-whitespace characters after the #. So maybe r'#\S+' (since a hashtag can't be followed by whitespace, but the # itself must be at the start of the word, so perhaps the pattern should be # followed by one or more non-whitespace characters until a space or end of line. So \S+ could work here. Hmm, maybe better to use r'#\S+' but need to check for word boundaries?
+
+Alternatively, the standard hashtag might be defined as a # followed by any alphanumeric characters and underscores, but perhaps in practice, people use other characters. Since the problem is general, perhaps just use r'#\w+' but maybe that's too restrictive. Alternatively, maybe any sequence of characters until whitespace. Let me think: the regex pattern could be r'#\w+' or r'#\S+'? Let's see:
+
+Suppose the text is "#hello123" → that's okay. But "#hello-world" would have the hyphen, so \w doesn't include hyphens. So the first would capture "#hello" but not "world" but the second with \S would capture "#hello-world".
+
+The problem's docstring says "tag word", so perhaps the tags are whole words. So maybe the regex should be r'\#\w+' (but need to escape the #). Wait, in regex, the # is just a regular character unless it's part of a comment (but in Python, the regex is in a string). So the pattern should be r'#\w+'.
+
+Alternatively, perhaps the problem considers any sequence of non-whitespace characters after the # as a tag. For example, in the string "look at this #hashtag example", the #hashtag is a tag. But in "check #this-out", the tag would be #this-out, which is a single tag. So the regex r'#\S+' (since \S is non-whitespace) would capture that. However, this might include cases where the # is part of a larger string, but I think that's acceptable here.
+
+So perhaps the correct regex is r'#\S+', but need to make sure that it's a word. Wait, maybe the problem expects tags to be words starting with a #, so maybe the regex is r'\b#\w+' but the \b might not be correct if the # is at the start of a word. Wait, the # is part of the word? Like in English, a word starting with a # is possible. But the word boundary before the # would not exist. Hmm. Maybe it's better to just look for any # followed by non-whitespace, but not including # at the end of a line unless followed by something. Wait, perhaps the exact pattern is that a tag is a # followed by any combination of letters, numbers, underscores, hyphens, etc., but not including spaces. So the simplest way is r'#\S+'.
+
+But let's test some cases. For example, in "##test", would that be a tag? The first # is part of the tag? Maybe not. The problem might consider that a single # starts the tag, so multiple #s would be part of it? Or maybe not. The problem's docstring says "tag word", so maybe a tag is a single # followed by the rest of the word. So perhaps the pattern is r'#\w+'.
+
+Alternatively, maybe the problem allows any characters after the # until the next whitespace, so using r'#(\S+)' and capturing the group. Wait, but the entire # followed by the characters is the tag. So perhaps the regex r'#\S+' is better.
+
+Hmm, I'll go with r'#\S+' for now, but maybe the problem expects only alphanumeric plus underscores. Well, perhaps the problem expects the standard hashtag, so I'll proceed with the regex r'#\w+'.
+
+Wait, but in the example where the code block has #hashtag, which is inside a code block, the code would ignore that, which is correct. So the regex is okay.
+
+Now, the code structure:
+
+We start by splitting the text into parts. Then loop through each part, tracking if it's in a code block (using the index's parity).
+
+For each non-code part, extract the tags and add to the set.
+
+If replacer is provided, replace each tag in the non-code parts with the replacer's result.
+
+So the code steps:
+
+Split the text into parts = text.split("```")
+
+Then, initialize tags as a set. processed_parts as an empty list.
+
+Loop over each part with their indices:
+
+for i, part in enumerate(parts):
+
+    if i % 2 == 0:  # non-code section
+
+        current_tags = re.findall(r'#\w+', part)
+
+        tags.update(current_tags)
+
+        if replacer is not None:
+
+            # replace each tag in part with replacer(tag)
+
+            # use a substitution function
+
+            def replace(match):
+
+                tag = match.group()
+
+                replacer_result = replacer(tag)
+
+                return replacer_result
+
+            # but how to do this inside the loop? The replace function needs to have access to the replacer and the current part?
+
+            # Alternatively, use a lambda.
+
+            new_part = re.sub(r'#(\w+)', lambda m: replacer(m.group()), part)
+
+            # Wait, the regex here would need to capture the entire tag. The pattern for substitution can be r'#\w+', and in the lambda, m.group() is the entire tag.
+
+            # So, in the substitution:
+
+            # part becomes re.sub(r'#\w+', replacer, part) ?
+
+            # Wait, the replacer function is a callable that takes the tag as the argument. So if we pass replacer directly to sub, then each match would be replaced by replacer(matched_tag). That would work.
+
+            # So yes, perhaps:
+
+            if replacer is not None:
+
+                new_part = re.sub(r'#\w+', replacer, part)
+
+                # but then how do we track the tags? Because the found_tags are current_tags, which are the original tags.
+
+                # So the current_tags are added to the set before any replacement.
+
+            So in this case, for each part that is non-code:
+
+            the current_tags are the list of tags found, so add them to the set.
+
+            if replacer is given, then the part is substituted with the replacer applied to each hashtag.
+
+            So:
+
+            So for the part processing:
+
+            if i is even:
+
+                found_tags = re.findall(r'#\w+', part)
+
+                tags.update(found_tags)
+
+                if replacer is not None:
+
+                    part = re.sub(r'#\w+', replacer, part)
+
+                processed_parts.append(part)
+
+            else:
+
+                processed_parts.append(part)
+
+            Then, after processing all parts, the new text is built by joining all parts with "```" between them.
+
+Wait, but the split on "```" would create parts separated by "```, so when joining, the parts must be joined with "```" between each part. Because the split removes the "```" as the delimiter. So the original text is:
+
+part0 + "```" + part1 + "```" + part2 + ... etc.
+
+Therefore, the joined text is "```".join(parts) would not be correct, because the parts alternate between non-code and code, and each code is between two "```".
+
+Wait, let's see the example again:
+
+Original text: "a```b```c" → split on "```" gives ["a", "b", "c"]. So when joining with "```", it would be "a```b```c", which is correct. So yes, the processed parts can be joined with "```".
+
+So the final text is "```".join(processed_parts).
+
+Wait, but the first part is non-code (index 0), then comes a "```", then code (index 1), then another "```", then non-code (index 2). So the split parts are [non-code, code, non-code, ...], and when you join with "```", you get the correct sequence.
+
+Therefore, the code can be structured as follows.
+
+Wait, but the problem says the replacer is called with the tag word. So the replacer function's argument is the actual tag string like "#hello".
+
+So in the substitution, the replacer is called with each match, which is the entire tag (including the #). So the code above would work.
+
+But what about overlapping or nested code blocks? Like if there are four triple backticks. The split would handle that, since each occurrence toggles the state. So that's okay.
+
+Now, code:
+
+First, import the necessary modules. The function returns a Tuple[Set, str], so the Set is of strings, and the str is the processed text. The return type is from the typing module, so need to import Tuple and Set.
+
+So:
+
+from typing import Set, Tuple
+
+def find_tags(text: str, replacer: callable = None) -> Tuple[Set, str]:
+    parts = text.split("```")
+    tags = set()
+    processed = []
+    for i, part in enumerate(parts):
+        if i % 2 == 0:  # non-code section
+            # find all tags in this part
+            current_tags = re.findall(r'#\w+', part)
+            tags.update(current_tags)
+            if replacer is not None:
+                # replace each tag with replacer(tag)
+                part = re.sub(r'#\w+', replacer, part)
+            processed.append(part)
+        else:
+            processed.append(part)
+    # Now, join the parts with "```" between them
+    new_text = "```".join(processed)
+    return tags, new_text
+
+Wait, but in the re.sub, if the replacer is a function, then passing it directly would work. Because the sub function will call the replacer with the matched string. So in the code above, when replacer is not None, part becomes the substitution with the replacer function. So that's correct.
+
+Wait, in the code above, when replacer is a function, the substitution uses the replacer function. But in the case where replacer is a lambda, that's okay. But the problem states replacer is a callable. So yes, this should work.
+
+Wait, but in the example where the code block has a hashtag, it's not processed, so the tags set would not include those. That's correct.
+
+Testing the code:
+
+Suppose text is "Hello #world\n```#ignore this```\n#python"
+
+Split into ["Hello #world\n", "#ignore this", "\n#python"]
+
+Processing parts:
+
+i=0 (even):
+
+current_tags = ['#world', '#python']? Wait no, part0 is "Hello #world\n", so the findall would find ['Hello #world'? No wait, the regex is r'#\w+', so in "Hello #world" the # is followed by 'world', so it's a match. The first part is "Hello #world\n", so the current_tags would be ['#world'].
+
+Then part is replaced (if replacer is present) to replace each tag. For example, if replacer is a function that uppercases the tag, then part0 would become "Hello #WORLD" (assuming replacer is lambda s: s.upper()).
+
+Then, part1 (i=1, odd) is code, so added as is. The second part is the code block's content "#ignore this", so that's not added to the tags set.
+
+The third part is i=2 (even). The part is "\n#python", so current_tags is ['#python'].
+
+Thus, the tags set would have both #world and #python, and the new text would be "Hello #world\n```#ignore this```\n#python" if no replacer, or modified if there is.
+
+Wait, but in the third part, the \n is before the #python. So the regex would capture that.
+
+So this seems correct.
+
+Now, possible edge cases. What if the text starts or ends with a triple backtick? Like "```code#1```#endtag".
+
+Split would be ["", "code#1", "#endtag"].
+
+The first part (i=0) is empty → no tags. The second part (i=1, code) → the # is part of the code, so not counted. The third part (i=2, even) → the #endtag is a tag, so it's added to the set.
+
+Another case: a single triple backtick. Like "text#1```more text#2".
+
+Split would be ["text#1", "more text#2"].
+
+Wait, the first triple backtick would split into two parts. The first part is before the triple backtick, which is "text#1", then the second part is "more text#2". The first part (i=0) is non-code, so the #1 is a tag (assuming the regex is r'#\w+'). Wait, but #1 is a hashtag with a number. The regex r'#\w+' would include that. So yes, it would find "#1".
+
+The second part (i=1) is code, so the "more text#2" is in a code block. So the #2 would not be considered a tag.
+
+But then the third part is after the next triple backtick, but there is none. So the code block starts at the first ``` but since there's no closing ```, the second part is the code block's content, but the rest is considered code? That's a problem. Because if there is an odd number of ``` splits, then the last part would be inside code if the number of parts is odd. Wait, let's think.
+
+Suppose the text is "```code#1", then split on "```" gives ["", "code#1"].
+
+The first part (i=0) is non-code (since even index). But the code block is started, so the second part (i=1, odd) is code. So the "code#1" is part of a code block, so the #1 is not a tag. So that's okay.
+
+Another case: what about hashtags inside a code block that are not part of the code? Like in a comment, but the problem says to ignore all tags inside code blocks regardless. So the code is correct.
+
+Another possible issue is that splitting on "```" may split in the middle of a hashtag. Like if someone writes "```#tag", then the first split is before the ``` which is part of the code block? Wait no, the triple backtick is the delimiter. So in the example "```#tag", the split would be ["", "#tag"].
+
+The first part (index 0) is empty (non-code), so the second part is code (index 1). So the "#tag" is in code, so not counted. That's correct.
+
+Hmm, but in the case of a hashtag followed immediately by a triple backtick. Like "#tag```code", then split would be ["#tag", "code"]. The first part (index 0) is non-code, so the "#tag" is captured as a tag, then the code part (index 1) is code. So that's okay.
+
+What about hashtags within a code block? Like in the code block's content "#hashtag" is present, but since it's in code (odd index), we don't process it. So the code works.
+
+Now, the regex might have to be adjusted. Let's think again about the pattern.
+
+The current regex r'#\w+' would match any sequence starting with a # followed by word characters. So in "##test", it would match "#t" (since the first # is part of the tag? Wait, no. Let's see:
+
+The string "##test" → the first # is part of the first character, but the regex would look for a # followed by at least one \w. So the first # is followed by another #, but that's not a word character. So the first # would not be matched as a hashtag? Wait, the second # is part of the string. Let me think:
+
+Wait, the regex is looking for # followed by one or more word characters (letters, numbers, underscores). So in "##test", the first # is followed by another # (which is not a word character), so the first # would not form a hashtag. The second part (the second #) is followed by 'test', so the entire "#test" is a hashtag. Wait, no. The first # would be part of the first #, but the next character is a #, so the first match would be "#", but that's just a single character. Wait, the regex is '#\w+', so the \w+ requires at least one word character after the #. So in "##test", the first # is followed by another #, which is not a word character. So the first # is not part of a hashtag. The second # is followed by 'test', so the hashtag is "#test".
+
+Hmm, that's okay, but what if the hashtag is "#123"? The regex would match it, since 123 are word characters. So that's okay.
+
+But what about something like "#a-b-c"? The hyphen is not a word character, so the regex would match up to the 'a', then the hyphen would stop it. Wait, no. The hyphen is not a \w, so the regex would match '#a' (the first part), and the rest '-b-c' would not be part of the hashtag. So that might be an issue. The problem might expect the entire string until whitespace as the tag. So maybe the regex should be r'#\S+' instead.
+
+Let me adjust the regex to r'#\S+'.
+
+Then in the example "#a-b-c", the entire "#a-b-c" (assuming it's followed by a space or end of line) would be captured as a tag. So that's better.
+
+So changing the regex to r'#\S+'.
+
+Wait, but \S+ is any non-whitespace characters. So in the string " #tag#", the hashtag is "#tag#", but the last # is part of the tag. The regex would capture the entire "#tag#".
+
+Hmm, that's better. So perhaps using r'#\S+' is better. Let me adjust the code accordingly.
+
+So modifying the code:
+
+current_tags = re.findall(r'#\S+', part)
+
+Then, the substitution regex would also be r'#\S+', but with a caveat: the \S+ can be part of a larger pattern, but the regex needs to match the entire tag. So the regex is correct.
+
+Wait, but the problem says "tag word". Does that mean that the hashtag is part of a word? Like, maybe the hashtag must be followed by a word character? Not sure. The problem's description is a bit vague. Since the problem says "tag word", perhaps the hashtag is part of a word, so maybe the regex should be r'#\w+', but if the user expects things like hyphens in the tag, then r'#\S+' is better. Since the problem didn't specify, I'll proceed with r'#\S+', but perhaps it's better to match the entire tag as a word, but including possible hyphens or other characters.
+
+Alternatively, perhaps the tags are words that start with # and continue until the next whitespace. So using r'#\S+' would capture that.
+
+So changing the regex to r'#\S+'.
+
+Now, the code would need to import re. Oh right, forgot that. So the function will need to have the regular expressions imported.
+
+Wait, in the code I wrote earlier, I didn't import re. So adding that.
+
+Wait, the code so far:
+
+from typing import Set, Tuple
+import re
+
+def find_tags(text: str, replacer: callable = None) -> Tuple[Set, str]:
+    parts = text.split("```")
+    tags = set()
+    processed = []
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            current_tags = re.findall(r'#\S+', part)
+            tags.update(current_tags)
+            if replacer is not None:
+                part = re.sub(r'#\S+', replacer, part)
+            processed.append(part)
+        else:
+            processed.append(part)
+    new_text = "```".join(processed)
+    return tags, new_text
+
+Wait, but the substitution using re.sub(r'#\S+', replacer, part) may have an issue. Because the replacer function is called with the entire matched string, which includes the # and the rest. So that's okay.
+
+Another possible problem is that the replacement may not account for overlapping matches. But since we are using re.sub with the same regex, it should be fine.
+
+Wait, but in the regex, the \S+ includes all non-whitespace, so a tag like "#hello#world" would be matched as a single tag? Let's see. The regex would match from the first # to the end of the non-whitespace sequence, so the entire "#hello#world" would be one tag. But maybe that's intended. The problem says "tag word", but perhaps the user considers a hashtag to be any sequence starting with # and continuing to the next space. So in that case, that's correct.
+
+Another edge case: a hashtag with no characters after it. Like "#". The regex r'#\S+' would not match it because after the # there's nothing (so the \S+ requires at least one non-whitespace character). So that would be ignored. So that's okay.
+
+Another case: a hashtag at the end of a line. Like "Check out #end". The regex would match "#end".
+
+So that's good.
+
+Now, what about the replacer function? Let's see. The replacer is called with the tag as the argument. So for example, if the tag is "#python", replacer("#python") should return the replacement string. The substitution would replace the entire "#python" with that string.
+
+Yes, that's correct.
+
+Wait, but in the code above, the substitution uses the same regex as the find. So the re.sub will find all occurrences of the pattern and replace each with the replacer's return value. But the replacer is called with the entire matched string (the tag), which is correct.
+
+Now, the problem says "if passed a replacer, will also replace the tag word with the result of the replacer function called with the tag word".
+
+So the replacer's parameter is the tag word (like #python), and the replacement is done in-place in the text.
+
+So this code should work.
+
+Wait, but in the case where the replacer function returns a string that includes a #, then that would create a new tag. For example, if the replacer turns "#py" into "#python", then the new tag would be counted again. But according to the problem statement, the replacer is optional, and the tags are the original ones, not the replaced ones. Because in the code above, current_tags are added before any replacement. So even if the replacer changes the tag, the original is added to the set. That's correct because the function should return the original tags, not the replaced ones. Because the replacer is an optional parameter for replacing in the text, but the tags set is of the original found tags.
+
+Wait, the problem says "the result of the replacer function called with the tag word". So the replacer is given the original tag, so the replacement is done with that. The tags set should contain the original tags, not the replaced ones. So yes, the code correctly adds the original tags before substitution.
+
+Thus, the code should work.
+
+Wait, but what about overlapping code blocks? Like if there are four triple backticks, so the third part is code (since index 2 is even?), no. Let me see:
+
+Suppose the text is "```code1```#tag```code2```.
+
+Splitting into ["", "code1", "#tag", "code2", ""]. The parts are:
+
+indices 0 (even): non-code → the first part is empty, so no tags. Then part 1 (index 1) is code → added as is. part 2 (index 2 even): non-code, so the "#tag" is captured. part3 (index3, odd) is code → added as is. part4 (index4 even): non-code, but empty.
+
+So the tags set would include #tag. That's correct.
+
+Another test case: the replacer function. Let's say the replacer is a function that removes the #. So for example, a tag "#hello" would be replaced with "hello".
+
+In that case, the processed text would have "hello" instead of "#hello".
+
+The code would do that, yes.
+
+So the code seems correct.
+
+Wait, but the split on "```" may split on instances where the ``` is part of a longer string? Like "``````" would split into ["", "", ""], but that's okay.
+
+Hmm, perhaps the code is okay. But I should also test for the case where there's a single backtick. But since the code is looking for triple backticks, that's fine.
+
+Another thing: the code uses the same regex in both findall and sub. So the substitution uses the same pattern as the find. So that's consistent.
+
+Wait, but in the substitution, the replacer is passed the entire match (the tag), and returns the replacement string. So that's correct.
+
+Now, the return type is a Set and a string. The Set can be of strings, so that's okay.
+
+Wait, the function signature uses "replacer: callable = None". So the parameter is optional, and when not provided, the replacer is None. So the code handles that.
+
+Yes.
+
+So I think this code should work. Let me write it out properly, making sure to use the correct imports and structure.

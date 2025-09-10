@@ -1,0 +1,57 @@
+
+
+```python
+import os
+import logging
+from configparser import ConfigParser, ParsingError
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    """
+    Given a sequence of configuration filenames, load and validate each configuration file. If the configuration file
+    cannot be read due to insufficient permissions or error parsing configuration file, the error log will
+    be recorded. Otherwise, return the results as a tuple of: dict of configuration filename to corresponding parsed configuration,
+    and sequence of logging.LogRecord instances containing any parse errors.
+    """
+    config_dict = {}
+    errors = []
+    for filename in config_filenames:
+        parser = ConfigParser()
+        try:
+            parser.read(filename)
+            # Apply overrides
+            if overrides:
+                for key, value in overrides.items():
+                    try:
+                        section, key = key.split('.', 1)
+                    except ValueError:
+                        section = 'DEFAULT'
+                        key = key
+                    if section not in parser:
+                        parser[section] = {}
+                    parser[section][key] = value
+            # Resolve environment variables
+            if resolve_env:
+                for section in parser.sections():
+                    for key in parser[section]:
+                        value = parser[section][key]
+                        if isinstance(value, str) and value.startswith('${') and value.endswith('}'):
+                            env_var = value[2:-1]
+                            env_value = os.environ.get(env_var)
+                            if env_value is not None:
+                                parser[section][key] = env_value
+            config_dict[filename] = parser
+        except (FileNotFoundError, PermissionError, ParsingError) as e:
+            error_msg = f"Error reading or parsing {filename}: {str(e)}"
+            error_record = logging.LogRecord(
+                name='config_loader',
+                level=logging.ERROR,
+                pathname=filename,
+                msg=error_msg,
+                args=None,
+                exc_info=(type(e), e, e.__traceback__),
+                func='load_configurations',
+                lineno=0
+            )
+            errors.append(error_record)
+    return config_dict, errors
+```
