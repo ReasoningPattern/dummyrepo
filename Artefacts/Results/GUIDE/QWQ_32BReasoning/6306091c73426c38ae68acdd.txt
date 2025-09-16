@@ -1,0 +1,573 @@
+Okay, I need to generate Python code for the function validate_from_file based on the given signature and docstring. Let me start by understanding the requirements. The function is a class method that takes a YAML file path, loads it, checks for required fields, and raises an exception if something's missing. It returns the data as a dictionary.
+
+First, I should think about the steps involved. The function has to load the YAML file. So I'll need to use a YAML parser like PyYAML. But I should check if the file exists first. If it doesn't, that's an error. Then, once loaded, I need to validate that all required fields are present. Wait, but where are the required fields defined? The docstring mentions "mandatory data", but the function's parameters don't specify them. Hmm, maybe the required fields are defined elsewhere in the class, perhaps as a class variable. So maybe the cls refers to a class that has a list of required fields, like cls.required_fields or something similar. That makes sense because the method is a class method, so it can access class-level attributes.
+
+So the steps are: check if the file exists. Open and load the YAML. Then check each required field (from the class) is present in the data. If any are missing, raise IRValidatorException with a helpful message. Then return the data.
+
+Now, for the test-driven part. I need to first write unit tests. Let me think about the test cases. 
+
+Test 1: Valid YAML file with all required fields. Should return the data without error. 
+
+Test 2: YAML file missing a required field. Should raise IRValidatorException with the missing field listed.
+
+Test 3: Invalid YAML syntax. Should raise an appropriate exception, maybe a YAML parsing error, but the function's docstring says to raise IRValidatorException. Wait, the function's specified to raise that exception when mandatory data is missing. But if the YAML is invalid, that's a different error. So perhaps the function will let the YAML parsing errors propagate, unless they are caught and re-raised as a different exception? The docstring doesn't mention handling parsing errors, only missing mandatory data. So maybe parsing errors are not handled here, and the function will just pass them through. But the user might want to handle that. Hmm, but the problem says to raise IRValidatorException when mandatory data is missing. So perhaps the test for invalid YAML is outside the scope here. Maybe focus on the validation after loading.
+
+Another test case: File not found. Should raise an exception. Probably, the function should check if the file exists before trying to load it. So in that case, it would raise an IRValidatorException?
+
+Wait, the function's docstring says to raise the exception when mandatory data is missing. So maybe the file not existing is a separate case. But the function's parameters allow yaml_file to be None? Wait the parameter is yaml_file=None, but in the function, if it's None, what happens? The function might need to handle that as an error. Or maybe the function expects a valid path. The docstring's param says it's the path, so passing None would be invalid. But the tests should check for that.
+
+Wait, the function's parameters have yaml_file=None as default. But the function is a class method. So maybe the user is supposed to pass the path. So in the tests, perhaps a test where the file doesn't exist would raise an error. But according to the docstring, the exception is only raised for missing mandatory data in the file, not for file not found. So maybe the function should first check that the file exists. Otherwise, trying to load a non-existent file would raise an IOError, which the function would need to handle. But according to the docstring's raise condition, that's not covered. So perhaps the function should first check the file exists and raise an appropriate exception, but the problem's docstring doesn't mention that. Hmm, this could be a point of confusion. But perhaps the required fields are part of the data, so the file must exist. So the first step in the function would be to check if the file exists. If not, raise a different exception, but the docstring says to raise IRValidatorException only when mandatory data is missing. So maybe the function should not handle that and let the exception propagate, but that's not clear. The problem says to raise the exception when mandatory data is missing in the file, so perhaps the file must exist. So the test cases should include checking that the file exists as part of the validation. 
+
+Alternatively, maybe the required fields are part of the data structure, so the function first loads the data, then checks the keys. So, for the tests, let's outline the tests:
+
+Test case 1: Valid YAML with all required fields. Passes, returns data.
+
+Test case 2: YAML missing one required field. Raises exception with message about missing fields.
+
+Test case 3: YAML has extra fields but all required are present. Should pass, since extra fields are allowed.
+
+Test case 4: File does not exist. Should raise an error. But according to the function's docstring, it's supposed to raise the exception when mandatory data is missing. So perhaps in that case, the function would first check for file existence, and if not, raise an IOError or similar, but the docstring doesn't mention that. So maybe that's outside the scope here, and the test should assume the file exists. Alternatively, the function may need to handle that, but the problem's instructions don't specify. Since the user is to generate code based on the given signature and docstring, I'll proceed under the assumption that the file exists, and the main checks are on the data's required fields.
+
+Now, writing the tests first. Let's think of using pytest. The tests would need to mock the YAML loading. Alternatively, create temporary files for testing. 
+
+First, I'll need to create a test class or functions. Let's think of using pytest. The tests might be structured like:
+
+def test_validate_from_file_valid(tmp_path):
+    # Create a valid YAML file with all required fields
+    data = {'field1': 'value', 'field2': 42}
+    # Assume the required fields are ['field1', 'field2']
+    # Create a temporary file
+    yaml_file = tmp_path / 'test.yaml'
+    yaml_file.write_text(yaml.dump(data))
+    # Call the method, should return data without error
+    result = MyClass.validate_from_file(yaml_file)
+    assert result == data
+
+def test_validate_from_file_missing_required(tmp_path):
+    # Create a YAML missing a required field
+    data = {'field1': 'value'}  # missing field2
+    yaml_file = tmp_path / 'test.yaml'
+    yaml_file.write_text(yaml.dump(data))
+    with pytest.raises(IRValidatorException) as exc_info:
+        MyClass.validate_from_file(yaml_file)
+    assert "Missing required fields: field2" in str(exc_info.value)
+
+def test_validate_from_file_invalid_yaml(tmp_path):
+    # Create a file with invalid YAML syntax
+    yaml_file = tmp_path / 'test.yaml'
+    yaml_file.write_text("invalid: yaml: \n")
+    with pytest.raises(...):  # what exception here? The function may raise a different error
+        # But according to the docstring, the function doesn't handle parsing errors, so this would raise a PyYAML error, like ScannerError. The test would need to expect that.
+    # But since the problem's function is supposed to raise IRValidatorException only for missing data, this case is outside the function's responsibility.
+
+Hmm, perhaps the tests should focus on the validation part. The first two tests are the main ones. Also, maybe test when all required fields are present but in a nested structure. Wait, but the required fields are probably top-level? The function's description isn't specific, but the code will need to check for presence of each required key in the loaded dictionary. So the code would need to have access to the list of required fields via the class. So in the class, there must be a class variable like required_fields = ['field1', 'field2', ...]
+
+Therefore, in the tests, the MyClass would have those required fields defined. So in the test setup, perhaps the test class will have a mock or a subclass of the actual class with the required fields.
+
+Alternatively, the code being written would have the required fields as a class attribute. So in the code, the function would check for each field in cls.required_fields being in the data.
+
+Now, moving to the actual code. The steps are:
+
+1. Check if the yaml_file exists. Or maybe the YAML loading will throw an error if the file is not found. So perhaps the code can proceed to load the YAML first, which would raise an IOError if the file isn't found. But according to the docstring's exception, that's not covered. So perhaps the function should first check the file exists, and if not, raise an error. But the docstring doesn't mention that. Hmm. To avoid that, maybe the function proceeds to load the YAML, and any file not found error would be raised as a different exception, which is acceptable.
+
+But for the code, the steps would be:
+
+- Open the file, load it using yaml.safe_load (or load, but safer to use safe_load)
+- Check if the data is a dictionary (maybe? Or just proceed)
+- Iterate over each required field in cls.required_fields, check if each is in the data.
+- Collect all missing fields.
+- If any missing, raise IRValidatorException with a message listing them.
+- Return the data.
+
+So code outline:
+
+def validate_from_file(cls, yaml_file=None):
+    with open(yaml_file, 'r') as f:
+        data = yaml.safe_load(f)
+    missing = [field for field in cls.required_fields if field not in data]
+    if missing:
+        raise IRValidatorException(f"Missing required fields: {', '.join(missing)}")
+    return data
+
+Wait, but what if the data is None (if the YAML file is empty)? Then checking for fields would raise an error. So perhaps need to handle that case. Like, if data is None, then all required fields are missing. Or treat data as an empty dict?
+
+Alternatively, the code can assume that the YAML is a valid dictionary. So perhaps:
+
+data = yaml.safe_load(f) or {}
+Then proceed.
+
+So modifying the code:
+
+data = yaml.safe_load(f) or {}
+missing = [field for field in cls.required_fields if field not in data]
+
+That way, if the file is empty, data is an empty dict, and the missing fields are all required ones.
+
+Now, the exception is raised with the appropriate message.
+
+But where is the required_fields defined? The code is a class method, so the class must have a required_fields attribute. So the user of this method must define that in their class. That's okay, as per the problem's context.
+
+Now, the tests. To test, we need to have a class with required_fields. So in the test, perhaps we can create a subclass with specific required fields. Like:
+
+class TestValidator:
+    required_fields = ['field1', 'field2']
+
+Then in the tests, use TestValidator.validate_from_file.
+
+So in the test function:
+
+def test_valid(tmp_path):
+    class TempClass:
+        required_fields = ['a', 'b']
+    data = {'a': 1, 'b': 2}
+    # create the file, then call TempClass.validate_from_file(yaml_file)
+    # should return data.
+
+But in pytest, perhaps using a fixture. Alternatively, in the code, the tests would need to set up the required_fields in the test class.
+
+Alternatively, the tests can be written using a mock or a helper class. 
+
+Now, the code for the tests would use pytest's tmp_path fixture to create temporary files. 
+
+Now, putting this into code. The tests would be structured with these cases. 
+
+Now, moving to the actual code. The code must be written in the class method. Also, need to import yaml and the exception.
+
+Wait, the exception is called IRValidatorException. So the code must have that exception defined somewhere, perhaps imported. The code would need to raise it. So the code would have:
+
+from .exceptions import IRValidatorException  # or wherever it's imported from.
+
+But since the code is just the function, perhaps the exception is defined in the same module or imported. The code will just raise it.
+
+So the code for the function would be something like:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+But since the code is part of a class method, the actual code may not need to define the exception. The user is to generate the function's code, so the code should be written as per the signature. 
+
+Putting it all together:
+
+The code for the function:
+
+def validate_from_file(cls, yaml_file=None):
+    """
+    Loads & validates that a YAML file has all required fields
+
+    :param yaml_file: Path to YAML file
+    :raise IRValidatorException: when mandatory data is missing in file
+    :return: Dictionary with data loaded from a YAML file
+    """
+    with open(yaml_file, 'r') as f:
+        data = yaml.safe_load(f) or {}
+    missing = [field for field in cls.required_fields if field not in data]
+    if missing:
+        raise IRValidatorException(
+            f"Missing required fields: {', '.join(missing)}"
+        )
+    return data
+
+Wait, but what if the file is not found? Then open() will raise a FileNotFoundError. The function's docstring doesn't mention catching that, so it's allowed to propagate. So that's okay.
+
+Now, the tests. Let's outline the test cases.
+
+Test 1: Valid file with all required fields present. Should return data.
+
+Test 2: Missing one required field. Should raise exception with the missing field.
+
+Test 3: Missing multiple required fields. Should list all missing.
+
+Test 4: File has extra fields but required are present. Should pass.
+
+Test 5: File is empty (data is None). All required fields are missing.
+
+Test 6: yaml_file is None. Then, the open would fail (since the parameter is passed as None, which is the default, but the user must provide a valid path). The function's parameter has yaml_file=None as default, but the user is supposed to pass a path. So passing None would cause an error. So the test should check that. For example:
+
+def test_invalid_file_path():
+    with pytest.raises(FileNotFoundError):
+        MyClass.validate_from_file(None)
+
+But the docstring's exception is only for missing data, so this is a separate error.
+
+Now, the tests would be written first. Let me structure them using pytest.
+
+But the user needs to output only the code generated, in Python markdown format. Wait, the instructions say to output only the code generated, in Python markdown format. So the code would be enclosed in ```python ... ```?
+
+Wait the user says:
+
+"Output ONLY the code generated, in python markdown format."
+
+So the code should be enclosed in triple backticks with the python language tag.
+
+The problem requires first generating the unit tests, then the code. But the user's instruction says to generate the code based on the signature and docstring, following a test-driven approach. So the process is to first write tests, then the code. But the user wants the code to be output, not the tests. Wait, the problem says "Generate Python code based on the following function signature and docstring. Output ONLY the code generated, in python markdown format."
+
+Ah, so even though the approach is test-driven, the user wants the actual code (the function) to be written. The tests are part of the TDD process but not to be included in the output. So the code to be written is the function validate_from_file as per the signature and docstring.
+
+Therefore, the code I outlined earlier is the correct answer, but I need to make sure it's properly formatted with the required imports and exception handling.
+
+Wait, but the function is a class method, so it's inside a class. But the code to be generated is just the function's code. The user provided the function signature, so the code should include that function.
+
+Wait, the function is part of a class, so the code would be inside a class. But since the user provides the function's signature, the code should be the function itself. So the code is:
+
+But the code needs to import yaml. So the code must include the necessary imports.
+
+Wait, but in the function, we use yaml.safe_load. So the code must have:
+
+import yaml
+
+But the user's code may be part of a larger module. So the code should include the import statement.
+
+Putting it all together, the code would be:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class SomeClass:
+    required_fields = [...]  # but the code doesn't need to define this
+
+Wait, but the function is a class method, so the code is part of a class. However, the user's function signature is def validate_from_file(cls, yaml_file=None):, which is a class method. So the code should be written as the function inside a class.
+
+But the problem states to generate the code based on the function signature and docstring, so the code is just that function. But it's a class method, so it's part of a class. However, the user may not need the class structure, just the function. But since it's a class method, the code must be written inside a class.
+
+Hmm, perhaps the code is to be written as the function within a class. But the user's instruction says to output the code generated. The minimal code would be the function, assuming the class has the required_fields and the exception is defined elsewhere.
+
+Alternatively, perhaps the code should be written as:
+
+def validate_from_file(cls, yaml_file=None):
+    """
+    Loads & validates that a YAML file has all required fields
+
+    :param yaml_file: Path to YAML file
+    :raise IRValidatorException: when mandatory data is missing in file
+    :return: Dictionary with data loaded from a YAML file
+    """
+    with open(yaml_file, 'r') as f:
+        data = yaml.safe_load(f) or {}
+    missing = [field for field in cls.required_fields if field not in data]
+    if missing:
+        raise IRValidatorException(
+            f"Missing required fields: {', '.join(missing)}"
+        )
+    return data
+
+But this requires that yaml is imported. So the code should include the import statement.
+
+Wait, but in the function, the code uses yaml.safe_load, so the import must be present. So the code must start with import yaml.
+
+So the full code would be:
+
+import yaml
+
+def validate_from_file(cls, yaml_file=None):
+    """
+    ... (docstring as given)
+    """
+    ... (the rest as before)
+
+But the function is a class method, so it should be inside a class. Wait, the function's first parameter is cls, so it's a class method. Therefore, the function must be part of a class. However, the problem's function signature is given as a standalone function, but in reality, it's a method of a class. Since the user provides the function signature as def validate_from_file(cls, ...), the code must be part of a class. 
+
+Therefore, the code would be:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class YourClassName:
+    required_fields = [...]  # this is where the required fields are defined
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+
+But the user's problem requires just the function, not the entire class. So perhaps the code is written as the class method, assuming the class has the required fields and the exception is imported.
+
+Alternatively, perhaps the code should not include the class definition and just present the function as a standalone, but that's not possible because it's a class method. Therefore, the correct approach is to present the function inside a class, with necessary imports and exception.
+
+But the problem says to generate the code based on the function signature and docstring, so the code should be the function itself. The user may have the class defined elsewhere, so the code is just the function. Wait, but the function is a class method, so it must be part of a class. So perhaps the code is written as a class method inside a class, with the necessary imports.
+
+Alternatively, maybe the code can be written as a standalone function, but that would not fit the class method requirement. 
+
+Hmm, perhaps the code is to be written as the function, assuming it's part of a class. So the code would start with the import, then the function, but inside a class.
+
+Alternatively, the user might have the class structure elsewhere, and the code to be written is just the function. 
+
+Wait, the problem's function signature is given as def validate_from_file(cls, yaml_file=None):, which is a class method. Therefore, the code must be written inside a class. But the problem requires outputting only the code generated. The minimal code would be the function inside a class, with the necessary imports.
+
+Therefore, the code would look like this:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class YourClassName:
+    required_fields = []  # to be defined by the class
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+
+But the problem might not require the class definition, just the function. Since the user provided the function's signature, the code must be exactly that function. However, since it's a class method, it's part of a class. Therefore, the code must include the function inside a class, with the necessary imports.
+
+But perhaps the code can be written as just the function, assuming it's part of a class. So the code would start with the import statement and the function. But the function must be a class method. So the code should include the @classmethod decorator.
+
+Ah, right! The function is a class method, so it must be decorated with @classmethod. I missed that earlier. So the correct code would include that.
+
+So the final code:
+
+import yaml
+
+def validate_from_file(cls, yaml_file=None):
+    """
+    Loads & validates that a YAML file has all required fields
+
+    :param yaml_file: Path to YAML file
+    :raise IRValidatorException: when mandatory data is missing in file
+    :return: Dictionary with data loaded from a YAML file
+    """
+    with open(yaml_file, 'r') as f:
+        data = yaml.safe_load(f) or {}
+    missing = [field for field in cls.required_fields if field not in data]
+    if missing:
+        raise IRValidatorException(
+            f"Missing required fields: {', '.join(missing)}"
+        )
+    return data
+
+Wait, but this is not decorated with @classmethod. Oh right! Because the function is a class method, the decorator is needed. So the code should have:
+
+@classmethod
+def validate_from_file(cls, yaml_file=None):
+
+Ah, I missed that. So the correct code must include the @classmethod decorator. 
+
+Therefore, the final code is:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class YourClass:
+    required_fields = []  # to be defined by the class
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+
+But the user's problem may not want the entire class structure, just the function. Since the function is part of a class, the code must be written inside the class. However, the problem's instructions specify the function's signature, so the code must be exactly that function with the @classmethod decorator.
+
+Wait, but in Python, the function must be inside a class to use @classmethod. So the code must be written within a class. The problem might expect that the code is presented as part of a class. But the user's instruction says to output the code generated, which is the function. So perhaps the code is written as the function with the decorator, assuming it's part of a class.
+
+Alternatively, maybe the code is written as the function with the decorator, inside a class. So the minimal code would be:
+
+import yaml
+
+class YourClass:
+    required_fields = [...]  # as defined by the class
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        # function code here
+
+But the user's problem requires only the code generated based on the function signature and docstring, so the code should be the function with the @classmethod decorator, the import, and the exception. But the exception is raised, so it must be imported or defined.
+
+Wait, the exception is IRValidatorException, which is presumably defined elsewhere, but in the code, perhaps it's imported. So the code must include the import for yaml and the exception, unless it's defined in the same module.
+
+Assuming that the exception is in the same module, perhaps the code would have:
+
+class IRValidatorException(Exception):
+    pass
+
+Then the function.
+
+Alternatively, the code may assume that the exception is imported from another module. Since the problem doesn't specify, perhaps the code should include the exception definition.
+
+Putting it all together:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+def validate_from_file(cls, yaml_file=None):
+    # ... (as before)
+
+Wait no, the function is a class method, so it must be inside a class. So the code must be part of a class. Therefore, the correct code is the function inside a class with the necessary imports and exception.
+
+But since the user's problem only asks for the code based on the function signature and docstring, perhaps they expect the code to be written as the function with the @classmethod decorator, assuming the class is defined elsewhere. 
+
+Alternatively, perhaps the code can be written as:
+
+import yaml
+
+def validate_from_file(cls, yaml_file=None):
+    ...
+But with the @classmethod decorator.
+
+Wait, here's the correct code:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class YourClass:
+    required_fields = []  # this must be set by the class
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+
+But the user might not want the class name. Since the problem's function is part of a class, perhaps the code is written as the function inside a class, with the necessary parts. However, the problem's instruction says to output only the code generated. So the code should include the function with the @classmethod decorator, the import, and the exception.
+
+Wait, but the exception is raised in the function. So the code must define or import it. Since the problem's docstring says to raise IRValidatorException, the code must have access to it. Therefore, the code must include the exception definition or an import.
+
+Assuming that the exception is defined in the same module, the code would need to define it. So the code would start with the exception definition, then the class and the function.
+
+Putting all together:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class YourClassName:
+    required_fields = [...]  # the actual required fields list
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+
+But the problem's function's signature is def validate_from_file(cls, yaml_file=None):, so the code must be exactly that function with the @classmethod decorator, the imports, and the exception.
+
+Alternatively, perhaps the code is written as follows, omitting the class name:
+
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class BaseValidator:
+    required_fields = []  # to be overridden by subclasses
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+
+But the user's problem requires only the code generated, so the minimal code that fulfills the function's signature and docstring.
+
+The minimal code that is correct would be the function inside a class with the required elements. Since the user's code must be in Python markdown format, the code should be enclosed in triple backticks with the language tag.
+
+So the final code would look like:
+
+```python
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class YourClassName:
+    required_fields = []  # Define the required fields here
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        """
+        Loads & validates that a YAML file has all required fields
+
+        :param yaml_file: Path to YAML file
+        :raise IRValidatorException: when mandatory data is missing in file
+        :return: Dictionary with data loaded from a YAML file
+        """
+        with open(yaml_file, 'r')_as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+```
+
+Wait, there's a typo in the 'with open' line: the underscore between 'as' and f is a typo. It should be 'as f'.
+
+Also, the required_fields must be set in the class. The user must define that in their subclass.
+
+But the code provided here is correct except for the typo. Let me correct that:
+
+```python
+import yaml
+
+class IRValidatorException(Exception):
+    pass
+
+class YourClassName:
+    required_fields = []  # Define the required fields here
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        """
+        Loads & validates that a YAML file has all required fields
+
+        :param yaml_file: Path to YAML file
+        :raise IRValidatorException: when mandatory data is missing in file
+        :return: Dictionary with data loaded from a YAML file
+        """
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        missing = [field for field in cls.required_fields if field not in data]
+        if missing:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing)}"
+            )
+        return data
+```
+
+This code includes the necessary imports, defines the exception, and implements the class method with the required functionality. The 'required_fields' must be set in the class (or subclass) for this to work properly. The function reads the YAML file, loads it, checks for missing required fields, and raises an exception if any are missing.

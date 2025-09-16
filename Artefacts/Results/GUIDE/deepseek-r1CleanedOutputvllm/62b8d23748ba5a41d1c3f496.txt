@@ -1,0 +1,53 @@
+class LfuWrapper:
+    def __init__(self, function, maxsize, typed):
+        self.function = function
+        self.maxsize = maxsize
+        self.typed = typed
+        self.cache = {}
+        self.counters = {}
+        self.current_size = 0
+
+    def __call__(self, *args, **kwargs):
+        if self.maxsize == 0:
+            raise ValueError("maxsize cannot be zero or negative")
+        if self.typed:
+            if kwargs.get('check_args', True):
+                expected_types = tuple(type(arg) for arg in args)
+                actual_types = tuple(type(kw) for kw in kwargs.values())
+                if expected_types != actual_types:
+                    raise TypeError("Arguments must match expected types")
+        
+        result = None
+        if args in self.cache:
+            result = self.cache[args]
+            if result is None:
+                result = self.function(*args, **kwargs)
+                self.cache[args] = result
+                self.counters[args] = 1
+            else:
+                self.counters[args] += 1
+        else:
+            if self.current_size >= self.maxsize:
+                # Evict the least frequently used item
+                self._evict()
+            self.cache[args] = self.function(*args, **kwargs)
+            self.counters[args] = 1
+            self.current_size += 1
+        return result
+
+    def _evict(self):
+        if not self.counters:
+            return
+        # Sort by the least usage count, breaking ties by insertion order
+        sorted_items = sorted(self.counters.items(), key=lambda x: (x[1], id(x[0])))
+        least_used = sorted_items[0]
+        del self.cache[least_used[0]]
+        del self.counters[least_used[0]]
+
+    def __get__(self, instance, owner):
+        return self
+
+def lfu_cache(maxsize=128, typed=False, check_args=True):
+    def decorator(func):
+        return LfuWrapper(func, maxsize, typed)
+    return decorator

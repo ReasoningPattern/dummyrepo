@@ -1,0 +1,68 @@
+
+
+```python
+import yaml
+from some_module import IRValidatorException
+
+class IRValidator:
+    REQUIRED_FIELDS = ['field1', 'field2']
+
+    @classmethod
+    def validate_from_file(cls, yaml_file=None):
+        """
+        Loads & validates that a YAML file has all required fields
+
+        :param yaml_file: Path to YAML file
+        :raise IRValidatorException: when mandatory data is missing in file
+        :return: Dictionary with data loaded from a YAML file
+        """
+        required_fields = cls.REQUIRED_FIELDS
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f)
+        for field in required_fields:
+            if field not in data:
+                raise IRValidatorException(f"Missing required field: {field}")
+        return data
+```
+
+```python
+import unittest
+import yaml
+import os
+from my_module import IRValidator, IRValidatorException
+
+class TestIRValidator(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = 'test_files'
+        os.makedirs(self.temp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for f in os.listdir(self.temp_dir):
+            os.remove(os.path.join(self.temp_dir, f))
+        os.rmdir(self.temp_dir)
+
+    def test_valid_yaml(self):
+        yaml_file = os.path.join(self.temp_dir, 'valid.yaml')
+        with open(yaml_file, 'w') as f:
+            f.write("field1: value1\nfield2: value2")
+        data = IRValidator.validate_from_file(yaml_file)
+        self.assertEqual(data['field1'], 'value1')
+        self.assertEqual(data['field2'], 'value2')
+
+    def test_missing_required_field(self):
+        yaml_file = os.path.join(self.temp_dir, 'missing.yaml')
+        with open(yaml_file, 'w') as f:
+            f.write("field1: value1")
+        with self.assertRaises(IRValidatorException):
+            IRValidator.validate_from_file(yaml_file)
+
+    def test_invalid_yaml_syntax(self):
+        yaml_file = os.path.join(self.temp_dir, 'invalid.yaml')
+        with open(yaml_file, 'w') as f:
+            f.write("field1: value1\ninvalid: ")
+        with self.assertRaises(yaml.YAMLError):
+            IRValidator.validate_from_file(yaml_file)
+
+if __name__ == '__main__':
+    unittest.main()
+```

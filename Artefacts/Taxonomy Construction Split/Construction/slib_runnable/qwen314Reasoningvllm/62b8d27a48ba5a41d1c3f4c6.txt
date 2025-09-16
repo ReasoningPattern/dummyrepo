@@ -1,0 +1,169 @@
+
+Okay, I need to generate a Python decorator function called cached that uses a provided cache, key function, and lock. Let me think about how to approach this.
+
+The function signature is def cached(cache, key=hashkey, lock=None):. The docstring says it returns a decorator that saves results in the cache. So the decorator should wrap a function and cache its results based on the key.
+
+First, the decorator needs to take the function to be decorated. So the cached function should return another function that acts as a decorator. Maybe something like this:
+
+def cached(cache, key=hashkey, lock=None):
+    def decorator(func):
+        # implementation here
+        return wrapper
+    return decorator
+
+Wait, but the parameters cache, key, and lock are passed to the cached function. The decorator needs to use them. So when the user applies @cached(some_cache), the decorator will use that cache.
+
+Now, the wrapper function. It should check if the result for the current key is already in the cache. If yes, return it. If not, compute the result, store it in the cache, and then return it.
+
+But how to handle the key? The key parameter defaults to hashkey, which I assume is a function that generates a hashable key from the function's arguments. So the key function will take the arguments of the decorated function and return a key.
+
+Also, there's a lock parameter. That's probably for thread safety. So when accessing the cache, we need to acquire the lock to prevent race conditions. If lock is None, maybe we don't use any locking, but if provided, we use it.
+
+So inside the wrapper, before checking the cache, we should acquire the lock. Then check if the key is in the cache. If not, compute the result, store it in the cache, and release the lock. If it is, return the cached value.
+
+Wait, but how to handle the lock properly? Using a context manager might be better. Like with lock: ... if lock is not None.
+
+Putting it all together:
+
+The wrapper function will take *args and **kwargs. It computes the key using the key function passed to cached. Then, under the lock (if any), checks the cache. If the key exists, returns the value. Otherwise, calls the original function, stores the result in the cache, and returns it.
+
+But what about the cache itself? It should be a dictionary-like object that supports get and set. The user is expected to pass in a cache that has those methods. So the code can assume that cache has a get and set method.
+
+So here's the plan for the wrapper:
+
+def wrapper(*args, **kwargs):
+    k = key(*args, **kwargs)
+    if lock is not None:
+        with lock:
+            if k in cache:
+                return cache[k]
+            else:
+                result = func(*args, **kwargs)
+                cache[k] = result
+                return result
+    else:
+        if k in cache:
+            return cache[k]
+        else:
+            result = func(*args, **kwargs)
+            cache[k] = result
+            return result
+
+Wait, but that's not quite right. Because if the lock is provided, we need to acquire it before checking the cache and before setting it. Otherwise, multiple threads might check the cache at the same time and compute the same result multiple times.
+
+So the correct approach is to use the lock to ensure that only one thread can check and update the cache at a time. So inside the wrapper, we first compute the key. Then, acquire the lock (if present), check if the key is in the cache. If not, compute the result, store it in the cache, then release the lock. But using a with statement for the lock would handle acquiring and releasing automatically.
+
+But what if the key function is not hashkey? The user can pass a custom key function. So the key parameter in the cached function is a function that's used to generate the key from the arguments.
+
+So the code should be:
+
+def cached(cache, key=hashkey, lock=None):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            k = key(*args, **kwargs)
+            if lock is not None:
+                with lock:
+                    if k in cache:
+                        return cache[k]
+                    else:
+                        result = func(*args, **kwargs)
+                        cache[k] = result
+                        return result
+            else:
+                if k in cache:
+                    return cache[k]
+                else:
+                    result = func(*args, **kwargs)
+                    cache[k] = result
+                    return result
+        return wrapper
+    return decorator
+
+Wait, but in the else part, when there's no lock, we still need to check if the key is present. However, there's a possible race condition here if multiple threads are using the same cache without a lock. But the docstring says that the lock is optional, so maybe the user is responsible for providing a thread-safe cache if they don't use a lock.
+
+But the problem says to generate the code based on the given signature and docstring. So perhaps that's acceptable.
+
+But I need to make sure that the code is correct. Also, the hashkey function—does it exist? Maybe the user is supposed to pass a key function, and hashkey is a default. But in Python, there's no built-in hashkey function. Oh, maybe it's a typo or the user expects that hashkey is a predefined function. But since the code is supposed to be generated, perhaps the key parameter is set to a default function, which might be something like using the arguments' hash. However, the code as written would need to have hashkey defined. But since the user provided the signature with key=hashkey, maybe they expect that hashkey is a function that takes *args and **kwargs and returns a hashable key. So perhaps the code is okay as is.
+
+Another thing: the key function might need to be called with the arguments of the decorated function. So in the wrapper, when we call key(*args, **kwargs), that's correct.
+
+So the code should look like this. Let me write it properly with proper indentation and syntax.
+
+Wait, but the function is called cached, and returns a decorator. So when someone uses @cached(some_cache), the decorator is applied. The code should handle that.
+
+I think that's the right approach. Let me check for possible errors. For example, if the lock is not a context manager, but maybe it's a threading.Lock. Using 'with lock:' would acquire and release it properly.
+
+Yes, that's correct. So the code would be:
+
+def cached(cache, key=hashkey, lock=None):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            k = key(*args, **kwargs)
+            if lock is not None:
+                with lock:
+                    if k in cache:
+                        return cache[k]
+                    result = func(*args, **kwargs)
+                    cache[k] = result
+                    return result
+            else:
+                if k in cache:
+                    return cache[k]
+                result = func(*args, **kwargs)
+                cache[k] = result
+                return result
+        return wrapper
+    return decorator
+
+Wait, but in the else part, the code is not using the lock. So if multiple threads are accessing the same cache without a lock, they might overwrite each other's entries. But the docstring says that the lock is optional, so maybe the user is supposed to handle that. The code is correct in that it uses the lock if provided.
+
+But what about the case where the key is generated and then the cache is checked, but between checking and storing, another thread could have added the same key. The lock ensures that once a thread has acquired it, no other can, so that scenario is avoided.
+
+Yes, that makes sense. So the code should be okay.
+
+I think that's the correct implementation. Let me make sure I didn't miss any parameters. The key is set to hashkey by default. The lock is optional. The cache is expected to have get and set methods? Or maybe it's a dictionary. Wait, in the code above, it's using cache[k] = result, which implies that cache is a mutable mapping, like a dictionary. So the user is expected to pass a cache that supports key-based access.
+
+So the code should work as intended. Now, I need to present it in Python markdown format, but the user said to output only the code in Python markdown. So the code should be enclosed in triple backticks with the python tag.
+
+But the user's original code has the function signature and docstring. The generated code should include that. Wait, the user provided the function signature and docstring, and wants the code generated based on that. So the code should be the complete function, including the docstring.
+
+Wait, the user's initial code is:
+
+def cached(cache, key=hashkey, lock=None):
+    """
+    Returns a decorator function that saves the results in the cache
+    """
+    
+
+So the code needs to fill in the implementation. So the generated code should have the function with the docstring and the body.
+
+So putting it all together, the code would be:
+
+def cached(cache, key=hashkey, lock=None):
+    """
+    Returns a decorator function that saves the results in the cache
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            k = key(*args, **kwargs)
+            if lock is not None:
+                with lock:
+                    if k in cache:
+                        return cache[k]
+                    result = func(*args, **kwargs)
+                    cache[k] = result
+                    return result
+            else:
+                if k in cache:
+                    return cache[k]
+                result = func(*args, **kwargs)
+                cache[k] = result
+                return result
+        return wrapper
+    return decorator
+
+But wait, the code inside the lock block: when we check if k is in cache, and if not, compute the result. But if two threads check at the same time, they might both compute the result. However, with the lock, only one thread can enter the block at a time. So the first thread checks, finds it not in cache, computes, stores, returns. The second thread, after the first has released the lock, will check again and find it there. So that's correct.
+
+But what if the key function is not hashable? Well, the code assumes that the key function returns a hashable value, which is necessary for using it as a dictionary key. The user is responsible for that.
+
+So this should be the correct code. Now, I need to output it in Python markdown format, which is triple backticks with python specified. But the user said to output ONLY the code generated, in python markdown format. So I need to make sure there's no extra text, just the code.

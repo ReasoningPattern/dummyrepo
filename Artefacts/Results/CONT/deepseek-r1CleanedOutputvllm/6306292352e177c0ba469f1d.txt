@@ -1,0 +1,36 @@
+import re
+import urllib.parse
+
+def find_tags(text: str, replacer: callable = None) -> Tuple[Set, str]:
+    """
+    Find tags in text.
+
+    Tries to ignore tags inside code blocks.
+
+    Optionally, if passed a "replacer", will also replace the tag word with the result
+    of the replacer function called with the tag word.
+
+    Returns a set of tags and the original or replaced text.
+    """
+    code_block_pattern = re.compile(r'(\s*#|\s*@|\s*$)([\w-]+)')
+    
+    def is_code_block(match):
+        _, tag = match.groups()
+        return urlsplit(encode_if_text(text, tag)).scheme in ('http', 'https')
+    
+    def replace_tag(match):
+        tag_word = match.group(2)
+        if replacer:
+            return replacer(tag_word)
+        return tag_word
+    
+    tags = set()
+    new_text = []
+    for match in code_block_pattern.finditer(text):
+        if is_code_block(match):
+            continue
+        tags.add(match.group(2))
+        new_text.append(replace_tag(match))
+    
+    result_text = ''.join(new_text)
+    return tags, result_text

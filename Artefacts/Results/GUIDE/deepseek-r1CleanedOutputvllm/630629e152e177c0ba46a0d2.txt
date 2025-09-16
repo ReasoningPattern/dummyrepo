@@ -1,0 +1,76 @@
+import requests
+import json
+import logging
+
+def retrieve_and_parse_diaspora_webfinger(handle):
+    """
+    Retrieves and parses a remote Diaspora webfinger document.
+
+    Args:
+        handle (str): Remote handle/URL to retrieve
+
+    Returns:
+        dict: Parsed data from the webfinger document
+
+    Raises:
+        requests.exceptions.HTTPError: For HTTP errors during the request
+        json.JSONDecodeError: If the response content is not valid JSON
+    """
+    logging.info(f"Retrieving webfinger from handle: {handle}")
+    
+    response = requests.get(handle)
+    
+    try:
+        if response.status_code != 200:
+            logging.error(f"HTTP Error: {response.status_code}")
+            raise requests.exceptions.HTTPError(response)
+        
+        data = response.json()
+        if not data:
+            logging.error("JSON parsing failed or response is empty")
+            return {}
+        
+        return json.loads(data)
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON Decode Error: {str(e)}")
+        raise
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP Error: {str(e)}")
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}")
+        raise
+
+def test_retrieve_and_parse_diaspora_webfinger():
+    """
+    Comprehensive unit tests for retrieve_and_parse_diaspora_webfinger function.
+    """
+    test_handles = [
+        "https://example.com/diaspora/test1",
+        "https://example.com/diaspora/test2",
+        "invalid_handle",
+        "https://example.com/diaspora/empty"
+    ]
+    
+    # Mock HTTP client for testing
+    with requests_mock.MokHTTP() as m:
+        m.get("https://example.com/diaspora/test1", json={"test": 1})
+        m.get("https://example.com/diaspora/test2", json={"test": 2})
+        m.get("invalid_handle", status_code=404)
+        m.get("https://example.com/diaspora/empty", json={})
+        
+        for handle, expected_data in [
+            ("https://example.com/diaspora/test1", {"test": 1}),
+            ("https://example.com/diaspora/test2", {"test": 2}),
+            ("invalid_handle", None),
+            ("https://example.com/diaspora/empty", {})
+        ]:
+            m.get.handle(handle)
+            try:
+                result = retrieve_and_parse_diaspora_webfinger(handle)
+                assert result == expected_data
+                print(f"Test passed for handle: {handle}")
+            except Exception as e:
+                print(f"Test failed for handle: {handle}, error: {str(e)}")
+    
+    print("All tests completed successfully")

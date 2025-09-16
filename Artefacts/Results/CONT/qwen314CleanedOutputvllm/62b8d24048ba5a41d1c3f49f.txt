@@ -1,0 +1,49 @@
+import time
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    class _Wrapper:
+        __slots__ = ('func', 'cache', 'order', 'maxsize', 'ttl', 'timer', 'typed')
+        def __init__(self, func):
+            self.func = func
+            self.cache = {}
+            self.order = OrderedDict()
+            self.maxsize = maxsize
+            self.ttl = ttl
+            self.timer = timer
+            self.typed = typed
+
+        def __call__(self, *args, **kwargs):
+            key = self._make_key(args, kwargs)
+            now = self.timer()
+
+            if key in self.cache:
+                value, timestamp = self.cache[key]
+                if now - timestamp <= self.ttl:
+                    self.order.move_to_end(key)
+                    return value
+                else:
+                    del self.cache[key]
+                    del self.order[key]
+
+            value = self.func(*args, **kwargs)
+            self.cache[key] = (value, now)
+            self.order[key] = None
+            if len(self.order) > self.maxsize:
+                lru_key = self.order.popitem(last=False)
+                del self.cache[lru_key]
+            return value
+
+        def _make_key(self, args, kwargs):
+            key_parts = list(args)
+            if self.typed:
+                key_parts = [type(arg) for arg in args] + key_parts
+            key_parts.extend(sorted(kwargs.items()))
+            return tuple(key_parts)
+
+    return _Wrapper

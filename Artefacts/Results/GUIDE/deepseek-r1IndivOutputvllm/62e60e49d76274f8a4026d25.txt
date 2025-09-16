@@ -1,0 +1,139 @@
+
+
+```python
+import time
+import unittest
+from unittest import TestCase
+from functools import wraps
+
+class TestUnitOfWork(TestCase):
+    def test_unit_of_work_with_metadata_and_timeout(self):
+        @self.patch('time.time')
+        @self.patch('time.timeit')
+        def mock_unit_of_work(test_timeit, test_time, mock_func):
+            metadata = {'__metadata_key__': 'test_value'}
+            timeout = 1.0
+            
+            def decorator(func):
+                def wrapper(*args, **kwargs):
+                    start_time = test_time()
+                    result = func(*args, **kwargs)
+                    execution_time = time.timeit(lambda: func(*args, **kwargs), number=1) - start_time
+                    metadata['execution_time'] = execution_time
+                    return result
+                wrapper.metadata = metadata
+                return wrapper
+            return decorator
+        
+        mock_func()
+        mock_timeit = self._mock_timeit
+        mock_time = self._mock_time
+        
+    def test_unit_of_work_with_only_metadata(self):
+        @self.patch('time.time')
+        @self.patch('time.timeit')
+        def mock_unit_of_work(test_timeit, test_time, mock_func):
+            metadata = {'__metadata_key__': 'test_value'}
+            
+            def decorator(func):
+                def wrapper(*args, **kwargs):
+                    result = func(*args, **kwargs)
+                    return result
+                wrapper.metadata = metadata
+                return wrapper
+            return decorator
+        
+        mock_func()
+        mock_timeit = self._mock_timeit
+        mock_time = self._mock_time
+        
+    def test_unit_of_work_with_only_timeout(self):
+        @self.patch('time.time')
+        @self.patch('time.timeit')
+        def mock_unit_of_work(test_timeit, test_time, mock_func):
+            timeout = 1.0
+            
+            def decorator(func):
+                def wrapper(*args, **kwargs):
+                    start_time = test_time()
+                    result = func(*args, **kwargs)
+                    execution_time = time.timeit(lambda: func(*args, **kwargs), number=1) - start_time
+                    return result
+                return wrapper
+            return decorator
+        
+        mock_func()
+        mock_timeit = self._mock_timeit
+        mock_time = self._mock_time
+        
+    def test_unit_of_work_with_no_args(self):
+        @self.patch('time.time')
+        @self.patch('time.timeit')
+        def mock_unit_of_work(test_timeit, test_time, mock_func):
+            def decorator(func):
+                def wrapper(*args, **kwargs):
+                    result = func(*args, **kwargs)
+                    return result
+                return wrapper
+            return decorator
+        
+        mock_func()
+        mock_timeit = self._mock_timeit
+        mock_time = self._mock_time
+
+def unit_of_work(metadata=None, timeout=None):
+    """
+    Returns a decorator with metadata and timeout attributes.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            execution_time = time.timeit(lambda: func(*args, **kwargs), number=1) - start_time
+            metadata_dict = {}
+            if metadata is not None:
+                metadata_dict['metadata'] = metadata
+            if timeout is not None:
+                metadata_dict['timeout'] = timeout
+            metadata_dict['execution_time'] = execution_time
+            return result
+        if metadata is not None:
+            wrapper.metadata = metadata
+        return wrapper
+    return decorator
+
+def timeit(func):
+    """
+    Simple decorator to time functions.
+    """
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        execution_time = time.time() - start_time
+        return result
+    wrapper.execution_time = execution_time
+    return wrapper
+
+class _MockTimeit:
+    def __init__(self):
+        self._calls = 0
+        self._time = None
+    def __call__(self, *args, **kwargs):
+        self._time = time.time()
+        self._calls +=1
+        return self._time
+
+class _MockTime:
+    def __init__(self):
+        self._value = None
+    def __call__(self, *args, **kwargs):
+        self._value = time.time()
+        return self._value
+
+# Mock objects for testing
+def _mock_timeit():
+    return _MockTimeit()
+
+def _mock_time():
+    return _MockTime()
+```

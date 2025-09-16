@@ -1,0 +1,38 @@
+import collections
+
+def lru_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        if maxsize == 0:
+            return user_function
+        class LRUWrapper:
+            def __init__(self):
+                self.user_function = user_function
+                self.cache = collections.OrderedDict()
+                self.maxsize = maxsize
+                self.typed = typed
+                self.hits = 0
+                self.misses = 0
+            def __call__(self, *args, **kwds):
+                key_args = args
+                key_kwargs = sorted(kwds.items())
+                if self.typed:
+                    key_args = tuple( ( (v, type(v)) for v in args ) )
+                    key_kwargs = tuple( ( (k, v, type(v)) for (k, v) in sorted(kwds.items()) ) )
+                else:
+                    key_args = tuple( (v for v in args) )
+                    key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+                key = (key_args, key_kwargs)
+                if key in self.cache:
+                    self.hits += 1
+                    val = self.cache.pop(key)
+                    self.cache[key] = val
+                    return val
+                else:
+                    self.misses += 1
+                    result = self.user_function(*args, **kwds)
+                    self.cache[key] = result
+                    if len(self.cache) > self.maxsize:
+                        self.cache.popitem(last=False)
+                    return result
+        return LRUWrapper()
+    return decorating_function

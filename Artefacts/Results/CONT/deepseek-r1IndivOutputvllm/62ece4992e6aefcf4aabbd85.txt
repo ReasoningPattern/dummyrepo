@@ -1,0 +1,52 @@
+
+
+To solve this problem, we need to write a Python function that identifies the roots in a transitive hierarchy from a given graph. The function should take a graph, a property, and an optional set of roots. The goal is to return a set of nodes that act as roots in the hierarchy.
+
+### Approach
+The function `find_roots` is designed to identify the roots of a transitive hierarchy in a given graph. The approach involves two main scenarios:
+
+1. **When `roots` is `None`:**
+   - We need to find all nodes in the graph that do not have any incoming edges via the given property. These nodes are considered the roots of the hierarchy because they are not preceded by any other nodes in the graph.
+
+2. **When `roots` is provided:**
+   - We start from the given set of roots and traverse the graph in the forward direction using the given property. This traversal continues until no new nodes can be added, resulting in a set of nodes that are reachable from the provided roots via the property.
+
+### Solution Code
+```python
+from rdflib import Graph
+
+def find_roots(graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None) -> Set["Node"]:
+    if roots is None:
+        parents = set()
+        for triple in graph:
+            _, prop, parent = triple
+            parents.add(parent)
+        return {node for node in graph.nodes() if node not in parents}
+    else:
+        reverse_graph = {}
+        for triple in graph:
+            child, prop, parent = triple
+            if parent not in reverse_graph:
+                reverse_graph[parent] = set()
+            reverse_graph[parent].add(child)
+        current = set(roots)
+        new_nodes = current.copy()
+        while new_nodes:
+            current_nodes = new_nodes.copy()
+            new_nodes.clear()
+            for node in current_nodes:
+                if node in reverse_graph:
+                    new_nodes.update(reverse_graph[node])
+            current.update(new_nodes)
+        return current
+```
+
+### Explanation
+- **When `roots` is `None`:**
+  - We iterate through all triples in the graph. For each triple, we extract the parent node and add it to a set of parents. The roots of the graph are all nodes that are not present in this set of parents. These nodes are the top-level nodes in the hierarchy.
+
+- **When `roots` is provided:**
+  - We build a reverse graph mapping where each key is a parent node, and the value is a set of child nodes. This helps in efficiently finding all nodes that can be reached from the given roots via the property.
+  - We start with the provided roots and iteratively find all nodes reachable from them using the property. This is done by traversing the reverse graph and expanding the set of reachable nodes until no new nodes can be added.
+
+This approach ensures that we efficiently find all roots in the hierarchy, whether starting from no roots or a specific set of roots.

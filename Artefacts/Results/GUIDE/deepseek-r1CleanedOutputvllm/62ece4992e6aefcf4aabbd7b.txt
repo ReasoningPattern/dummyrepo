@@ -1,0 +1,65 @@
+import os
+import yaml
+
+def write_configuration(config_filename, rendered_config, mode=0o600, overwrite=False):
+    """
+    Given a rendered config YAML, write it out to target file.
+    But if the file already exists and overwrite is False,
+    abort before writing anything.
+    If the file does not exist, create it.
+    Write to the file otherwise.
+
+    Returns: None
+    """
+    if not os.path.exists(config_filename):
+        with open(config_filename, mode=mode, encoding='utf-8') as f:
+            yaml.dump(rendered_config, f)
+    else:
+        if overwrite:
+            with open(config_filename, mode=mode, encoding='utf-8') as f:
+                yaml.dump(rendered_config, f)
+        else:
+            raise FileNotFoundError(
+                f"File {config_filename} exists and overwrite is False; "
+                "cannot proceed."
+            )
+
+def test_write_configuration_file_does_not_exist():
+    """Test that file is written when it does not exist."""
+    test_config = """some_config:
+        value: test"""
+    write_configuration("test_config.yaml", test_config)
+    assert os.path.exists("test_config.yaml")
+    with open("test_config.yaml", 'r') as f:
+        loaded_config = yaml.safe_load(f)
+        assert loaded_config == {"some_config": {"value": "test"}}
+
+def test_write_configuration_file_exists_with_overwrite():
+    """Test that file is written when it exists and overwrite is True."""
+    test_config = """test_config:
+        value: 1"""
+    initial_config = """initial_config:
+        value: 0"""
+    write_configuration("test_config.yaml", test_config, overwrite=True)
+    assert os.path.exists("test_config.yaml")
+    with open("test_config.yaml", 'r') as f:
+        loaded_config = yaml.safe_load(f)
+        assert loaded_config == {"test_config": {"value": "1"}}
+
+def test_write_configuration_file_exists_without_overwrite():
+    """Test that function raises error when file exists and overwrite is False."""
+    test_config = """test_config:
+        value: 1"""
+    initial_config = """initial_config:
+        value: 0"""
+    with pytest.raises FileNotFoundError:
+        write_configuration("test_config.yaml", initial_config, overwrite=False)
+
+def test_write_configuration_file_exists_without_overwrite_and_mode():
+    """Test that function raises error when file exists, overwrite is False, and mode is not writable."""
+    test_config = """test_config:
+        value: 1"""
+    initial_config = """initial_config:
+        value: 0"""
+    with pytest.raises(FileNotFoundError):
+        write_configuration("test_config.yaml", initial_config, mode=0o400, overwrite=False)

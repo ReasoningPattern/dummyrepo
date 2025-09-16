@@ -1,0 +1,5 @@
+def index(self, key):
+    """
+    Returns the key in the form of int.
+    """
+    return int(key)

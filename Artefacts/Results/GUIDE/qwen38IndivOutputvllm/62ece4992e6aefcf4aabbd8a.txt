@@ -1,0 +1,70 @@
+
+
+```python
+import os
+import json
+import logging
+import re
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    """
+    Given a sequence of configuration filenames, load and validate each configuration file. If the configuration file
+    cannot be read due to insufficient permissions or error parsing configuration file, the error log will
+    be recorded. Otherwise, return the results as a tuple of: dict of configuration filename to corresponding parsed configuration,
+    and sequence of logging.LogRecord instances containing any parse errors.
+    """
+    config_dict = {}
+    error_logs = []
+    
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                content = f.read()
+        except Exception as e:
+            # Log the error
+            log_record = logging.LogRecord(
+                name='config_loader',
+                level=logging.ERROR,
+                pathname=filename,
+                lineno=0,
+                msg=f"Error reading file {filename}: {str(e)}",
+                args=None,
+                exc_info=None,
+                func=None,
+                keywords=None
+            )
+            error_logs.append(log_record)
+            continue
+        
+        if resolve_env:
+            # Resolve environment variables in content
+            def replace_env(match):
+                var_name = match.group(1)
+                return os.environ.get(var_name, '')
+            content = re.sub(r'\$\{([^}]+)\}', replace_env, content)
+        
+        try:
+            # Parse content into a dictionary (assuming JSON)
+            parsed_config = json.loads(content)
+        except json.JSONDecodeError as e:
+            # Log parsing error
+            log_record = logging.LogRecord(
+                name='config_loader',
+                level=logging.ERROR,
+                pathname=filename,
+                lineno=0,
+                msg=f"Error parsing JSON in file {filename}: {str(e)}",
+                args=None,
+                exc_info=None,
+                func=None,
+                keywords=None
+            )
+            error_logs.append(log_record)
+        else:
+            # Apply overrides
+            if overrides is not None:
+                parsed_config.update(overrides)
+            config_dict[filename] = parsed_config
+    
+    return config_dict, error_logs
+```

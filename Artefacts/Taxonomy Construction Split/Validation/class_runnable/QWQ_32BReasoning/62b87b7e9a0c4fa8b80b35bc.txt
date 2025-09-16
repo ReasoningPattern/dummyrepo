@@ -1,0 +1,710 @@
+Okay, I need to generate the Python code for the _update_context method based on the given docstring. Let me read through the docstring carefully to understand what's required.
+
+The function's purpose is to update the context with the properties of the graph. Specifically, the context.error should be appended with indices of errors. The example provided shows a subcontext where "error_E_low" is mapped to "x_low" and the index is 2. The note says that error names are "x", "y", or "z", corresponding to the first three coordinates if present. Existing values in context.value and its subcontexts shouldn't be removed. 
+
+Hmm, so the method should take the context parameter and add the graph's properties to it. The example uses a dictionary structure where each error field (like x_low) has an index. I think the idea is that the graph has some data fields, like "E" and "t" in the example, and for each of these, if there's an associated error (like error_E_low), we need to map them to x, y, z based on their position in the coordinates.
+
+Wait, the note mentions that error names are called "x", "y", and "z", which allows simplifying plotting. So maybe the graph has some fields that are coordinates (like E, t, etc.), and the errors for those coordinates should be labeled as x, y, or z errors. The indices refer to the position in the coordinates. Like, if "E" is the first coordinate, then its error becomes "x_low" with index 0? Or maybe the indices are based on the order of the coordinates. 
+
+The example given is for a graph with fields "E,t,error_E_low". The subcontext there is {"error": {"x_low": {"index": 2}}}. Wait, that's confusing. The error_E_low is part of the graph's fields, but the index in the example is 2. Maybe the index here refers to the position in the error fields? Or perhaps the graph has some way of determining which coordinate each error corresponds to. 
+
+The key points are: 
+
+- Append to context.error with the indices of errors. 
+- The error names should be "x", "y", or "z", depending on their coordinate position. 
+- Existing values in context.value and its subcontexts are preserved. 
+
+So, the code needs to loop through the graph's properties and check for error fields. Let me think about how the graph's data is structured. Maybe the graph has a list of fields, and each field can have an error. The errors are named like 'error_<field_name>_<direction>', where direction could be 'low' or 'high'?
+
+Alternatively, perhaps the graph has a way to get the error values for each coordinate. The example's error_E_low is an error for the E field, which is the first coordinate. So "x_low" would be the key under the error subcontext, and the index would be the position of E in the coordinates (since E is first, the index would be 0?), but in the example, the index is 2. Wait that's conflicting. Let me look again.
+
+The example says: Example subcontext for a graph with fields "E,t,error_E_low": {"error": {"x_low": {"index": 2}}}. Wait, maybe the fields are stored in a list, and the error fields are part of that list. So the fields list has "E", "t", "error_E_low", so the index of "error_E_low" is 2. That makes sense. The error fields are part of the graph's data, so their indices in the original data fields are stored in the context.error's subcontext. 
+
+So the process is: for each error field in the graph's fields, determine which coordinate it belongs to (like x, y, or z) and then add an entry to the context.error's subcontext. The coordinate is determined by the field's name. For example, if the error is named 'error_E_low', then 'E' is the coordinate field, which is the first in the list (so index 0?), but the error field's own index in the fields list would be 2 in the example. 
+
+Wait, the error field's name has a prefix like 'error_', followed by the original field name (like 'E'), then a direction (low/high). The original field's position in the coordinates would determine whether it's x, y, or z. So for instance, if the graph's fields are ['E', 't', 'error_E_low'], then 'E' is the first coordinate (x), so the error_E_low is an error for x. The error's own index in the fields list would be 2. So in the context, under the error subcontext, we create an entry like 'x_low' pointing to index 2. 
+
+Therefore, the code should loop over each field in the graph's fields. For each field, check if it starts with 'error_', then parse the original field name from the suffix after 'error_'. Then find the index of that original field in the coordinates (like the first three fields?), and use that to determine if it's x, y, or z. 
+
+Wait, the note says "the first three coordinates, if they are present". So maybe the graph has coordinates in order x, y, z, and any error for those coordinates should be mapped to x, y, or z. 
+
+So steps:
+
+1. Iterate over each field in the graph's fields. 
+
+2. For each field that starts with 'error_', split the name to get the original field. Like, if the field is 'error_E_low', the original is 'E'. 
+
+3. Find the index of the original field in the main coordinates. For example, the coordinates are the first three fields (assuming 2D or 3D). So check if the original field is among the first three. 
+
+4. If it is, then assign the error type (like 'x_low') based on the original's position. For instance, original field at index 0 → x, 1 → y, 2 → z. 
+
+5. The index of the error field in the overall fields list is stored under the error's subkey. 
+
+6. Add this to the context.error, but without overwriting existing entries. 
+
+Wait the existing values are not removed, so we can just update the context. 
+
+So the code would look something like this:
+
+First, check the existing context.error. Maybe if it doesn't exist, create it. But the problem says existing values are not removed, so perhaps we should merge. 
+
+Alternatively, since the function is called on destruction, maybe the context is being built up. So perhaps we can just add new entries. 
+
+Let me think in code terms. 
+
+Inside the method:
+
+for each field in self.fields:
+
+    if field starts with 'error_':
+
+        parts = field.split('_')
+
+        error_part = parts[1]  # since first part is 'error'
+
+        direction_part = parts[2]  # like 'low' or 'high'
+
+        original_field = error_part  # Wait, no. The first part after 'error' would be the original field name. 
+
+Wait the example's field is 'error_E_low', so splitting by '_' gives ['error', 'E', 'low']. So the original field is 'E', and the direction is 'low'. 
+
+Therefore, the error name in the context should be the coordinate (x, y, z) based on the original field's position, plus the direction. 
+
+So the original field's index in the coordinates (the first three fields) determines which coordinate name to use. 
+
+First, I need to get the list of coordinate fields. Let's say the coordinates are the first three fields of the graph. For example, if the graph has fields like ['E', 't', 'something', 'error_E_low'], then the first three are E (x), t (y), and something (z?), but maybe z is the third. 
+
+So the original field's index (in the first three fields) would decide the coordinate name. 
+
+Therefore, for each error field:
+
+original_field = '_'.join(parts[1:-1])? Wait no. Let's see:
+
+In the example, 'error_E_low' → parts[1] is 'E', parts[2] is 'low'. So the original field is 'E', and the direction is 'low'. 
+
+So the original field is the part after 'error', but before the direction. 
+
+Wait, perhaps the original field is the part after 'error', up to the direction. So in the name 'error_E_low', the original field is 'E', direction 'low'. 
+
+So to extract the original field, we can split the field name into parts, take the part after 'error', and before the direction. 
+
+So the general approach is:
+
+field_name = 'error_' + original + '_' + direction
+
+So for each error field, the original field name is the part between 'error' and the direction. 
+
+So, for a given error field:
+
+split into parts = field.split('_')
+
+if len(parts) <3, maybe it's not a valid error field? Or perhaps we can skip it. 
+
+Assuming the error fields are named properly, then:
+
+original = parts[1]
+
+direction = parts[2]
+
+Then find the index of the original field in the first three fields of the graph. 
+
+Wait the first three coordinates are the first three fields, perhaps. So the graph's fields list would have the coordinates as the first entries, then other data. 
+
+Wait the example says the graph has fields "E,t,error_E_low". So the first two are coordinates (E and t?), so maybe the coordinates are the first n fields (n being 2 or 3). 
+
+But how do I know which fields are coordinates? The note says that the error names correspond to the first three coordinates if present. 
+
+Hmm, perhaps the graph has a method or a property that tells the coordinates. Alternatively, maybe the first three fields are considered coordinates, but only if they exist. 
+
+Alternatively, maybe the graph has a list of coordinates, but the problem doesn't specify that. 
+
+The problem says that "error names are called 'x', 'y' and 'z' (this corresponds to first three coordinates, if they are present)". So the original field must be among the first three fields of the graph. 
+
+Therefore, the code can do the following:
+
+Loop through all the fields in self.fields:
+
+for idx, field in enumerate(self.fields):
+
+    if field.startswith('error_'):
+
+        # extract original field and direction
+
+        # split the field name into parts
+
+        parts = field.split('_')
+
+        if len(parts) <3:
+
+            continue  # or handle error, but the example shows three parts
+
+        original_part = parts[1]
+
+        direction_part = parts[2]
+
+        # now find the original field's index in the first three fields
+
+        # search through the first three fields of the graph's fields list
+
+        # but the original field may not be in the first three? 
+
+        # The original field must be in the first three coordinates, otherwise it can't be mapped to x/y/z.
+
+        # So first, check if original_part is present in the first three fields of the graph.
+
+        # Get the first three fields (coordinates):
+
+        coords = self.fields[:3]  # maybe up to 3?
+
+        original_field_index = None
+
+        for coord_idx, coord in enumerate(coords):
+
+            if coord == original_part:
+
+                original_field_index = coord_idx
+
+                break
+
+        if original_field_index is None:
+
+            # then the original field isn't one of the first three coordinates, so skip?
+
+            continue
+
+        # determine the coordinate name (x, y, z) based on original_field_index
+
+        coord_name = ['x', 'y', 'z'][original_field_index]
+
+        # the error key would be coord_name + '_' + direction_part
+
+        error_key = f"{coord_name}_{direction_part}"
+
+        # then, in the context.error, we need to add an entry for error_key with the current index (idx)
+
+        # but the example shows that the error's index in the fields is 2 (the error_E_low is at index 2?)
+
+        Wait in the example, the graph's fields are "E,t,error_E_low", so the third field (index 2) is error_E_low. 
+
+        So the error_key would be x_low (since E is the first coordinate, index 0 → x), so the key is 'x_low', and the index stored is 2 (the index of the error field in the overall list). 
+
+        Therefore, the code should add to the context.error subcontext a key like 'x_low' with the value being the current index (the position in the graph's fields list). 
+
+        So, to structure the context:
+
+        The context.error is a dictionary. For each error_key (like 'x_low'), we add an entry under context.error with that key pointing to a dictionary containing 'index' as the current field's index. 
+
+        So, in code:
+
+        error_subcontext = context.error.get(error_key, {})
+
+        # Wait no, perhaps the existing entries might have other data. The problem says existing values are not removed. 
+
+        # The example shows that for error_E_low, the index is stored under "x_low" as {"index": 2}
+
+        So each error entry in the context.error is a dictionary with 'index' key. 
+
+        Therefore, for each error field:
+
+        The error_key (like x_low) is to be added to context.error. If that key already exists, perhaps we need to merge or append? But the problem says existing values are not removed, so maybe we just add the new entry. 
+
+        Wait the example shows that when there's an error field, the subcontext is built. So maybe each error field creates a new entry in the error subcontext. 
+
+        So the code can proceed as:
+
+        if error_key is determined, then:
+
+            context.error[error_key] = {'index': idx}
+
+        But need to make sure that if there's an existing entry for that key, perhaps we shouldn't overwrite it. Wait the problem says "append with indices of errors", so perhaps each error is added to the error's subcontext. But the example shows that the subcontext is a dictionary with 'index' as a key. 
+
+        So the note says existing values are not removed from context.value and its subcontexts. Wait, the context has a 'value' and 'error'? Or perhaps the 'error' is part of the context's structure. 
+
+        The function's first line says: *context.error* is appended with indices of errors. 
+
+        So, perhaps the context.error is a list, but the example uses a dictionary. Wait the example shows a subcontext with error being a nested dict. Hmm, maybe I misunderstood the structure. 
+
+        Looking at the example: {"error": {"x_low": {"index": 2}}}. So context.error is a dictionary. 
+
+        The function needs to update this dictionary. So for each error field, we create a key like 'x_low' (based on original coordinate's index and direction) and set its value to {'index': idx_of_error_field}. 
+
+        But if there is already a key like 'x_low', then do we overwrite it? The note says existing values are not removed, so perhaps we should not overwrite, but maybe the indices are unique per coordinate direction? 
+
+        Alternatively, the problem might want to accumulate all possible error fields. 
+
+        Since the example uses a single entry, maybe each error field is mapped to one key. 
+
+        So the code would be:
+
+        for each field in self.fields:
+
+            if field starts with 'error_':
+
+                parts = field.split('_')
+
+                original_part = parts[1]
+
+                direction_part = parts[2]
+
+                find the original_part's position in the first three fields (coordinates). 
+
+                if found:
+
+                    coord_name = 'x', 'y', or 'z'
+
+                    key = f"{coord_name}_{direction_part}"
+
+                    context.error[key] = {'index': current index (the field's index in the list)}
+
+        Wait but in the example, the error field's index is 2 (third element in the list), so that's correct. 
+
+        So in code, the steps are:
+
+        - Iterate over each field in self.fields, keeping track of their indices (idx). 
+
+        - For each field starting with 'error_', split the name into parts. 
+
+        - The original field is parts[1], direction is parts[2]. 
+
+        - Check if the original field is in the first three fields (coordinates). 
+
+        - If so, get its coordinate index (0,1,2) → coordinate name (x, y, z). 
+
+        - Then, the error's key is coordinate_name + '_' + direction_part. 
+
+        - Assign to context.error that key with the value {'index': idx}. 
+
+        But how do I access the context.error? 
+
+        The function's parameter is context. The docstring says "update *context* with the properties of this graph". 
+
+        The example shows that the subcontext is under 'error' in the context. 
+
+        So perhaps the context is a dictionary, and we need to add to its 'error' sub-dictionary. 
+
+        So first, we need to make sure that context has an 'error' key. 
+
+        So maybe:
+
+        if 'error' not in context:
+
+            context['error'] = {}
+
+        Then, for each error field:
+
+            key = coord_name + '_' + direction_part
+
+            context['error'][key] = {'index': idx}
+
+        Wait but in the example, the key is 'x_low' and the value is {'index': 2}. So that's exactly what this would do. 
+
+        Now, how to get the original_part's coordinate index. 
+
+        The original field is the name of the coordinate field, so we have to look through the first three fields of the graph's fields to see if that name exists. 
+
+        So:
+
+        original_field = parts[1]
+
+        # look for original_field in the first three fields of self.fields
+
+        for i in range(len(self.fields[:3])):
+
+            if self.fields[i] == original_field:
+
+                coord_index = i
+
+                break
+
+        else:
+
+            continue  # not found in first three, so skip
+
+        Then, the coordinate name is 'x', 'y', 'z'[coord_index]
+
+        So putting it all together, in code:
+
+        def _update_context(self, context):
+            # Check if 'error' exists in context, create if not
+            if 'error' not in context:
+                context['error'] = {}
+            error_subcontext = context['error']
+            for idx, field in enumerate(self.fields):
+                if field.startswith('error_'):
+                    parts = field.split('_')
+                    if len(parts) < 3:
+                        continue
+                    original_part = parts[1]
+                    direction_part = parts[2]
+                    # Find original_part in first three fields
+                    for coord_idx, coord_field in enumerate(self.fields[:3]):
+                        if coord_field == original_part:
+                            coord_name = ['x', 'y', 'z'][coord_idx]
+                            key = f"{coord_name}_{direction_part}"
+                            error_subcontext[key] = {'index': idx}
+                            break
+                    else:
+                        continue  # not found in first three coordinates
+
+        Wait but what about the case where the original_part is not in the first three? Then we skip. 
+
+        This seems to fit the example. 
+
+        Also, the note mentions that existing values in context.value and subcontexts are not removed. So, if the context already has an 'error' subcontext, we just add new keys. The code above uses context['error'] as a dictionary, so adding new keys won't remove existing ones. 
+
+        But what about 'value'? The problem says that existing values are not removed from context.value and its subcontexts. Wait, maybe the 'value' part is separate, and this function is only dealing with the error part. 
+
+        The docstring says the function is called on destruction (like in ToCSV), so maybe the 'value' part is handled elsewhere, and here we just add the error info. 
+
+        So the code seems okay. 
+
+        Now, I need to make sure that all error fields are processed correctly. 
+
+        Let's test with the example. Suppose self.fields is ["E", "t", "error_E_low"]. 
+
+        For the third field (index 2):
+
+        field is 'error_E_low', parts are ['error', 'E', 'low']
+
+        original_part is 'E', direction 'low'
+
+        looking in first three fields (indices 0,1,2?), wait wait, self.fields[:3] is the first three elements. The first two elements are "E" and "t", then the third is "error_E_low". 
+
+        Wait, that would mean the first three fields are ["E", "t", "error_E_low"], but the original_part is 'E', which is at index 0. 
+
+        So coord_idx would be 0, so coord_name is 'x', key is 'x_low', and the index is 2 (the current field's index). 
+
+        That matches the example's {"error": {"x_low": {"index": 2}}}.
+
+        That's correct. 
+
+        Another test case: suppose a graph has fields ['E', 't', 'T', 'error_t_high', 'error_E_low'].
+
+        The first three fields are E (x), t (y), T (z). 
+
+        The error_t_high would be parts ['error', 't', 'high'], original_part 't' is at index 1 → 'y', so key 'y_high', index 3. 
+
+        The error_E_low is parts ['error', 'E', 'low'], original_part at index 0 → 'x_low', index 4. 
+
+        So the error subcontext would have both 'x_low' (index4) and 'y_high' (index3). 
+
+        The code should handle that. 
+
+        Also, if there is an error field that's named 'error_not_in_coords_low', then it's ignored since the original_part isn't in the first three. 
+
+        Now, what about the direction part? The direction is either 'low' or 'high', so the keys would be 'x_low', 'x_high', etc. 
+
+        So this code should work. 
+
+        Now, the function is part of a class, so self has the fields. 
+
+        I think this is the approach. Now, coding that. 
+
+        Also, the function is named _update_context, so it's an instance method. 
+
+        Let me write the code step by step. 
+
+        First, check if 'error' is in the context. If not, create an empty dict. 
+
+        Then, loop over each field with index. 
+
+        For each field, check if it starts with 'error_'. 
+
+        Split into parts. 
+
+        If parts less than 3, skip. 
+
+        Get original_part and direction_part. 
+
+        Then check in the first three fields of self.fields (the coordinates) if original_part is present. 
+
+        So loop through the first three fields (using their indices from 0 to 2):
+
+        Wait, the first three are self.fields[0], self.fields[1], self.fields[2]. So for each of those indices (0,1,2), if the field name matches original_part, then the coordinate name is x, y, z respectively. 
+
+        So in code, perhaps loop through the first three fields, track their index. 
+
+        So:
+
+        for coord_idx in range(3):
+
+            if coord_idx >= len(self.fields):
+
+                break  # no coordinate at that index
+
+            coord_field = self.fields[coord_idx]
+
+            if coord_field == original_part:
+
+                # then we have the coordinate index
+
+                coord_name = ['x', 'y', 'z'][coord_idx]
+
+                key = f"{coord_name}_{direction_part}"
+
+                error_subcontext[key] = {'index': idx}
+
+                break
+
+        Wait, that's another way. 
+
+        Alternatively, looping through the first three fields:
+
+        for i in range(3):
+
+            if i >= len(self.fields):
+
+                continue  # beyond the list
+
+            if self.fields[i] == original_part:
+
+                coord_name = ['x','y','z'][i]
+
+                key = coord_name + '_' + direction_part
+
+                error_subcontext[key] = {'index': idx}
+
+                break
+
+        So that's better, perhaps. 
+
+        So in the code:
+
+        def _update_context(self, context):
+            if 'error' not in context:
+                context['error'] = {}
+            error_subcontext = context['error']
+            for idx, field in enumerate(self.fields):
+                if field.startswith('error_'):
+                    parts = field.split('_')
+                    if len(parts) < 3:
+                        continue
+                    original_part = parts[1]
+                    direction_part = parts[2]
+                    found = False
+                    for coord_idx in range(3):
+                        if coord_idx < len(self.fields):
+                            coord_field = self.fields[coord_idx]
+                            if coord_field == original_part:
+                                coord_name = ['x', 'y', 'z'][coord_idx]
+                                key = f"{coord_name}_{direction_part}"
+                                error_subcontext[key] = {'index': idx}
+                                found = True
+                                break
+                    if not found:
+                        continue
+
+        Wait, but maybe the code can be more concise. 
+
+        Let me see:
+
+        Instead of a loop, maybe check each of the first three indices directly. 
+
+        Or:
+
+        for coord_idx in 0, 1, 2:
+
+            if coord_idx < len(self.fields):
+
+                if self.fields[coord_idx] == original_part:
+
+                    ...
+
+        Alternatively, just loop through the first three elements:
+
+        for coord_idx in range(min(3, len(self.fields))):
+
+            if self.fields[coord_idx] == original_part:
+
+                ... 
+
+        But perhaps the code can be written as:
+
+        for coord_idx in range(3):
+
+            if coord_idx >= len(self.fields):
+
+                continue
+
+            if self.fields[coord_idx] == original_part:
+
+                coord_name = ['x', 'y', 'z'][coord_idx]
+
+                key = f"{coord_name}_{direction_part}"
+
+                error_subcontext[key] = {'index': idx}
+
+                break
+
+        That way, once found, it breaks. 
+
+        So putting this all together. 
+
+        Now, in code:
+
+        The code must not use any markdown formatting. 
+
+        Also, the function is supposed to be part of a class, so the code should use self.fields. 
+
+        Now, let's code this step by step.
+
+        Start with checking the 'error' key in context. 
+
+        Then, loop over each field in self.fields with their indices. 
+
+        For each error field:
+
+        split into parts, check length. 
+
+        Then, check each coordinate index (0-2) to see if the original_part matches. 
+
+        Once a match is found, create the key and add to the error_subcontext. 
+
+        The code can be written as:
+
+        def _update_context(self, context):
+            if 'error' not in context:
+                context['error'] = {}
+            error_subcontext = context['error']
+            for idx, field in enumerate(self.fields):
+                if field.startswith('error_'):
+                    parts = field.split('_')
+                    if len(parts) < 3:
+                        continue
+                    original_part = parts[1]
+                    direction_part = parts[2]
+                    for coord_idx in range(3):
+                        if coord_idx < len(self.fields):
+                            if self.fields[coord_idx] == original_part:
+                                coord_name = ['x', 'y', 'z'][coord_idx]
+                                key = f"{coord_name}_{direction_part}"
+                                error_subcontext[key] = {'index': idx}
+                                break
+
+        Wait, but in the loop over coord_idx, once found, we break. So the first occurrence is taken. 
+
+        What if the original_part appears more than once in the first three fields? But that's unlikely, as coordinates are probably unique. 
+
+        This code should work. 
+
+        Now, let's test with the example. 
+
+        Suppose self.fields is ['E', 't', 'error_E_low'].
+
+        The loop runs for idx 0 (field 'E'), then 1 (field 't'), then 2 (field 'error_E_low'). 
+
+        For idx 2, the field starts with 'error_', so split into ['error', 'E', 'low'].
+
+        original_part is 'E', direction 'low'.
+
+        Then, loop coord_idx from 0 to 2. 
+
+        coord_idx=0: check if self.fields[0] (E) == original_part (E → yes). So coord_name is 'x', key is 'x_low', and the index is 2 (the current field's index is 2). 
+
+        So error_subcontext['x_low'] = {'index': 2}
+
+        That's correct. 
+
+        Another test case: 
+
+        fields = ['x', 'y', 'z', 'error_x_low', 'error_y_high', 'error_z_low']
+
+        For the fourth field (index 3, 'error_x_low'):
+
+        parts are ['error', 'x', 'low']
+
+        original_part is 'x'. 
+
+        check coord_idx 0: self.fields[0] is 'x' → yes. So coord_name 'x', key 'x_low', index 3 → stored. 
+
+        Then, the fifth field (index4, 'error_y_high') → original_part 'y', found at coord_idx 1 → 'y', key 'y_high', index4. 
+
+        Similarly, the sixth field (index5, 'error_z_low') → original_part 'z' at coord_idx2 → 'z_low', index5. 
+
+        So the error_subcontext would have entries for x_low (3), y_high (4), z_low (5). 
+
+        That's correct. 
+
+        Now, what if the original_part is not in the first three? Like a field 'error_not_x_low' where the first three are 'E', 't', 'T'. Then original_part is 'not_x' which is not in first three, so it skips. 
+
+        So the code works. 
+
+        Now, what about if the error field has a different structure? Like 'error_E_low_high'? Then splitting would give parts ['error', 'E', 'low', 'high'] → length is 4. So parts[1] is 'E', parts[2] is 'low', but direction_part would be 'low', and the rest is ignored. 
+
+        That's okay, because the code takes the first two parts after 'error' as the original and direction. Wait no, in the example, the direction is parts[2], so the code assumes that the direction is the third part. So if the field is named 'error_E_low_high', the direction_part would be 'low', but the code might not handle that. But according to the note, the error names are x, y, z, so perhaps the error field names must be in the format 'error_<original>_<direction>', where direction is low or high. 
+
+        So the code can safely assume that direction_part is the third part. 
+
+        So that's okay. 
+
+        Now, the code must not remove existing values in context.value and its subcontexts. Since the code only modifies the 'error' subcontext, and only adds new keys, existing keys are preserved. 
+
+        Therefore, this code should satisfy the requirements. 
+
+        Now, let me write it properly. 
+
+        Also, the function is called on destruction, so maybe the order in which the fields are processed doesn't matter. 
+
+        So the code should be as written above. 
+
+        Wait, in the code, the error_subcontext is set once, so each time the loop runs, the error_subcontext is the same. 
+
+        So the code is correct. 
+
+        I think that's it. Now, the code needs to be written in Python, using the function signature provided. 
+
+        Also, the code should not include any markdown formatting, just the code in a code block. 
+
+        So the final code would look like:
+
+        def _update_context(self, context):
+            if 'error' not in context:
+                context['error'] = {}
+            error_subcontext = context['error']
+            for idx, field in enumerate(self.fields):
+                if field.startswith('error_'):
+                    parts = field.split('_')
+                    if len(parts) < 3:
+                        continue
+                    original_part = parts[1]
+                    direction_part = parts[2]
+                    for coord_idx in range(3):
+                        if coord_idx < len(self.fields) and self.fields[coord_idx] == original_part:
+                            coord_name = ['x', 'y', 'z'][coord_idx]
+                            key = f"{coord_name}_{direction_part}"
+                            error_subcontext[key] = {'index': idx}
+                            break
+
+        Wait, in the for loop over coord_idx, I can check if the coord_idx is within the list length. 
+
+        Also, the code uses a for loop that breaks once the original_part is found. 
+
+        This should work. 
+
+        Let me check again the example. 
+
+        The field 'error_E_low' is at index 2. 
+
+        The first three fields are 'E', 't', and 'error_E_low'? Wait no, in the example, the fields are "E,t,error_E_low", so the first three elements are E (0), t (1), and error_E_low (2). 
+
+        So when checking coord_idx 0, the field at 0 is E → matches original_part (E). 
+
+        So coord_name is 'x', key is 'x_low', and the index is 2. 
+
+        That's exactly the example's result. 
+
+        So the code is correct. 
+
+        Another possible case: what if the original_part is in the first three, but the error field is not in the first three? 
+
+        Like fields are ['E', 't', 'T', 'error_E_low', 'error_T_high']. 
+
+        Then, for 'error_E_low' (index3), original_part is E, which is at coord_idx0. So key x_low, index3. 
+
+        For 'error_T_high' (index4), original_part T is at coord_idx2, so key z_high, index4. 
+
+        That's correct. 
+
+        I think this should work. 
+
+        Now, I'll write the code as per the function signature.

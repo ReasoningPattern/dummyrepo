@@ -1,0 +1,68 @@
+
+
+To solve this problem, we need to categorize Ansible play arguments into three distinct groups: control arguments, nested arguments, and custom arguments. The goal is to split the collected arguments such that control arguments are not included in the spec file, nested arguments are included, and custom arguments are used as variables.
+
+### Approach
+1. **Identify Control Arguments**: These are arguments that control the behavior of Ansible commands and are not meant to be part of the configuration. They can include boolean values, strings that evaluate to boolean, and specific control words like "become", "state", etc.
+
+2. **Identify Nested Arguments**: These are configuration values that are used by Ansible playbooks. They typically include strings, numbers, and enums.
+
+3. **Identify Custom Arguments**: These are variables or identifiers that are not meant to be part of the configuration. They can include strings that are not meant to be parsed as values, such as environment variables or specific identifiers.
+
+### Solution Code
+```python
+def get_nested_custom_and_control_args(self, args):
+    """
+    Split input arguments into control, nested, and custom arguments.
+
+    Control arguments are those that control the IR behavior and are not included in the spec file.
+    Nested arguments are used by Ansible playbooks and are included in the spec file.
+    Custom arguments are ansible variables that replace normal nested usage.
+
+    Args:
+        args (list): The collected list of arguments.
+
+    Returns:
+        tuple: (control_args, nested_args, custom_args) where each is a dictionary.
+    """
+    control_args = {}
+    nested_args = {}
+    custom_args = {}
+
+    for arg in args:
+        if isinstance(arg, bool):
+            # Control boolean arguments
+            control_args[arg] = arg
+        elif isinstance(arg, str):
+            # Check if the string is a control word
+            if arg.lower() in ['become', 'state', 'vars', 'become', 'state']:
+                control_args[arg] = arg
+            else:
+                # Check if the string is a nested or custom argument
+                if arg.strip().upper() == 'YES' or arg.strip().upper() == 'NO':
+                    control_args[arg] = arg
+                else:
+                    # Determine if it's nested or custom based on presence of special characters
+                    if arg.count('=') or arg.count('-'):
+                        nested_args[arg] = arg
+                    else:
+                        custom_args[arg] = arg
+        else:
+            # For non-string, non-bool values, default to nested or custom
+            if isinstance(arg, (int, float)):
+                nested_args[arg] = arg
+            else:
+                # For objects, assume custom
+                custom_args[arg] = arg
+
+    return (control_args, nested_args, custom_args)
+```
+
+### Explanation
+1. **Control Arguments**: These are identified as boolean values or strings that are control words (e.g., "become", "state"). These arguments are not included in the spec file.
+
+2. **Nested Arguments**: These are strings that represent configuration values. They can include special characters like '=', '-', or numeric values.
+
+3. **Custom Arguments**: These are strings that do not evaluate to boolean values and do not contain special characters. They are used as variables in Ansible playbooks.
+
+This approach ensures that each argument is correctly categorized based on its type and context, providing a clear separation of concerns for Ansible playbooks.

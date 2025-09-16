@@ -1,0 +1,172 @@
+Okay, I need to write a Python function called fetch_content_type that takes a URL string and returns an optional string. The docstring mentions setting the head of the request using the URL and USER_AGENT. Hmm, so I think this function is supposed to send a HEAD request to the given URL and return the Content-Type header from the response. If there's an error or no Content-Type, it returns None.
+
+First, I should figure out how to make a HEAD request in Python. The requests library is commonly used for HTTP requests. Oh right, but the problem might require using standard libraries if we can't assume third-party ones. Wait, the user didn't specify, so maybe it's okay to use requests. Alternatively, using urllib or http.client. Let me think. The function's purpose is to get the Content-Type, so using the requests library would be straightforward because it handles HEAD requests easily.
+
+Wait, but if I use requests, I need to set the User-Agent header as per the docstring's note. The USER_AGENT might be a constant or an environment variable? The docstring says "through the URL and USER_AGENT", maybe the USER_AGENT is a predefined string in the code. So I'll need to set the User-Agent in the request headers.
+
+Now, the return type is Optional[str], so if the request is successful and the response has a Content-Type header, return that; else return None.
+
+But I should also handle exceptions, like if the URL is invalid, connection errors, etc. The function should not crash but just return None in such cases.
+
+So the steps for the function would be:
+
+1. Send a HEAD request to the URL with a custom User-Agent header.
+2. Check the response's headers for 'Content-Type'.
+3. Return the value if present, else None.
+4. Handle any exceptions (like connection errors, timeouts, invalid URLs) by returning None.
+
+Now, for the unit tests. Since the user mentioned using test-driven development, I should first write the tests. Let's think of possible test cases:
+
+- A valid URL that returns a Content-Type (like a web page)
+- A URL that returns no Content-Type header
+- Invalid URL (like "http://invalid.url")
+- URL that times out
+- Check that the User-Agent is correctly set in the request
+
+But how to test these without making actual network requests? Maybe use a mocking library like pytest-mock or unittest.mock to mock the requests.get or whatever method is used. Alternatively, use a test server with something like httpbin.org which can return specific headers.
+
+Wait, in the tests, I can use a fixture that mocks the requests.head method. For example, in a test case where the response has a Content-Type, the mock would return a response with that header. Another case where the response doesn't have it. Also test exceptions like ConnectionError.
+
+So the tests would cover:
+
+Test 1: Successful HEAD request with Content-Type → returns the type.
+Test 2: Successful request but no Content-Type → returns None.
+Test 3: Request raises an exception (like connection error) → returns None.
+Test 4: Ensure User-Agent is set correctly in the request headers.
+
+Now, writing the actual code:
+
+First, import necessary modules. The function uses Optional from typing, so need to import that. Also, for the requests, if using the requests library:
+
+But wait, the problem might require using standard library. Let me check. The function's signature doesn't have any dependencies, but using requests would be easier. However, if the user expects standard library, then perhaps using urllib.request.
+
+Hmm, the problem says "You are a Python software engineer" so maybe using the requests library is acceptable. But I should confirm. Since the user didn't specify, perhaps I should proceed with the requests library because it's more straightforward.
+
+So code outline:
+
+import requests
+from typing import Optional
+
+def fetch_content_type(url: str) -> Optional[str]:
+    headers = {'User-Agent': '...'}  # Need to define the USER_AGENT. Wait the docstring says "through the URL and USER_AGENT". Maybe the USER_AGENT is a variable or a constant? The problem's docstring mentions setting the head through the URL and USER_AGENT, so perhaps the USER_AGENT is a predefined string in the code. Let's assume there's a constant called USER_AGENT. But where is that defined? Maybe the function is supposed to use a specific USER_AGENT string. Since the problem's code doesn't show it, perhaps the code should have a USER_AGENT variable. Let me define it as a constant in the code. Like:
+
+USER_AGENT = 'MyUserAgent/1.0'  # or something, but the exact value might not matter for the tests.
+
+Wait, the problem's docstring says "Set the head of the request through the URL and USER_AGENT." So probably the User-Agent header needs to be set to the value of the USER_AGENT variable. So perhaps in the code, there is a constant named USER_AGENT, and the function uses that.
+
+So in the code:
+
+USER_AGENT = 'Python-requests'  # or some default?
+
+Alternatively, maybe the user expects that the USER_AGENT is passed as an argument, but the function signature doesn't have that. So the function must use a predefined USER_AGENT.
+
+So in the code, first, define the USER_AGENT constant. Let's say:
+
+USER_AGENT = 'fetch_content_type/1.0'
+
+Then, in the request's headers, set 'User-Agent': USER_AGENT.
+
+So putting it all together:
+
+def fetch_content_type(url: str) -> Optional[str]:
+    try:
+        response = requests.head(url, headers={'User-Agent': USER_AGENT}, timeout=5)
+        return response.headers.get('Content-Type')
+    except requests.exceptions.RequestException:
+        return None
+
+Wait, but the function must return an Optional[str], so if the header is not present, response.headers.get returns None, which is okay. The try block catches any exceptions from the request (like connection errors, timeouts, invalid URLs) and returns None.
+
+But what about the timeout? The function should handle that, so adding a timeout is good.
+
+Now, the tests. Let's think of how to write them with pytest and mock.
+
+First, install pytest and requests (if needed, but in the code it's already using requests).
+
+The tests would be something like:
+
+import pytest
+from unittest.mock import patch, MagicMock
+from mymodule import fetch_content_type  # assuming the function is in mymodule
+
+def test_success_content_type():
+    # Mock the response to have a Content-Type
+    mock_response = MagicMock()
+    mock_response.headers = {'Content-Type': 'text/html'}
+    with patch('requests.head', return_value=mock_response):
+        assert fetch_content_type('http://example.com') == 'text/html'
+
+def test_no_content_type():
+    mock_response = MagicMock()
+    mock_response.headers = {}  # or no Content-Type key
+    with patch('requests.head', return_value=mock_response):
+        assert fetch_content_type('http://example.com') is None
+
+def test_request_exception():
+    with patch('requests.head', side_effect=requests.exceptions.ConnectionError()):
+        assert fetch_content_type('http://example.com') is None
+
+def test_user_agent_set():
+    with patch('requests.head') as mock_head:
+        fetch_content_type('http://example.com')
+        mock_head.assert_called_with(
+            'http://example.com',
+            headers={'User-Agent': 'fetch_content_type/1.0'},
+            timeout=5
+        )
+
+These tests check the various cases. The user_agent test ensures that the User-Agent is set correctly.
+
+Wait, but in the code, the USER_AGENT is a constant. So in the test, the value must match that constant. So in the code, the USER_AGENT is set to 'fetch_content_type/1.0', so the test must use that exact string.
+
+Now, putting all together. The code must include the USER_AGENT constant, the function with the try block, and using the requests library.
+
+But wait, the problem's function signature may not have the USER_AGENT defined. The docstring says "Set the head of the request through the URL and USER_AGENT." So perhaps the USER_AGENT is an environment variable or a global variable. Alternatively, maybe the function uses a default user agent. Since the problem's code doesn't show where USER_AGENT comes from, perhaps in the code I should define it as a constant in the same module.
+
+So the code would start with:
+
+from typing import Optional
+import requests
+
+USER_AGENT = 'MyUserAgent/1.0'  # or any string, but must be set.
+
+Then the function as above.
+
+Now, possible edge cases: if the URL is None? But the function's parameter is a str, so the input is a string. So no need to handle that. Also, if the URL is not a valid URL, the requests.head would raise an exception, which is caught and returns None.
+
+Another case: the response has multiple Content-Type headers (unlikely, but possible). The get method would return the first one, but in practice, headers are case-insensitive and the server should send only one.
+
+So the code should be okay.
+
+Now, the user asked to output only the code in Python markdown format. So the final code would look like:
+
+```python
+from typing import Optional
+import requests
+
+USER_AGENT = 'fetch_content_type/1.0'
+
+def fetch_content_type(url: str) -> Optional[str]:
+    """
+    Set the head of the request through the URL and USER_AGENT.
+    """
+    try:
+        response = requests.head(
+            url,
+            headers={"User-Agent": USER_AGENT},
+            timeout=5  # seconds
+        )
+        return response.headers.get("Content-Type")
+    except requests.exceptions.RequestException:
+        return None
+```
+
+Wait, but in the function's docstring, the description says "Set the head of the request through the URL and USER_AGENT." Maybe that's a bit ambiguous. But the code uses the USER_AGENT constant, so that's covered.
+
+Testing the code with the unit tests would confirm it works as intended.
+
+Wait, the timeout is set to 5 seconds. That's a reasonable default, but maybe the user expects it to be configurable. But since the function's signature doesn't have a timeout parameter, it's okay to hardcode it here.
+
+Another thing: the function uses the User-Agent header with the value from the constant. The tests ensure that this is set correctly.
+
+So this should be the code. The user also mentioned generating the unit tests first as part of TDD, but the problem only asks for the code, so the code is as above.

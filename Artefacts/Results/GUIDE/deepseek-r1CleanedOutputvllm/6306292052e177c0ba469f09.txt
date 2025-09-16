@@ -1,0 +1,67 @@
+import json
+import xml.etree.ElementTree as ET
+from typing import Any
+
+def identify_request(request: RequestType) -> bool:
+    """
+    Check whether the request body contains JSON events or has XML tag Magic_ENV_TAG.
+    
+    Args:
+        request: The request object containing the body to check.
+    
+    Returns:
+        bool: True if events are found in JSON body or Magic_ENV_TAG is found in XML,
+             False otherwise.
+    """
+    # Check if request body is present
+    body = request.json()
+    if not body:
+        return False
+    
+    # Check for JSON events
+    for event in body:
+        if isinstance(event, dict) and ('type' in event and 'id' in event and 'payload' in event):
+            return True
+    
+    # If no JSON events, check for XML tag
+    text = request.text()
+    if not text:
+        return False
+    
+    root = ET.fromstring(text)
+    for node in root:
+        if node.tag == 'Magic_ENV_TAG':
+            return True
+    
+    return False
+
+def test_identify_request():
+    import pytest
+    from fastapi import Request
+    
+    # Test cases
+    test_cases = [
+        # Test case 1: Should return True due to JSON events
+        {
+            "request": {"events": [{"type": "http", "id": "1", "payload": {"env": {"Magic_ENV_TAG": "value"}}]}
+        },
+        "expected": True
+    ],
+    
+    # Test case 2: Should return True due to XML tag
+    {
+        "request": b"<?xml version='1.0' encoding='UTF-8'?>\n<Magic_ENV_TAG />"
+    },
+    "expected": True
+),
+    
+    # Test case 3: Should return False (no JSON events or XML tag)
+    {
+        "request": {"a": 1, "b": 2}
+    },
+    "expected": False
+    ]
+    
+    for case in test_cases:
+        with pytest.raises(AssertionError, match=".*Expected"):
+            assert identify_request(case["request"]) == case["expected"]

@@ -1,0 +1,49 @@
+
+
+```python
+import re
+from typing import Tuple, Set
+
+def find_tags(text: str, replacer: callable = None) -> Tuple[Set, str]:
+    """
+    Find tags in text.
+
+    Tries to ignore tags inside code blocks.
+
+    Optionally, if passed a "replacer", will also replace the tag word with the result
+    of the replacer function called with the tag word.
+
+    Returns a set of tags and the original or replaced text.
+    """
+    code_block_pattern = re.compile(r'```.*?```', re.DOTALL)
+    text_parts = []
+    current_pos = 0
+    for match in code_block_pattern.finditer(text):
+        start, end = match.span()
+        if current_pos < start:
+            text_parts.append(('non_code', text[current_pos:start]))
+        text_parts.append(('code', text[start:end]))
+        current_pos = end
+    if current_pos < len(text):
+        text_parts.append(('non_code', text[current_pos:]))
+
+    tags = set()
+    modified_parts = []
+
+    for part_type, part in text_parts:
+        if part_type == 'code':
+            modified_parts.append(part)
+        else:
+            words = re.findall(r'\b\w+\b', part)
+            valid_tags = [word for word in words if all(c not in ILLEGAL_TAG_CHARS for c in word)]
+            tags.update(valid_tags)
+            if replacer:
+                pattern = re.compile(r'\b(' + '|'.join(re.escape(tag) for tag in valid_tags) + r')\b')
+                replaced_part = pattern.sub(replacer, part)
+                modified_parts.append(replaced_part)
+            else:
+                modified_parts.append(part)
+
+    modified_text = ''.join(modified_parts)
+    return tags, modified_text
+```

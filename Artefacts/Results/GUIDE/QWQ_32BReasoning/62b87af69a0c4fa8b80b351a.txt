@@ -1,0 +1,301 @@
+Okay, I need to write a Python function called is_fill_compute_el that checks if an object's class has both fill and compute methods. Let's think about how to approach this.
+
+First, the function should take an object 'obj' as an argument. The goal is to determine if the class of this object has both methods named 'fill' and 'compute'. 
+
+Hmm, how do I check if a class has a particular method? Well, in Python, I can use the hasattr function. So for the class of the object, I should check if it has 'fill' and 'compute' attributes. Wait, but those need to be actual methods, not just any attributes. Oh right, but in Python, methods are attributes of the class, so using hasattr should work as long as the methods are defined in the class. 
+
+Wait, but for an instance, if the method is an instance method, then checking the instance's __dict__ might not work. But using hasattr on the instance would check the class. Because hasattr(obj, 'method') would check if the class has that method. Wait, actually, hasattr checks the object's attributes, which includes the class's attributes. So for example, if the class has a 'fill' method, then hasattr(obj, 'fill') would return True even if the instance doesn't have it set. So maybe I should check the class directly? Or is checking the instance sufficient?
+
+Alternatively, maybe I should check the class of the object. So first get the class of obj using obj.__class__, then check if that class has both 'fill' and 'compute' as attributes. 
+
+So the steps would be:
+
+1. Get the class of the object: cls = obj.__class__
+2. Check if 'fill' is in cls's attributes: hasattr(cls, 'fill')
+3. Check if 'compute' is in cls's attributes: hasattr(cls, 'compute')
+4. Return True if both are present, else False.
+
+Wait, but what if the methods are inherited from a parent class? For example, if the object's class doesn't have the method but its parent does, hasattr would still return True because it checks the entire class hierarchy. That's correct because hasattr does look into the method resolution order. So that's exactly what we need here.
+
+So the function can be written as:
+
+def is_fill_compute_el(obj):
+    cls = obj.__class__
+    return hasattr(cls, 'fill') and hasattr(cls, 'compute')
+
+Wait, but maybe the methods could be added to the instance itself, not the class. But according to the problem statement, it's about the class having the methods. So checking the class is correct.
+
+Now, unit tests. Since the user mentioned test-driven development, I should first think of the tests.
+
+Possible test cases:
+
+1. A class with both fill and compute methods. Should return True.
+2. A class missing fill. Should return False.
+3. A class missing compute. Should return False.
+4. A class with neither. Should return False.
+5. A class that inherits from a parent which has the methods. Should return True.
+6. Check that the function works even if the instance has the methods but the class doesn't. Wait, but in that case, the class wouldn't have them. For example, if someone adds a method to the instance dynamically, but that's not typical. The problem specifies the class's methods, so the test should focus on the class.
+
+Let's outline some test classes for these cases.
+
+First test case:
+
+class HasBoth:
+    def fill(self):
+        pass
+    def compute(self):
+        pass
+
+obj = HasBoth()
+assert is_fill_compute_el(obj) is True
+
+Second case, missing fill:
+
+class MissingFill:
+    def compute(self):
+        pass
+
+obj = MissingFill()
+assert is_fill_compute_el(obj) is False
+
+Third, missing compute:
+
+class MissingCompute:
+    def fill(self):
+        pass
+
+obj = MissingCompute()
+assert is_fill_compute_el(obj) is False
+
+Fourth, neither:
+
+class Neither:
+    pass
+
+obj = Neither()
+assert is_fill_compute_el(obj) is False
+
+Fifth, inherited:
+
+class Parent:
+    def fill(self):
+        pass
+    def compute(self):
+        pass
+
+class Child(Parent):
+    pass
+
+child_obj = Child()
+assert is_fill_compute_el(child_obj) is True
+
+Another case where the instance has the methods but the class doesn't, but that's probably not a concern since the function checks the class. For example:
+
+class NoMethods:
+    pass
+
+def add_methods():
+    obj = NoMethods()
+    obj.fill = lambda: None  # This is an instance attribute, not a class method
+    assert is_fill_compute_el(obj) is False  # because the class doesn't have them
+
+But in that case, the function correctly returns False because the class doesn't have the methods. So the test cases are covered.
+
+Now, the actual code. The function is straightforward. The key is to check the class's attributes using hasattr.
+
+Wait, but what if the methods are class methods or static methods? Does hasattr still work? Let's see:
+
+If a method is a class method:
+
+class HasClassMethod:
+    @classmethod
+    def fill(cls):
+        pass
+    @classmethod
+    def compute(cls):
+        pass
+
+Then hasattr(HasClassMethod, 'fill') would be True. So that's okay.
+
+Same for static methods. So the function should handle all method types.
+
+So the code is as I thought.
+
+Now, the user wants the code in Python markdown format, only the code. So the function is:
+
+def is_fill_compute_el(obj):
+    """
+    Check whether the obj class has the fill and compute methods.
+    """
+    return hasattr(obj.__class__, 'fill') and hasattr(obj.__class__, 'compute')
+
+Wait, but maybe the user expects to check if those are actually callable? Because hasattr returns True even if the attribute is not a method but some other type. For example, if the class has an attribute named 'fill' which is an integer, then the function would return True even though it's not a method. 
+
+Hmm, the problem says "has the fill and compute methods". So maybe the function should check that the attributes are actually callable. Because otherwise, if someone defines a class with a 'fill' attribute that's not a method, the current code would incorrectly return True.
+
+So that's a possible flaw. The problem's docstring says "has the fill and compute methods". So perhaps the correct approach is to check that both attributes exist and are callable.
+
+Ah, right! That's an important point I missed. The original problem's docstring specifies that it's checking for methods. So just having an attribute named 'fill' isn't enough; it has to be a method. So I need to check that the attributes are callable.
+
+So the revised approach would be:
+
+Check that the class has the attributes, and that those attributes are callable.
+
+So the code would need to:
+
+cls = obj.__class__
+has_fill = hasattr(cls, 'fill') and callable(getattr(cls.fill, 'fill', None))
+Wait, perhaps better to do:
+
+def is_fill_compute_el(obj):
+    cls = obj.__class__
+    return (
+        hasattr(cls, 'fill') and callable(getattr(cls, 'fill')) and
+        hasattr(cls, 'compute') and callable(getattr(cls, 'compute'))
+    )
+
+Wait, but in Python, when you do getattr on the class for an instance method, it returns a method object, which is callable. So for example, in the class:
+
+class Test:
+    def fill(self): pass
+
+getattr(Test, 'fill') would return the function (since it's a method in the class). Wait, no, in Python, the method in the class is actually a function, but when accessed via an instance, it becomes a bound method. But when you access via the class, it's just the function, which is callable. So yes, the check would work.
+
+Wait, let me test:
+
+>>> class C:
+...     def m(self): pass
+...
+>>> hasattr(C, 'm')  # yes
+True
+>>> callable(C.m)    # the function is callable, yes
+True
+
+So that works. So the code must check both the existence and the callability of the attributes.
+
+Therefore, the initial code was incorrect because it didn't check for callability. So the correct function should check that.
+
+So the unit tests must also account for this.
+
+For example, a test case where a class has an attribute named 'fill' but it's an integer:
+
+class BadFill:
+    fill = 42
+    def compute(self): pass
+
+Then, the function should return False because 'fill' is not callable.
+
+So the tests must include this scenario.
+
+So now, the code needs to be adjusted to include the callability check.
+
+So the correct function would be:
+
+def is_fill_compute_el(obj):
+    cls = obj.__class__
+    fill_attr = getattr(cls, 'fill', None)
+    compute_attr = getattr(cls, 'compute', None)
+    return (
+        fill_attr is not None and callable(fill_attr) and
+        compute_attr is not None and callable(compute_attr)
+    )
+
+Alternatively, using hasattr and then checking:
+
+def is_fill_compute_el(obj):
+    cls = obj.__class__
+    return (
+        hasattr(cls, 'fill') and callable(getattr(cls, 'fill')) and
+        hasattr(cls, 'compute') and callable(getattr(cls, 'compute'))
+    )
+
+Wait, but getattr(cls, 'fill') would return the attribute, which if it exists, then check if it's callable.
+
+This approach is better because if the attribute doesn't exist, hasattr returns False, so the second part is short-circuited.
+
+Wait, but in the first part, 'hasattr' checks existence, and then the second part checks if it's callable. But in the case where the attribute exists but isn't callable, it would return False.
+
+So the code would be:
+
+return (hasattr(cls, 'fill') and callable(getattr(cls, 'fill'))) and ... same for compute.
+
+Yes, that's correct.
+
+So the final code is:
+
+def is_fill_compute_el(obj):
+    """
+    Check whether the obj class has the fill and compute methods.
+    """
+    cls = obj.__class__
+    has_fill = hasattr(cls, 'fill') and callable(getattr(cls, 'fill'))
+    has_compute = hasattr(cls, 'compute') and callable(getattr(cls, 'compute'))
+    return has_fill and has_compute
+
+Alternatively, written inline:
+
+return (hasattr(obj.__class__, 'fill') and callable(getattr(obj.__class__, 'fill')) and
+        hasattr(obj.__class__, 'compute') and callable(getattr(obj.__class__, 'compute')))
+
+But that's a bit long.
+
+Now, the unit tests must include cases where the attributes exist but are not callable.
+
+Let me think of the test cases again:
+
+Test case 1: class with both methods → passes.
+
+Test case 2: missing fill → fails.
+
+Test case 3: missing compute → fails.
+
+Test case 4: neither → fails.
+
+Test case 5: inherited → passes.
+
+Test case 6: class has fill as a non-callable (like an int) → should return False.
+
+So adding that test:
+
+class NonCallableFill:
+    fill = 42  # not a method
+    def compute(self):
+        pass
+
+obj = NonCallableFill()
+assert is_fill_compute_el(obj) is False
+
+Another case where compute is non-callable:
+
+class NonCallableCompute:
+    def fill(self): pass
+    compute = 3.14
+
+obj = NonCallableCompute()
+assert is_fill_compute_el(obj) is False
+
+Another case where both are non-callable:
+
+class BothNonCallable:
+    fill = "not a method"
+    compute = "also not a method"
+
+obj = BothNonCallable()
+assert is_fill_compute_el(obj) is False
+
+Also, a case where one is present and callable, the other present but not:
+
+class FillOkComputeNot:
+    def fill(self): pass
+    compute = 5
+
+obj = FillOkComputeNot()
+assert is_fill_compute_el(obj) is False
+
+These tests are important to cover the callability check.
+
+So now, the code must include the callability check.
+
+Therefore, the final code is as written above.
+
+I think that's the correct approach now. The initial code didn't check for callability, but the problem specifies methods, so it's necessary.

@@ -1,0 +1,396 @@
+
+Okay, I need to create a Python function called ttl_cache that acts as a decorator. The function should memoize results using an LRU algorithm with a TTL. Let me think about how to approach this.
+
+First, the parameters are maxsize, ttl, timer, and typed. The default for maxsize is 128, ttl is 600, timer is time.monotonic, and typed is False. The decorator needs to cache function results, but entries should expire after the TTL.
+
+Hmm, the standard way to do memoization with LRU is using an OrderedDict or a cache that tracks usage. But since we also need TTL, each entry in the cache needs to have a timestamp. So maybe I can use a dictionary where each key is the function arguments, and the value is a tuple of (result, timestamp).
+
+Wait, but checking the TTL for each entry every time we access the cache might be necessary. So when we retrieve a value, we check if the current time minus the timestamp is greater than the TTL. If so, we remove it from the cache.
+
+But how to manage the LRU part? The LRU requires that when the cache is full, the least recently used item is evicted. However, with TTL, some items might expire before being accessed again. So maybe the cache should be ordered by the last access time, and when an item is accessed, it's moved to the end (most recently used). When adding a new item, if the cache is full, we remove the least recently used item, but also check if any items have expired.
+
+Alternatively, maybe using a combination of a dictionary and a queue. But that might get complicated. Another approach is to use a cache that's ordered, and when checking for an item, if it's expired, it's removed. Then, when adding new items, if the cache is at maxsize, we remove the least recently used items, but also check if they are expired.
+
+Wait, but the LRU eviction policy is based on access time. So each time a key is accessed (either a hit or a miss), it's marked as recently used. So the cache needs to track the order of access.
+
+I remember that Python's functools has an lru_cache decorator, but that doesn't have TTL. So I need to implement this from scratch.
+
+Let me think about the steps for the decorator:
+
+1. The decorator will wrap the function. The wrapper will handle the caching.
+2. The cache needs to store the arguments (considering typed, which affects if different types are considered different keys) and the result, along with the timestamp.
+3. When a function is called, the wrapper checks if the arguments are in the cache. If they are, check if the entry is still valid (current time - timestamp <= ttl). If valid, return the result. If not, remove the entry and proceed to compute.
+4. If the arguments are not in the cache, compute the result, store it in the cache with the current timestamp, and then manage the cache size.
+5. For managing the cache size, when adding a new entry, if the cache exceeds maxsize, remove the least recently used entries. But how to track which entries are least recently used?
+
+An OrderedDict can be used where the order is based on the last access time. Each time a key is accessed (hit or miss), it's moved to the end. When adding a new entry, if the cache is full, we pop the first item (the least recently used). However, we also need to check if any items in the cache have expired. Wait, but if we use an OrderedDict, we can't efficiently check for expired items unless we iterate through all entries each time.
+
+Alternatively, when checking for a key, if it's present but expired, we remove it. Then, when adding a new entry, if the cache is full, we remove the least recently used entries, but also check if they are expired. Wait, but that might not be efficient. However, given that the maxsize is 128 by default, maybe it's acceptable.
+
+So here's a possible approach:
+
+The cache is a dictionary (for O(1) lookups) and an OrderedDict (to track the order of access). Wait, but that might complicate things. Alternatively, the OrderedDict can be used as the cache, where each entry's key is the function arguments, and the value is (result, timestamp). When a key is accessed, it's moved to the end of the OrderedDict. When adding a new entry, if the size exceeds maxsize, the first entry is removed. However, when checking for a key, if it's present but expired, we remove it from the OrderedDict.
+
+But how to handle the case where an entry is expired but not yet evicted? For example, when a key is accessed, we check its timestamp. If it's expired, we remove it from the cache. Then, when adding new entries, we check the size and evict as needed.
+
+So the steps for the wrapper function:
+
+- On function call, generate the key based on the arguments (considering typed).
+- Check if the key is in the cache.
+   - If it is, get the (result, timestamp). Check if current time - timestamp <= ttl. If yes, return the result. If not, remove the key from the cache and proceed to compute.
+- If the key is not in the cache, compute the result.
+- Add the key to the cache with the current timestamp.
+- If the cache size exceeds maxsize, evict the least recently used entries (the ones at the beginning of the OrderedDict), but also check if they are expired. Wait, but how to do that? Because when you add a new entry, you have to make sure the cache doesn't exceed maxsize. So perhaps when adding a new entry, we check the size. If it's over, we remove entries from the beginning (LRU) until the size is under maxsize. However, during this process, we can check if the entry is expired. If it is, we can remove it even if it's not the LRU. But that complicates the eviction policy.
+
+Alternatively, the eviction is only based on LRU, but entries can be removed when they are expired. So during the process of adding a new entry, if the cache is full, we remove the LRU entries. However, if those entries have expired, they are already removed when they were accessed. Wait, but if they were never accessed again, they might still be in the cache but expired. So the eviction based on LRU may not remove expired entries unless they are the LRU ones.
+
+This seems like a problem. For example, if there are many expired entries that are not the LRU, they would remain in the cache, taking up space. So perhaps we need to check for expired entries when adding new ones, but that could be time-consuming.
+
+Alternatively, when we check for a key in the cache, we also check if it's expired. If it is, we remove it. Then, when adding new entries, we check the size and evict LRU entries. But even then, some expired entries may still be in the cache if they were not accessed recently.
+
+This is a trade-off. The TTL ensures that entries are only kept for a certain time, but the LRU ensures that the least recently used entries are evicted when needed. However, if an entry is expired but not the LRU, it's still in the cache. But since the TTL is set, it's possible that the entry is no longer valid, but the cache hasn't evicted it yet. However, when the entry is accessed again, it will be checked for expiration and removed if necessary.
+
+So perhaps the approach is:
+
+- The cache is an OrderedDict where the order is based on the last access time (most recent at the end).
+- When a key is accessed (hit or miss), it's moved to the end of the OrderedDict.
+- When adding a new key, if the cache is full, remove the first entry (LRU).
+- However, when checking for a key, if it's present but expired, remove it from the cache.
+
+So during the process of looking up a key, we check if it's expired. If so, remove it. Then, if the key is not in the cache, compute the value, add it to the cache, and manage the size.
+
+So, for the code:
+
+Implement the cache as an OrderedDict. The keys are the function arguments (with typed consideration). The values are tuples of (result, timestamp).
+
+The steps for the wrapper function:
+
+def wrapper(*args, **kwargs):
+    key = make_key(args, kwargs, typed)
+    if key in cache:
+        result, timestamp = cache[key]
+        if timer() - timestamp > ttl:
+            del cache[key]
+            # The key is expired, so proceed to compute
+        else:
+            # Move to end to mark as recently used
+            cache.move_to_end(key)
+            return result
+    # Compute the result
+    result = func(*args, **kwargs)
+    # Add to cache
+    cache[key] = (result, timer())
+    # Ensure cache size is <= maxsize
+    while len(cache) > maxsize:
+        # Remove the first item (LRU)
+        cache.popitem(last=False)
+    return result
+
+Wait, but in this case, when the key is in the cache but expired, we delete it and then proceed to compute. However, after deleting, the code proceeds to compute and add the new entry. But what if the key is not in the cache anymore? Because we deleted it. So in that case, the code would compute the result again.
+
+But that's correct, because the previous entry was expired, so it's no longer valid. The new entry is added with the current timestamp.
+
+But in this approach, when checking for the key, if it's expired, it's removed. Then, the code proceeds to compute the result again. However, this may lead to recomputing the same result if the key is expired and then added again. But that's the intended behavior.
+
+But what about when the key is in the cache but expired? The code deletes it, then proceeds to compute, and adds the new entry. So the next time, if the key is accessed again, it will be checked again.
+
+Now, the problem is that the OrderedDict's move_to_end is only called when the key is found and not expired. So when a key is accessed and is valid, it's moved to the end (marking it as recently used). If it's expired, it's removed, and the new entry is added.
+
+Now, the question is, how to generate the key based on the arguments, considering the 'typed' parameter. For example, if typed is True, then different types (like int(1) vs str('1')) are considered different keys. The standard way to generate the key is to use the arguments and their types. So, for example, using the functools.lru_cache's approach.
+
+In the standard lru_cache, the key is generated by converting the arguments into a tuple, and if typed is True, the types are considered. So for the key generation, perhaps we can use the same approach as functools.lru_cache.
+
+So, the code for generating the key would involve checking if the arguments are of the same type. For example, if typed is True, then (1, 2) and (1.0, 2) would be considered different keys.
+
+But how to implement that? Well, for each argument, we can include its type in the key. So, for args, we can create a tuple of (arg, type(arg)) for each arg, and similarly for kwargs.
+
+But in Python, the standard way to handle this is to use the _make_key function from functools.lru_cache. However, since I can't use that directly, I need to replicate that logic.
+
+So, the key generation function would be something like:
+
+def make_key(args, kwargs, typed):
+    key = []
+    if typed:
+        key.append(args)
+        key.append(tuple(type(arg) for arg in args))
+        key.append(kwargs)
+        key.append(tuple(type(v) for v in kwargs.values()))
+    else:
+        key.append(args)
+        key.append(kwargs)
+    return tuple(key)
+
+Wait, but that's not quite right. The standard approach is to generate a tuple that includes the arguments and their types if typed is True. For example, for args, each argument is included as is, but if typed is True, then the type of each argument is also included. Wait, no, the standard approach for lru_cache is that if typed is True, then different types are considered different keys. So for example, (1, 2) and (1.0, 2) would be different keys if typed is True.
+
+So the way to generate the key is to create a tuple that includes the arguments, and if typed is True, also include their types. However, the exact method for generating the key is a bit more involved. For example, for args, we can create a tuple of (arg, type(arg)) for each arg, and for kwargs, a tuple of (key, value, type(value)) for each key-value pair. But that might be overkill. Alternatively, the key is generated by hashing the arguments, considering their types if typed is True.
+
+Alternatively, perhaps using the same approach as in the standard lru_cache, which is:
+
+def make_key(args, kwargs, typed):
+    key = []
+    if typed:
+        key.append(args)
+        key.append(tuple(type(arg) for arg in args))
+        key.append(kwargs)
+        key.append(tuple(type(v) for v in kwargs.values()))
+    else:
+        key.append(args)
+        key.append(kwargs)
+    return tuple(key)
+
+But I'm not sure. Maybe the standard approach is to use the arguments as is, but when typed is True, the types are considered. So for example, the key is generated by converting the arguments into a tuple, and for each argument, if typed is True, the type is also considered. However, this is not exactly accurate. The actual code for lru_cache's key generation is more nuanced. For example, the key is generated by creating a tuple that includes the arguments and their types if typed is True. But perhaps for the purpose of this problem, we can use a similar approach.
+
+Alternatively, perhaps the key is generated by using the arguments and their types, but for the purpose of this code, we can generate a tuple that combines the arguments and their types if typed is True.
+
+But perhaps the easiest way is to use the same approach as the standard lru_cache. Let me think: the standard lru_cache uses a key that is a tuple of the arguments, with each argument being converted to a hashable type. For typed=True, the types are considered. So, for example, if you have two functions with the same value but different types, they are considered different keys.
+
+So, for the key generation, perhaps the code would be something like:
+
+def make_key(args, kwargs, typed):
+    key = []
+    if typed:
+        key.append(tuple((arg, type(arg)) for arg in args))
+        key.append(tuple((k, v, type(v)) for k, v in kwargs.items()))
+    else:
+        key.append(args)
+        key.append(tuple(sorted(kwargs.items())))
+    return tuple(key)
+
+Wait, but this is getting complicated. Maybe for the purpose of this problem, we can use the same approach as the standard lru_cache, which is to generate a tuple of the arguments and the keyword arguments, and if typed is True, then the types are considered.
+
+Alternatively, perhaps the key is generated by using the arguments and the keyword arguments, and for each argument, if typed is True, then the type is considered. For example, the key is a tuple of (args, kwargs), but with each element's type considered if typed is True.
+
+But I'm not sure. Maybe I can look up how the standard lru_cache generates the key. However, since I can't look it up right now, I need to think of a way to generate unique keys based on the arguments and their types.
+
+Another approach is to use the __qualname__ of the function, but that's not relevant here.
+
+Alternatively, for the key, we can use a tuple that includes the arguments and their types if typed is True. For example, for args, each element is (arg, type(arg)), and for kwargs, each key-value pair is (key, value, type(value)).
+
+But perhaps the code can be written as:
+
+def make_key(args, kwargs, typed):
+    key = []
+    if typed:
+        key.extend(args)
+        key.extend(type(arg) for arg in args)
+        key.extend(kwargs.items())
+        key.extend(type(v) for v in kwargs.values())
+    else:
+        key.extend(args)
+        key.extend(kwargs.items())
+    return tuple(key)
+
+Wait, but that's not quite right. For example, the args are a tuple, and the kwargs are a dictionary. So, for the key, we need to create a tuple that uniquely represents the arguments, considering their types if typed is True.
+
+Alternatively, the key is generated by converting the arguments into a tuple, and if typed is True, then for each argument, we include both the value and the type. For example, for args, the key is a tuple of (arg, type(arg)) for each arg, and for kwargs, a tuple of (key, value, type(value)) for each key-value pair. Then, the entire key is a tuple that combines these.
+
+But this is getting complicated, and perhaps for the purpose of this problem, we can use a simpler approach. For example, the key is generated as a tuple of the arguments and the keyword arguments, and if typed is True, we also include the types of the arguments and keyword arguments. However, this may not be accurate, but it's a starting point.
+
+Alternatively, perhaps the key can be generated using the same method as the standard lru_cache, which uses a tuple of the arguments and keyword arguments, and if typed is True, then the types are considered. For example, in the standard lru_cache, the key is generated by:
+
+key = (args, kwargs)
+
+But if typed is True, then the types are considered. Wait, no. The typed parameter in lru_cache affects whether different types are considered different keys. For example, if you have a function that takes an int and a float, and typed is True, then (1, 2.0) and (1.0, 2) would be considered different keys. So, the key is generated by including the types of the arguments.
+
+But how to do that in code? Well, perhaps the key is generated by creating a tuple where each element is (arg, type(arg)) for positional arguments, and (key, value, type(value)) for keyword arguments. Then, the entire key is a tuple of these elements. However, this would generate a unique key for different types.
+
+But this approach would require that the arguments are hashable. For example, if an argument is a list, then (list, type(list)) is part of the key, but the list itself is not hashable. Wait, but the arguments must be hashable for the cache to work. So, the function being decorated must have hashable arguments.
+
+So, assuming that the arguments are hashable, the key can be generated by combining the arguments and their types if typed is True.
+
+But perhaps for the purpose of this code, we can use the same approach as the standard lru_cache. Let me think: in the standard lru_cache, the key is generated by creating a tuple of the arguments and the keyword arguments. For the keyword arguments, they are sorted by their keys to ensure a consistent order. If typed is True, then the types are considered. However, the exact implementation details may be more involved.
+
+But perhaps for the sake of this problem, we can use a helper function that generates the key based on the arguments and the typed parameter. For example:
+
+def make_key(args, kwargs, typed):
+    key = []
+    if typed:
+        for arg in args:
+            key.append((arg, type(arg)))
+        for k, v in sorted(kwargs.items()):
+            key.append((k, v, type(v)))
+    else:
+        for arg in args:
+            key.append(arg)
+        for k, v in sorted(kwargs.items()):
+            key.append((k, v))
+    return tuple(key)
+
+This way, if typed is True, the key includes both the value and the type for each argument. For keyword arguments, they are sorted by their keys to ensure a consistent order. This would make different types of the same value considered different keys.
+
+But I'm not sure if this is exactly how the standard lru_cache works, but for the purpose of this problem, it's a reasonable approach.
+
+Now, putting this together with the OrderedDict.
+
+So, the code for the ttl_cache decorator would be:
+
+import time
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    def decorator(func):
+        cache = OrderedDict()
+        def wrapper(*args, **kwargs):
+            # Generate the key
+            key = make_key(args, kwargs, typed)
+            # Check if key is in cache
+            if key in cache:
+                result, timestamp = cache[key]
+                current_time = timer()
+                if current_time - timestamp > ttl:
+                    # Expired, remove from cache
+                    del cache[key]
+                else:
+                    # Move to end to mark as recently used
+                    cache.move_to_end(key)
+                    return result
+            # Compute the result
+            result = func(*args, **kwargs)
+            # Add to cache
+            current_time = timer()
+            cache[key] = (result, current_time)
+            # Ensure cache size is within maxsize
+            while len(cache) > maxsize:
+                # Remove the least recently used item
+                cache.popitem(last=False)
+            return result
+        return wrapper
+    return decorator
+
+But wait, the make_key function is not defined. So I need to define that inside the decorator.
+
+So, inside the decorator function, I can define the make_key function. However, in Python, functions can be nested. So, inside the decorator, define make_key.
+
+But how to handle the make_key function? Let's define it inside the decorator:
+
+def ttl_cache(...):
+    def decorator(func):
+        def make_key(args, kwargs, typed):
+            # code here
+        ...
+    return decorator
+
+But perhaps the code for make_key can be written as follows:
+
+def make_key(args, kwargs, typed):
+    key_parts = []
+    if typed:
+        for arg in args:
+            key_parts.append((arg, type(arg)))
+        for k, v in sorted(kwargs.items()):
+            key_parts.append((k, v, type(v)))
+    else:
+        for arg in args:
+            key_parts.append(arg)
+        for k, v in sorted(kwargs.items()):
+            key_parts.append((k, v))
+    return tuple(key_parts)
+
+But this may not handle all cases. For example, if the arguments are not hashable, but that's the responsibility of the user of the decorator.
+
+Now, testing this code. Let's think about some test cases.
+
+Test case 1: A function that returns the same value for the same arguments, and the cache should return the cached value until it expires.
+
+Test case 2: After the TTL, the cached value is no longer available, and the function is recomputed.
+
+Test case 3: The cache size is limited, and when it's full, the LRU entries are evicted.
+
+But the code above uses an OrderedDict, which tracks the order of insertion and moves to end when accessed. So when a key is accessed (and not expired), it's moved to the end, making it the most recently used.
+
+But when adding a new entry, if the cache is full, the first entry (LRU) is removed.
+
+Another thing to consider: when a key is added to the cache, it's placed at the end of the OrderedDict. When the cache is full, the first entry is removed. So the order is maintained correctly.
+
+Now, what about the case where multiple entries are expired but not the LRU? For example, if the cache is full and the LRU entry is not expired, but there are other entries that are expired. Those expired entries will remain in the cache until they are accessed again. However, when they are accessed, they are checked for expiration and removed.
+
+This is acceptable, as the TTL ensures that entries are only kept for a certain time, but the LRU ensures that the least recently used entries are evicted when needed.
+
+Now, the code for the make_key function may have issues. For example, if the arguments are mutable, but that's the user's problem. The function being decorated must have hashable arguments.
+
+Another possible issue is that the key is generated using the sorted kwargs. This ensures that the order of keyword arguments does not affect the key. For example, if the function is called with a=1, b=2 or b=2, a=1, the key would be the same if the kwargs are sorted. This is correct, as the standard lru_cache does the same.
+
+Now, the code for the decorator. But the code above has a problem: when the key is in the cache but expired, we delete it from the cache and then proceed to compute the result. However, after that, the new result is added to the cache. So, the next time the same arguments are called, the new entry will be in the cache with the current timestamp.
+
+Another thing to note is that the timer function is passed as a parameter. The default is time.monotonic, which is a monotonic clock, which is good for measuring time intervals.
+
+Now, putting all together, the code would be:
+
+import time
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    def decorator(func):
+        cache = OrderedDict()
+        
+        def make_key(args, kwargs, typed):
+            key_parts = []
+            if typed:
+                for arg in args:
+                    key_parts.append((arg, type(arg)))
+                for k, v in sorted(kwargs.items()):
+                    key_parts.append((k, v, type(v)))
+            else:
+                for arg in args:
+                    key_parts.append(arg)
+                for k, v in sorted(kwargs.items()):
+                    key_parts.append((k, v))
+            return tuple(key_parts)
+        
+        def wrapper(*args, **kwargs):
+            key = make_key(args, kwargs, typed)
+            if key in cache:
+                result, timestamp = cache[key]
+                current_time = timer()
+                if current_time - timestamp > ttl:
+                    del cache[key]
+                else:
+                    cache.move_to_end(key)
+                    return result
+            result = func(*args, **kwargs)
+            current_time = timer()
+            cache[key] = (result, current_time)
+            while len(cache) > maxsize:
+                cache.popitem(last=False)
+            return result
+        
+        return wrapper
+    return decorator
+
+But wait, the make_key function is inside the decorator, which is inside the ttl_cache function. So each time the decorator is called, a new make_key function is created. That's okay.
+
+Testing this code. Let's imagine a simple function:
+
+@ttl_cache(maxsize=2, ttl=1)
+def add(a, b):
+    return a + b
+
+Then, calling add(1, 2) would return 3 and be cached. After 1 second, calling add(1, 2) again would recompute it. Also, if the cache is full, adding a new entry would evict the LRU.
+
+But what about the case where the cache is full, and the LRU entry is not expired? For example, with maxsize=2, and two entries. Then, adding a third would evict the LRU.
+
+Another possible issue: when the cache is being pruned (evicting entries), the code checks the size and removes entries until it's under maxsize. However, during this process, some entries may have expired. But since the code only checks for expiration when accessing the key, those expired entries may still be in the cache. However, when they are accessed, they are removed.
+
+But during the pruning step (when adding a new entry and the cache is full), the code removes the LRU entries. However, if those entries are expired, they are not checked here. But they would have been removed when they were accessed. So this is acceptable.
+
+Another thing to consider is that the code uses an OrderedDict, which in Python 3.7+ is ordered by insertion. However, when a key is moved to the end, it's marked as recently used. So the OrderedDict's order is maintained correctly.
+
+Now, the code seems to handle the LRU and TTL aspects. However, there's a possible issue when the same key is added multiple times. For example, if the key is added, then expires, then added again. The code would handle that correctly.
+
+But what about the case where the same key is added multiple times, and the cache is full? The code would evict the LRU entries as needed.
+
+Another possible problem is that the make_key function may generate the same key for different arguments if the types are not considered. But with the typed parameter, that should be handled.
+
+Now, the code is written. However, the user asked to generate the code based on the given function signature and docstring, and output only the code in Python markdown format.
+
+But the user also mentioned to follow a test-driven approach, generating unit tests first. However, the user's instruction says to generate the code based on the function signature and docstring, outputting only the code generated in Python markdown format. So perhaps the user expects the code for the ttl_cache decorator, not the tests.
+
+But the initial instruction says: "Generate Python code based on the following function signature and docstring. Output ONLY the code generated, in python markdown format."
+
+So the user wants the code for the ttl_cache function, not the tests. However, the tips mention test-driven development, but the user's main request is to generate the code, not the tests.
+
+Therefore, the code above is the generated code. However, there's a possible error in the make_key function. For example, in the case of keyword arguments, the code uses sorted(kwargs.items()), which ensures that the order of the keyword arguments doesn't affect the key. That's correct.
+
+Another possible issue is that the make_key function may not handle cases where the arguments are unhashable. But that's the responsibility of the user of the decorator.
+
+Now, the code seems to be correct. Let me write it in Python markdown format.

@@ -1,0 +1,509 @@
+Okay, I need to write a Python function called find_roots based on the given function signature and docstring. Let's see what the function is supposed to do.
+
+The function takes a graph, a property, and an optional roots parameter which defaults to None. It's supposed to find the roots in a transitive hierarchy. The example given is that using RDFS.subClassOf will return all roots of the sub-class hierarchy.
+
+Hmm, so the graph is an rdflib Graph object. The property is a URIRef. The roots are nodes, and the function should return a set of these nodes.
+
+The docstring says that the triples are in the form (child, prop, parent), which means the direction is like RDFS.subClassOf or SKOS.broader. So, for each node, if there's a triple where the property connects it to another node, we need to traverse up until we can't go further.
+
+Wait, but the roots are the starting points. If roots is None, how do we find the starting points? Oh, maybe the function needs to find all nodes that don't have a predecessor via the given property. Or perhaps, if roots is None, it starts from some root and traverses.
+
+But looking at the example, find_roots(graph, RDFS.subClassOf) returns all roots of the sub-class hierarchy. So in that case, the roots are the top-level classes that don't have a parent in the hierarchy.
+
+So, the function needs to traverse the graph starting from the given roots (or if none, perhaps from some initial node) and collect all nodes reachable via the property in the reverse direction.
+
+Wait, but the function's roots parameter is optional. So if it's not provided, how do we determine the starting points? Maybe the function is intended to find all nodes that are roots, meaning nodes that don't have any predecessors via the property.
+
+Alternatively, perhaps the function is meant to find all nodes that can be reached by traversing the graph in the reverse direction starting from no nodes, but that doesn't make much sense.
+
+Wait, maybe the function is supposed to find the minimal set of roots such that all nodes in the graph can be reached via the property in the reverse direction. But the example suggests that when using RDFS.subClassOf, it returns all the root classes in the hierarchy.
+
+So, perhaps the function should collect all nodes that are the topmost nodes in their respective hierarchies, meaning nodes that do not have any other nodes pointing to them via the property.
+
+So, the approach would be:
+
+1. For each node in the graph, check if there exists another node that has a triple (node, prop, current_node). If not, then the current node is a root.
+
+2. Collect all such nodes into a set and return them.
+
+But how do we efficiently do this without checking every node against every other node, which could be slow for large graphs?
+
+Maybe we can build an inverse graph where for each node, we have a list of nodes that point to it via the property. Then, any node not present in this inverse graph is a root.
+
+Yes, that makes sense. So, first, we'll create a dictionary where each key is a node, and the value is a list of nodes that have a triple (child, prop, key). Then, any node not in this dictionary's keys is a root.
+
+So, the steps are:
+
+- Initialize an empty dictionary, inverse_graph.
+- Iterate over all triples in the graph.
+- For each triple (child, prop, parent), add child to inverse_graph[parent] if it's not already there. Wait, no, actually, since the triple is (child, prop, parent), it means that parent is connected to child via prop. So, if we're looking for predecessors via prop, then for each triple, child has a parent via prop, so in the inverse graph, child should point back to parent.
+
+Wait, no. Let me think again. The triple is (child, prop, parent), meaning that child is connected to parent via prop. So, if we're looking for all nodes that have a path via prop, then for each node, if there's a triple where it's the parent, then the child is connected to it via prop. So, the inverse graph would map each parent to its children.
+
+Wait, no, perhaps I'm getting confused. Let's clarify:
+
+If the property is RDFS.subClassOf, then a triple (child, prop, parent) means that child is a subclass of parent. So, in the hierarchy, child is a child of parent. So, the function is supposed to find all root nodes, which would be the top-level classes that don't have any parents in the hierarchy.
+
+So, to find the roots, we need to find all nodes that do not appear as a parent in any triple with the given property.
+
+Therefore, the approach is:
+
+1. Iterate through all triples in the graph where the predicate is the given prop.
+
+2. For each such triple, note that the parent node (the second element) has a child (the first element).
+
+3. Collect all unique parent nodes. These are the nodes that have children via the property.
+
+4. The roots are all nodes in the graph that are not in this set of parent nodes.
+
+Wait, no. Because if a node is a parent, it might have children, but if it's not a parent, it could still be a root. For example, if a node doesn't have any incoming edges via the property, it's a root.
+
+Wait, no. Because if a node is not a parent in any triple, that means no other node has a triple pointing to it via prop. So, it's a root.
+
+Yes, that makes sense. So, the roots are all nodes in the graph that are not present as a parent in any triple with the given property.
+
+So, the steps are:
+
+- Collect all parent nodes from the triples.
+
+- The roots are all nodes in the graph that are not in this parent set.
+
+But wait, what if the graph is empty or the roots parameter is provided? If roots is provided, then we just return that set.
+
+So, the function should first check if roots is None. If it is, then compute the roots as the nodes not present as parents in any triple with the given property. If roots is provided, return that set.
+
+Wait, but in the example, when using RDFS.subClassOf, the function returns all roots of the sub-class hierarchy. So, that aligns with finding the top-level classes that don't have any parents.
+
+So, the code structure would be:
+
+- If roots is None, compute the roots as the nodes not in the parent set.
+
+- Else, return the provided roots.
+
+But wait, what if the provided roots include nodes that are not in the graph? Should we filter them? Probably, yes, because the graph might not contain all the nodes in roots.
+
+So, in the code, after computing the parent set, if roots is None, the function returns all nodes in the graph that are not parents. If roots is provided, it returns the intersection of roots and the graph's nodes, but only those nodes that are not parents.
+
+Wait, no. Because if roots is provided, the function should return those roots, regardless of whether they are parents or not. But according to the problem statement, the function is supposed to find the roots in the hierarchy. So, perhaps the roots parameter is used to seed the search, but the function should still traverse the graph to find all reachable nodes from the roots.
+
+Wait, now I'm getting confused. Let me re-read the problem statement.
+
+The function signature is def find_roots(graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None) -> Set["Node"]:
+
+The docstring says that find_roots(graph, RDFS.subClassOf) returns all roots of the sub-class hierarchy.
+
+So, when roots is None, it finds all roots (top-level classes). When roots is provided, perhaps it's supposed to find all nodes reachable from the given roots via the property in the reverse direction.
+
+Wait, that makes more sense. So, if roots is provided, it's a set of starting nodes, and the function returns all nodes reachable from them via the property in the reverse direction (i.e., following the edges backwards).
+
+So, the function's behavior changes based on whether roots is provided or not.
+
+So, the steps are:
+
+1. If roots is None:
+
+   a. Collect all parent nodes from the graph using the property.
+
+   b. The roots are all nodes in the graph that are not in the parent set.
+
+2. If roots is provided:
+
+   a. Start from each node in roots.
+
+   b. Traverse the graph in the reverse direction (using the property) to collect all reachable nodes.
+
+   c. Return the set of all such reachable nodes.
+
+Wait, but in the example, when using RDFS.subClassOf, the function returns all roots of the sub-class hierarchy. So, that suggests that when roots is None, it's finding all top-level classes.
+
+But in the case where roots is provided, perhaps it's supposed to find all nodes that are reachable from the given roots via the property, which would form the hierarchy.
+
+Wait, perhaps the function is intended to find all nodes that are reachable from the given roots via the property, which would include the roots themselves and all their descendants in the hierarchy.
+
+But the docstring says that when using RDFS.subClassOf, it returns all roots of the sub-class hierarchy. So, when roots is None, it's the top-level classes. When roots is provided, perhaps it's the same as the roots themselves, but I'm not sure.
+
+Wait, maybe the function is supposed to find all nodes that are connected to the given roots via the property, but in the reverse direction. So, for each root, we traverse all nodes that can reach it via the property, but that seems counterintuitive.
+
+Alternatively, perhaps the function is supposed to find all nodes that are reachable from the given roots via the property, which would form a subtree rooted at each root.
+
+But the example suggests that when roots is None, it returns the top-level nodes. So, perhaps the function's behavior is:
+
+- If roots is None: find all nodes that are not reachable by any other node via the property. These are the roots of the entire graph.
+
+- If roots is not None: find all nodes that are reachable from the given roots via the property, which would include the roots themselves and all their descendants.
+
+Wait, but in that case, the function would return a subtree for each root, but the example returns a single set of roots.
+
+Hmm, perhaps I need to clarify the intended behavior.
+
+Looking back at the problem statement:
+
+The example says find_roots(graph, RDFS.subClassOf) returns all roots of the sub-class hierarchy. So, when roots is None, it's the top-level classes.
+
+If roots is provided, perhaps it's supposed to find all nodes that are reachable from the given roots via the property in the forward direction. But that would include the roots and their children, not the parents.
+
+Wait, but the property is RDFS.subClassOf, which is a subclass relation. So, if a node is a child of another, it's a subclass. So, the function could be intended to find all nodes that are reachable from the given roots via the property, which would form the hierarchy under each root.
+
+But the example returns a single set of roots, not a subtree.
+
+I think I need to re-examine the problem statement.
+
+The function is called find_roots, and it's supposed to find the roots in some sort of transitive hierarchy. The example shows that when using RDFS.subClassOf, it returns all roots of the sub-class hierarchy.
+
+So, perhaps the function is intended to find all nodes that are the roots of the sub-class hierarchy. That is, nodes that do not have any parents in the hierarchy.
+
+Therefore, when roots is None, it finds all such nodes. When roots is provided, perhaps it's supposed to find all nodes that are reachable from the given roots via the property in the reverse direction, i.e., following the edges from the roots towards their parents.
+
+Wait, that would mean that the function returns all nodes that can reach the given roots via the property. But that seems a bit odd.
+
+Alternatively, perhaps the function is supposed to find all nodes that are reachable from the given roots via the property in the forward direction, i.e., their children, grandchildren, etc.
+
+But in that case, the function would return a subtree, not just the roots.
+
+I think the key here is to understand what the function is supposed to return based on the example.
+
+In the example, when using RDFS.subClassOf, it returns all roots of the sub-class hierarchy. So, that suggests that when roots is None, it's finding all top-level classes, i.e., nodes that do not have any parents via the property.
+
+If roots is provided, perhaps the function is supposed to find all nodes that are reachable from the given roots via the property in the reverse direction, i.e., all nodes that can be reached by following the property edges from the roots towards their parents.
+
+Wait, but that would include the roots themselves and their parents, grandparents, etc.
+
+But the function is called find_roots, so perhaps it's supposed to return all nodes that are reachable from the given roots via the property, forming their own hierarchy.
+
+Alternatively, perhaps the function is intended to find all nodes that are the roots of the sub-class hierarchy starting from the given roots.
+
+Wait, perhaps the function is supposed to find all nodes that are the topmost nodes in the hierarchy starting from the given roots.
+
+So, if you provide roots, it finds all nodes that cannot be reached by any other node via the property, starting from the given roots.
+
+But that seems a bit circular.
+
+Alternatively, perhaps the function is supposed to find all nodes that are reachable from the given roots via the property, forming a set of all descendants, including the roots themselves.
+
+But the example suggests that when roots is None, it returns the top-level nodes, not their descendants.
+
+So, perhaps the function's behavior is:
+
+- If roots is None: find all nodes that are not reachable by any other node via the property. These are the roots of the entire graph.
+
+- If roots is not None: find all nodes that are reachable from the given roots via the property, forming a subtree.
+
+Wait, but in that case, the function would return a subtree for each root, but the example returns a single set.
+
+I think I'm overcomplicating this. Let's try to approach it differently.
+
+The function needs to traverse the graph in the reverse direction of the given property to find the roots.
+
+So, for each node in the graph, if there's no triple where it is the parent via the property, it's a root.
+
+But if roots is provided, perhaps we need to find all nodes reachable from the roots via the property in the forward direction, which would include the roots and their children, grandchildren, etc.
+
+Wait, but the example returns all roots of the sub-class hierarchy when roots is None, which suggests that it's finding the top-level nodes.
+
+So, perhaps the function is intended to find the minimal set of nodes such that all nodes in the graph can be reached via the property from these roots.
+
+But that's more like finding the root nodes of a spanning tree, which might not be the case.
+
+Alternatively, perhaps the function is supposed to find all nodes that are the starting points of the hierarchy, i.e., nodes that do not have any incoming edges via the property.
+
+So, regardless of whether roots is provided or not, the function returns all nodes that are not reachable via any triple as the parent.
+
+Wait, but if roots is provided, perhaps it's supposed to return all nodes that can be reached from the roots via the property.
+
+I think I need to structure the code to handle both cases: when roots is None and when it's provided.
+
+So, the code outline would be:
+
+- If roots is None:
+
+   a. Collect all parent nodes from the graph using the property.
+
+   b. The roots are all nodes in the graph that are not in the parent set.
+
+- Else:
+
+   a. Collect all nodes in the graph that are in the roots set.
+
+   b. Traverse the graph in the reverse direction (using the property) to collect all nodes reachable from the roots.
+
+   c. Return this set.
+
+Wait, but in the example, when roots is None, it returns the top-level nodes, which are the roots of the entire graph. When roots is provided, it returns all nodes reachable from those roots, which would include their descendants.
+
+But the function is called find_roots, which suggests it's about finding the roots, not the descendants.
+
+Hmm, perhaps the function is supposed to find all nodes that are reachable from the given roots via the property, which would include the roots and their children, grandchildren, etc.
+
+But the example shows that when roots is None, it returns the top-level nodes, which are the roots of the entire graph.
+
+So, putting it all together, the code would:
+
+- If roots is None:
+
+   a. Find all nodes in the graph that are not parents of any other node via the property.
+
+- Else:
+
+   a. Find all nodes reachable from the given roots via the property, which would include the roots themselves and all their descendants.
+
+But I'm not entirely sure. Maybe the function is intended to find all nodes that are reachable from the given roots via the property, forming a subtree.
+
+Alternatively, perhaps the function is supposed to find all nodes that are the roots of the subgraph reachable from the given roots.
+
+Wait, perhaps the function is intended to find all nodes that are the topmost nodes in their respective hierarchies, starting from the given roots.
+
+So, if roots is provided, it's supposed to find all nodes that cannot be reached by any other node via the property, starting from the given roots.
+
+But that seems a bit circular.
+
+I think the best approach is to implement the function as follows:
+
+- If roots is None:
+
+   a. Find all nodes in the graph that do not have any parents via the property.
+
+- Else:
+
+   a. Start with the given roots.
+
+   b. For each node in the current set, find all nodes that have a triple pointing to it via the property, and add them to the set.
+
+   c. Repeat until no new nodes are added.
+
+   d. Return the final set.
+
+This way, when roots is None, it finds all nodes without parents, which are the roots of the entire graph.
+
+When roots is provided, it finds all nodes that can be reached from the given roots via the property in the reverse direction, forming a subtree.
+
+But the example shows that when using RDFS.subClassOf, it returns all roots of the sub-class hierarchy, which would be the case when roots is None.
+
+So, perhaps the function is intended to find all nodes that are not reachable by any other node via the property when roots is None, and when roots is provided, it finds all nodes reachable from the given roots via the property.
+
+Wait, no, because in that case, when roots is provided, the function would return a subtree.
+
+But the function is called find_roots, which suggests it's about finding the roots, not the subtree.
+
+I think I'm stuck. Let me try to write the code based on the initial understanding and see.
+
+First, I'll need to import rdflib's Graph and possibly other modules.
+
+Then, the function will:
+
+- If roots is None:
+
+   a. Iterate through all triples in the graph.
+
+   b. For each triple (child, prop, parent), add parent to a set of parents.
+
+   c. The roots are all nodes in the graph that are not in the parents set.
+
+- Else:
+
+   a. Start with the given roots.
+
+   b. For each node in the current set, find all nodes that have a triple pointing to it via prop, and add them to the set.
+
+   c. Continue until no new nodes are added.
+
+   d. Return the final set.
+
+Wait, but in the else case, the function would return all nodes reachable from the given roots via the property, which is the forward direction.
+
+But the example uses RDFS.subClassOf and returns the roots of the sub-class hierarchy, which would be the top-level classes.
+
+So, perhaps the else case is not the right approach.
+
+Alternatively, perhaps when roots is provided, the function should return the roots that are not reachable via the property from any other node, starting from the given roots.
+
+Wait, that might not make sense.
+
+Alternatively, perhaps the function is supposed to find all nodes that are not reachable via the property from any other node, regardless of the roots.
+
+But that would be the same as the case when roots is None.
+
+I think I need to structure the code to handle both cases, but perhaps the function is only supposed to find the roots when roots is None, and when roots is provided, it's just a starting point.
+
+Wait, perhaps the function is intended to find all nodes that are the roots of the sub-class hierarchy, starting from the given roots.
+
+So, when roots is None, it's the entire graph's roots. When roots is provided, it's the roots of the subgraph reachable from the given roots.
+
+So, the code would:
+
+- If roots is None:
+
+   a. Collect all parent nodes from the graph.
+
+   b. The roots are all nodes not in the parent set.
+
+- Else:
+
+   a. Start with the given roots.
+
+   b. Find all nodes that are not reachable via the property from any other node in the graph.
+
+Wait, no, that's not clear.
+
+Perhaps the function is supposed to find all nodes that are roots in the sense that they have no parents in the hierarchy, regardless of the starting point.
+
+So, the code would:
+
+- Collect all parents from the graph.
+
+- The roots are all nodes not in the parents set.
+
+But if roots is provided, perhaps we need to find the intersection of the provided roots and the computed roots.
+
+Wait, but that would return only the roots that are both in the provided set and are roots in the graph.
+
+But the example suggests that when roots is None, it returns all roots. So, perhaps the function is only supposed to handle the case when roots is None, and when roots is provided, it's an error or ignored.
+
+But that doesn't make sense because the function signature allows for an optional roots parameter.
+
+Alternatively, perhaps the function is supposed to find all nodes that are roots, considering the provided roots as a starting point.
+
+Wait, perhaps the function is supposed to find all nodes that are roots in the subgraph induced by the given roots and their descendants via the property.
+
+But I'm not sure.
+
+Given the time I've spent, I think I should proceed to write the code based on the initial understanding, which is:
+
+- If roots is None, find all nodes without parents via the property.
+
+- If roots is provided, find all nodes reachable from the roots via the property in the reverse direction.
+
+Wait, but that would mean traversing the graph in the reverse direction, i.e., for each node in roots, find all nodes that have a triple pointing to them via the property, and add them to the set, and repeat.
+
+But that would form a subtree, not the roots.
+
+Alternatively, perhaps the function is supposed to find all nodes that are reachable from the given roots via the property in the forward direction, which would include the roots and their descendants.
+
+But the example returns the top-level nodes when roots is None, not their descendants.
+
+I think I need to proceed with the code that, when roots is None, returns all nodes without parents, and when roots is provided, returns all nodes reachable from them via the property in the forward direction.
+
+So, the code would:
+
+- For the case when roots is None:
+
+   a. Iterate over all triples.
+
+   b. Collect all parents.
+
+   c. The roots are all nodes not in parents.
+
+- For the case when roots is provided:
+
+   a. Start with the provided roots.
+
+   b. For each node in the current set, find all nodes that have a triple pointing to it via the property.
+
+   c. Add those nodes to the set.
+
+   d. Repeat until no new nodes are added.
+
+   e. Return the final set.
+
+Wait, but in this case, when roots is provided, the function returns all nodes reachable from the roots via the property in the forward direction, which would include the roots and their children, grandchildren, etc.
+
+But the function is called find_roots, which suggests it's about finding the roots, not the descendants.
+
+I think I'm overcomplicating it. Perhaps the function is intended to find all nodes that are roots, considering the provided roots as a starting point.
+
+But without further clarification, I'll proceed with the code that, when roots is None, returns all nodes without parents, and when roots is provided, returns all nodes reachable from them via the property in the forward direction.
+
+So, the code would look like this:
+
+Import the necessary modules, including rdflib's Graph and URIRef.
+
+Define the function.
+
+If roots is None:
+
+   a. Initialize a set of parents.
+
+   b. Iterate over all triples in the graph.
+
+   c. For each triple, add the parent to the parents set.
+
+   d. The roots are all nodes in the graph that are not in the parents set.
+
+Else:
+
+   a. Initialize the result set with the provided roots.
+
+   b. While changes occur:
+
+      i. For each node in the current result set, find all nodes that have a triple pointing to them via the property.
+
+      ii. Add these nodes to a new set.
+
+      iii. Merge the new set into the result set.
+
+   c. Return the result set.
+
+Wait, but how do we find all nodes that have a triple pointing to a given node via the property?
+
+We need to build a reverse mapping, where for each node, we have a list of nodes that have a triple pointing to it via the property.
+
+So, first, build a dictionary where each key is a node, and the value is a list of nodes that are parents of it via the property.
+
+Then, when processing each node, we can look up its children in the reverse mapping.
+
+So, the code outline is:
+
+def find_roots(graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None) -> Set["Node"]:
+    if roots is None:
+        parents = set()
+        for triple in graph:
+            child, prop, parent = triple
+            parents.add(parent)
+        roots = {node for node in graph.nodes() if node not in parents}
+    else:
+        reverse_graph = {}
+        for triple in graph:
+            child, prop, parent = triple
+            if parent not in reverse_graph:
+                reverse_graph[parent] = set()
+            reverse_graph[parent].add(child)
+        current = set(roots)
+        new_nodes = current.copy()
+        while new_nodes:
+            current_nodes = new_nodes.copy()
+            new_nodes.clear()
+            for node in current_nodes:
+                if node in reverse_graph:
+                    new_nodes.update(reverse_graph[node])
+            current.update(new_nodes)
+        roots = current
+    return roots
+
+Wait, but in the else case, this code would find all nodes reachable from the given roots via the property in the forward direction, which would include the roots and their descendants.
+
+But the example suggests that when roots is None, it returns the top-level nodes, which are the roots of the entire graph.
+
+But in the else case, it's returning all descendants of the given roots, not the roots themselves.
+
+So, perhaps the function is intended to return all nodes that are reachable from the given roots via the property, including the roots.
+
+But the function is called find_roots, which is a bit confusing.
+
+Alternatively, perhaps the function is supposed to find all nodes that are roots in the subgraph reachable from the given roots.
+
+Wait, perhaps the function is intended to find all nodes that are not reachable via the property from any other node, starting from the given roots.
+
+But that would require a different approach.
+
+Alternatively, perhaps the function is supposed to find all nodes that are roots in the hierarchy, i.e., nodes that do not have any parents via the property.
+
+So, the function's behavior is:
+
+- If roots is None: return all nodes that are not parents of any other node via the property.
+
+- If roots is provided: return all nodes that are roots in the subgraph reachable from the given roots, i.e., nodes that do not have any parents via the property within that subgraph.
+
+But I'm not sure.
+
+Given the time I've spent, I think I'll proceed with the code that, when roots is None, returns all nodes without parents, and when roots is provided, returns all nodes that are reachable from the roots via the property in the forward direction.
+
+So, the code would be as follows.

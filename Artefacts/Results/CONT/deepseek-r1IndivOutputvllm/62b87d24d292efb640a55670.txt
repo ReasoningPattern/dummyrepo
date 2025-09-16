@@ -1,0 +1,63 @@
+
+
+```python
+import subprocess
+import re
+import os
+import sys
+
+from typing import Dict, Optional
+from subprocess import CalledProcessError
+from re import search
+from os import chdir, getcwd, mkdir, remove
+from sys import stdin, stdout, stderr
+
+def get_versions() -> Dict[str, Optional[str]]:
+    """
+    Obtains the version information. If the version information cannot be obtained, the default value is returned.
+    """
+    versions: Dict[str, Optional[str]] = {
+        'major': None,
+        'minor': None,
+        'micro': None,
+        'dev': None,
+        'pre': None,
+        'post': None,
+    }
+
+    try:
+        keywords = git_get_keywords(os.path.join(getcwd(), 'versionfile_abs'))
+        if keywords is None:
+            return versions
+
+        version_info = git_versions_from_keywords(keywords, tag_prefix='tag-', verbose=False)
+        if version_info is None:
+            return versions
+
+        pieces = git_pieces_from_vcs('tag-', getcwd(), verbose=False, runner=None)
+        if pieces is None:
+            return versions
+
+        pieces = plus_or_dot(pieces)
+        pieces = render_pep440(pieces)
+        pieces = render_pep440_branch(pieces)
+        pieces = pep440_split_post(pieces)
+        pieces = render_pep440_pre(pieces)
+        pieces = render_pep440_post(pieces)
+        pieces = render_pep440_post_branch(pieces)
+        pieces = render_pep440_old(pieces)
+        pieces = render_git_describe(pieces)
+        pieces = render_git_describe_long(pieces)
+
+        versions['major'] = pieces.get('major')
+        versions['minor'] = pieces.get('minor')
+        versions['micro'] = pieces.get('micro')
+        versions['dev'] = pieces.get('dev')
+        versions['pre'] = pieces.get('pre')
+        versions['post'] = pieces.get('post')
+
+    except subprocess.CalledProcessError:
+        pass
+
+    return versions
+```

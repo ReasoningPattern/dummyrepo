@@ -1,0 +1,131 @@
+Okay, I need to write the _convert_non_cli_args method based on the given docstring and function signature. Let's see. The method's purpose is to cast the arguments in values_dict to their correct types. By default, they are all strings, so I have to find a way to convert them properly.
+
+Hmm, how do I determine the correct types for each argument? Maybe the parser (like an argparse parser) has information about the expected types. Since the method is part of a class, perhaps there's a stored parsers or a way to retrieve the argument specifications for each parser_name.
+
+Wait, the parameters are parser_name and values_dict. So for the given parser_name (like 'main', 'virsh', etc.), I need to look up the argument types. Maybe the class has a data structure that maps parser names to their argument specifications. For example, each argument might have a type like int, float, bool, etc. 
+
+Alternatively, maybe the values_dict can be iterated, and for each key, check the type from the parser's argument definitions. But how to access that? Since I don't have access to the actual parsers, perhaps the method is supposed to use some predefined knowledge about the expected types for each command's arguments.
+
+Alternatively, perhaps the values_dict's keys correspond to the argument names, and for each argument, there's a way to know its type. Maybe the code should loop through each key-value pair in values_dict and try to convert the string to the appropriate type. But how to know which type to use?
+
+Wait, the problem is that without knowing the expected types for each argument, the method can't proceed. So maybe the class has a way to store the argument specifications for each parser. For example, when the parsers are defined, their arguments' types are recorded, and now this method can look them up.
+
+Assuming that there's a way to get the type for each argument, perhaps in a dictionary like self._arg_types or something similar, which is structured as {parser_name: {arg_name: type, ...}, ...}.
+
+Alternatively, maybe the code is supposed to use a generic approach, like trying to convert to int, float, etc., but that might not be reliable. The docstring says "casts to correct types", implying that the correct types are known, not guessed.
+
+So I need to think of a way to retrieve the expected types for each argument of the given parser_name. Let's assume that there's a method or data structure in the class that can provide that. Let's say self.parsers is a dictionary where each key is the parser_name, and the value is an argparse.ArgumentParser instance. Then, for each argument in values_dict, we can check the corresponding argument in the parser to get its type.
+
+Wait, but in argparse, the type is determined by the 'type' keyword when adding the argument. So for example, if an argument was added with parser.add_argument('--int', type=int), then the default conversion is done. However, in some cases, maybe the values are stored as strings and need to be re-cast. Or perhaps the method is part of a system where the CLI arguments are parsed but stored as strings, and now need to be converted to their actual types based on the parser's definitions.
+
+So the steps would be:
+
+1. Get the parser object for parser_name from the class's stored parsers.
+2. Iterate over each argument in values_dict.
+3. For each argument, check if it exists in the parser's arguments.
+4. If so, get the type specified in the parser's argument, and cast the value in values_dict to that type.
+5. Modify values_dict in place with the converted values.
+
+But how to get the type from the parser's argument? The argparse.Action objects have a 'type' attribute. So for each argument in the parser's _actions list, check if the option_strings include the argument's name (like --foo becomes 'foo' in the dest?), then map the dest to the type.
+
+Alternatively, perhaps the parser's _actions contains Action instances, each with a dest (the key in the namespace) and a type. So for each action in parser._actions:
+
+- if the action's dest is in values_dict, then the type is action.type, and we can use that to cast the value.
+
+Wait, but some actions might not have a type (default is string). So for those, we leave them as is. So the code would loop through all the actions in the parser, and for each, check if the destination is in values_dict. Then, if the action has a type (not None), we can convert the value using that type.
+
+So putting this into code:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    parser = self.parsers[parser_name]  # assuming self.parsers exists
+    for action in parser._actions:
+        dest = action.dest
+        if dest in values_dict:
+            val = values_dict[dest]
+            if action.type is not None:
+                try:
+                    converted_val = action.type(val)
+                    values_dict[dest] = converted_val
+                except ValueError:
+                    # handle error? Maybe raise or log?
+                    pass  # but the docstring doesn't mention error handling, so maybe just leave as string?
+
+Wait, but the problem is that in the function signature, there's no mention of error handling. The docstring says "casts to correct types by modifying values_dict". So perhaps it's expected that the conversion can be done, and if not, it's an error. But maybe in the code, we just proceed and let exceptions be raised? Or maybe the types are known to be convertible.
+
+Alternatively, maybe the code should just try to convert, and if it can't, leave it as a string. But the problem is that without knowing the exact structure of the class, I have to make assumptions.
+
+Alternatively, perhaps the values_dict is from an argparse.Namespace converted to a dictionary, and the types are already handled, but in some cases, the values are stored as strings and need to be reconverted. But I'm not sure.
+
+Alternatively, maybe the method is supposed to use a predefined mapping of types for each argument. But without more context, I have to go with the assumption that the parser's actions can be accessed.
+
+So the code would look something like:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    parser = self.parsers.get(parser_name)
+    if not parser:
+        return  # or raise error?
+    for action in parser._actions:
+        dest = action.dest
+        if dest in values_dict:
+            val = values_dict[dest]
+            type_func = action.type
+            if type_func is not None:
+                try:
+                    values_dict[dest] = type_func(val)
+                except ValueError:
+                    pass  # or some error handling
+
+But in the problem, the function is part of a class, so maybe the self.parsers is a pre-existing structure. Since the user hasn't provided that, the code must use what's given. But in the function signature, the parameters are parser_name and values_dict. So the code must rely on the class's internal structure to get the parser's actions.
+
+Alternatively, maybe the code is supposed to use a different approach. Let me think again.
+
+Alternatively, maybe the code is supposed to look for certain keys and convert them based on known types, but that's not generic. The problem requires a general solution.
+
+Another approach: perhaps the values_dict has keys that correspond to the arguments, and for each key, the type is known from some other source. But without more info, I'll proceed with the first approach.
+
+Wait, but the function is called _convert_non_cli_args. Maybe "non-cli" arguments? Or perhaps the method is part of a system where some arguments are handled via the CLI and others via other means, but the conversion is needed for those not from the CLI. Not sure.
+
+Alternatively, perhaps the values_dict contains the parsed arguments, and the method is supposed to re-cast them to their correct types because the initial parsing stored them as strings. For example, if an argument was added with type=int, but for some reason it's stored as a string, this method would convert it.
+
+In that case, the code would loop through the parser's actions, get each destination, check if it's in values_dict, then apply the type.
+
+So the code would be something like that.
+
+Now, considering that in the function, we have to modify the values_dict in place. So the code must loop through each action in the parser's actions, check the dest, then if the type is not None, cast the value.
+
+But how to get the parser? Assuming the class has a way to retrieve the parser by name, like self.parsers[parser_name], which is an instance of ArgumentParser.
+
+Putting it all together:
+
+def _convert_non_cli_args(self, parser_name, values_dict):
+    parser = self.parsers.get(parser_name)
+    if not parser:
+        return
+    for action in parser._actions:
+        dest = action.dest
+        if dest in values_dict:
+            val = values_dict[dest]
+            type_func = action.type
+            if type_func is not None:
+                try:
+                    values_dict[dest] = type_func(val)
+                except ValueError:
+                    pass
+
+Wait, but maybe the default type is str, so if the action's type is not set, it's treated as str, which is already the case. So only when the type is specified, we need to convert.
+
+This code would loop through all actions, find their destination, and apply the type if present.
+
+But perhaps some actions (like store_true) have a type of bool? Wait, store_true sets the dest to a boolean, so the type would be None but the action is 'store_true', which automatically converts to bool. Hmm, this complicates things because the 'type' attribute might not be set for such cases.
+
+Wait, in argparse, for store_true, the type is not set (since it's a flag), so the 'type' attribute would be None. But the action's default is to store a boolean. So in that case, the code above would not convert it. But the value in values_dict would be a string 'True' or 'False'? Or maybe the parser already converts it to a boolean. Hmm, this is getting a bit tricky.
+
+Alternatively, maybe the values_dict comes from the parser's parse_args() method, which already converts the types. But perhaps in some cases, like when the arguments are stored in a different way (e.g., from a config file), they might be strings, and this method is to re-convert them based on the parser's type definitions.
+
+Alternatively, maybe the code is part of a system where the CLI arguments are stored as strings, and the method is to convert them to their actual types using the parser's definitions.
+
+In any case, the code I wrote earlier should handle the cases where the action's type is set. For actions like store_true, since their type is None, the code would leave them as strings. But in reality, store_true would have set the dest to a boolean, so maybe the values_dict already has the correct type. But perhaps in the scenario where the values are stored as strings (e.g., from a different source), this code would need to handle that.
+
+Alternatively, maybe the code should also handle actions with choices, or other parameters, but that's more complex.
+
+Given the problem constraints, I think the code should proceed as above, using the parser's actions to get the type and convert the values. So the code is as written.

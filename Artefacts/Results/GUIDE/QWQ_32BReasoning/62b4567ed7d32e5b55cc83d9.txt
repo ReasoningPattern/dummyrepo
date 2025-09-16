@@ -1,0 +1,283 @@
+Okay, I need to write a Python function called deep_merge_nodes that takes a list of nodes and merges them, handling duplicate keys. The docstring says that if there are colliding keys with non-MappingNode values, the last one should stay. Hmm, so first I should understand what a MappingNode is. Probably, it's a type of node that can be a mapping (like a dictionary) so that when merging, we can combine their contents deeply. 
+
+The function has to merge the nodes in such a way that for each key present in the nodes, if the value is a MappingNode, then it should do a deep merge. But if it's not a MappingNode, then the last occurrence's value takes precedence. 
+
+Wait, the problem says "Merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains." So the key points are:
+
+- For each key, check if the value is a MappingNode. If yes, recursively merge the sub-nodes.
+- If the value is not a MappingNode, then the last node's value for that key is kept.
+
+So the steps would be:
+
+1. Iterate over all the nodes in the given list, in order.
+2. For each key in each node:
+   a. If the current result already has the key and the existing value is a MappingNode and the new value is also a MappingNode, then perform a deep merge.
+   b. Else, replace the existing value with the new one (since non-mapping or last occurrence takes precedence).
+
+Wait, but how do I know if a node's value is a MappingNode? Maybe the nodes are instances of some classes, like perhaps a base Node class and a MappingNode subclass. But the problem might abstract that away. Alternatively, perhaps the nodes are dictionaries where the values can be of a certain type (like a dict is a MappingNode, but others are not). Hmm, maybe the function is supposed to treat any value that is a MappingNode (like a dict) as such, so that when merging, their contents are merged recursively. But the exact type check is unclear. Since the problem statement doesn't specify, perhaps I can assume that a value is a MappingNode if it is a dictionary-like object (i.e., has a keys() method?), or perhaps the nodes are structured in such a way that their values can be checked for a certain attribute, like being an instance of a MappingNode class.
+
+Alternatively, maybe the problem is simplified, and the nodes are represented as dictionaries, and a MappingNode is just a regular dictionary. So when merging, if two keys have dict values, then we merge those dicts deeply. Otherwise, non-dicts are treated as non-MappingNodes, so the last one wins.
+
+Hmm, perhaps for the sake of this problem, I can assume that a value is a MappingNode if it is a dictionary (or an instance of a class that behaves like a dict). So the function can proceed as follows:
+
+Initialize the merged result as an empty dict. Then, for each node in nodes (in order), iterate through each key in the current node. For each key:
+
+- If the key is not present in the merged result, add it with the current node's value.
+- If it is present, and both the existing value and the new value are MappingNodes (i.e., are dicts), then recursively merge them. The merged value would be the result of deep merging the existing and new value.
+- If either is not a MappingNode, then the existing value is replaced by the new one, since the last occurrence takes precedence.
+
+Wait, but the problem says "the last of the values remains" for non-MappingNode collisions. So the last occurrence's value is kept regardless. So the order is important here. So when processing each node in order, for each key, if the new value is a non-MappingNode, then we should overwrite the existing key's value in the merged result with this new value. But if the existing value is a MappingNode and the new value is also a MappingNode, then we merge them. Otherwise, we replace the existing value with the new one.
+
+So the algorithm steps would be:
+
+Initialize merged as an empty dict.
+
+For each node in nodes:
+    for each key in node:
+        current_val = node[key]
+        existing_val = merged.get(key, None)
+        if existing_val is None:
+            merged[key] = current_val
+        else:
+            # Check if both are MappingNodes (dictionaries)
+            if isinstance(existing_val, dict) and isinstance(current_val, dict):
+                # Need to do a deep merge of existing_val and current_val
+                # So recursively merge them and set the result as merged[key]
+                merged[key] = deep_merge_nodes([existing_val, current_val])
+            else:
+                # Either one is not a MappingNode. So the last one wins.
+                # So replace existing_val with current_val
+                merged[key] = current_val
+
+Wait, but in the else case, even if one is a dict and the other isn't, then the last one is kept. So for example, if existing_val is a dict, but current_val is an int, then the merged[key] becomes the int. Because the current_val is the last occurrence. So that's correct per the problem's requirement.
+
+So the function needs to be recursive, but the base case is when merging a list of nodes (dictionaries?), but in this case, the function is called with a list of nodes, which may themselves be dictionaries. Wait, the function signature is def deep_merge_nodes(nodes), where nodes is a list of nodes. Each node is presumably a dictionary-like structure. So perhaps each node in the list is a dictionary. So the function would need to process each node in the list in order, merging their keys into the result as per the rules.
+
+Wait, but how does the function handle the list of nodes? The function's job is to merge all the nodes in the list into one merged dictionary. So the approach would be:
+
+Start with an empty merged dict.
+
+Iterate over each node in the nodes list, in order. For each node, process each key in that node and merge into the merged dict as per the rules.
+
+Therefore, the code outline would be something like:
+
+def deep_merge_nodes(nodes):
+    merged = {}
+    for node in nodes:
+        for key in node:
+            current_val = node[key]
+            existing_val = merged.get(key)
+            if existing_val is None:
+                merged[key] = current_val
+            else:
+                if isinstance(existing_val, dict) and isinstance(current_val, dict):
+                    # Need to merge these two dicts
+                    merged[key] = deep_merge_nodes([existing_val, current_val])
+                else:
+                    # replace with current_val
+                    merged[key] = current_val
+    return merged
+
+Wait, but in the case of merging two dicts, the existing_val is the first one (from previous nodes) and current_val is the next one (the current node's value). So when we call deep_merge_nodes with [existing_val, current_val], the existing_val comes first, then current_val, so the latter would take precedence in non-dict cases. That's correct because in the list [existing_val, current_val], the existing_val is from prior nodes, and current_val is from the current node. So when merging those two, the current_val would be the one that comes later, so any non-dict values would take precedence. 
+
+Hmm, that should work. Let's test with some examples.
+
+Test case 1: Merging two simple dicts with non-conflicting keys:
+
+nodes = [{"a": 1}, {"b": 2}]. The merged should be {"a":1, "b":2}
+
+Test case 2: Conflicting keys with non-dicts. 
+
+nodes = [{"a": 1}, {"a": 2}]. The merged should have "a" as 2, since the last occurrence wins.
+
+Test case 3: Both values are dicts. 
+
+nodes = [{"a": {"x": 1}}, {"a": {"y": 2}}]. The merged a's value should be {"x":1, "y":2}
+
+Another test case where existing is a dict and current is a non-dict:
+
+nodes = [{"a": {"x": 1}}, {"a": 3}]. The merged a should be 3, because the second node's value is non-dict, so it replaces the first.
+
+Another case where existing is non-dict and current is a dict:
+
+nodes = [{"a": 5}, {"a": {"y": 2}}]. Since existing_val (5) is not a dict, and current_val is a dict, but in the check, since existing is not a dict and current is a dict, then the else clause is taken, so merged[key] becomes current_val (the dict). Wait, no:
+
+Wait, in the code above, existing_val is 5 (non-dict), current_val is a dict. So in the condition:
+
+if isinstance(existing_val, dict) and isinstance(current_val, dict) → 5 is not a dict, so condition is false. So it goes into else, replacing existing_val with current_val. So the merged a would be the dict. 
+
+But according to the problem statement, if the keys collide and the existing and current are not both MappingNodes (since existing is a non-MappingNode and current is a MappingNode), then the last value (current) is kept. So that's correct. 
+
+Another test case where existing is a dict and current is a dict, but one of their sub-keys collides. 
+
+nodes = [{"a": {"x": 1, "y": 2}}, {"a": {"x": 3, "z":4}}]
+
+The merged a should have x from the second (since it's a dict, so merged recursively. The x in the second node's a is a non-dict? Wait, no, the x's values are integers, so when merging the two sub-dicts:
+
+The existing_val (from first a's value) is {"x":1, "y":2}, and current_val (from second a's value) is {"x":3, "z":4}. 
+
+When merging these two, for key "x" in the sub-merge, the existing_val's x is 1, current's x is 3. Since those are integers (non-dicts), the last one (3) is kept. So the merged a would be {"x":3, "y":2, "z":4}.
+
+So the code should handle that. 
+
+Now, the problem requires using test-driven development, so first write tests before the code. Let me think of some test cases.
+
+First, the function's output is a dict, so the tests can use assert statements.
+
+Test case 1: no nodes → returns empty dict.
+
+Test case 2: single node → returns a copy?
+
+Wait, but if the input is a list of nodes, like [node], then the merged should be that node. But since the function processes each node in order, the first node is added, and subsequent nodes override. So for a single node, the result is that node. But if the node is a dictionary, then modifying the merged would modify the original? But in the code, the function would just assign the values, but since dictionaries are mutable, perhaps we need to make copies. Wait, but in the code above, when merging existing and current, if they are both dicts, then it calls deep_merge_nodes on [existing_val, current_val], which would create a new merged dict. So the code should not modify the original nodes, but create a new merged structure. 
+
+Hmm, but in the first case, if the first node is a dict, then the merged dict will have references to the same objects. For example, if a node has a list, then modifying that list in the merged would affect the original. But the problem probably assumes that nodes are immutable or that the merging doesn't need to copy unless necessary. Maybe the problem doesn't require deep copies except when merging. So perhaps the code is okay.
+
+Now, the tests:
+
+First, let's think of some test cases:
+
+Test case 1: empty list → returns empty dict.
+
+def test_empty_list(self):
+    self.assertEqual(deep_merge_nodes([]), {})
+
+Test case 2: single node → returns the node as is.
+
+def test_single_node(self):
+    node = {"a": 1}
+    self.assertEqual(deep_merge_nodes([node]), node)
+
+Wait, but the function may return a new dict, but in the code, the first node's values are assigned to merged, so it would be a new dict. So if the input is a list with a single dict, the output is a new dict with the same contents. So the test should check equality, not identity. So the test is okay.
+
+Test case 3: two nodes with non-conflicting keys.
+
+def test_non_conflicting(self):
+    nodes = [{"a": 1}, {"b": 2}]
+    expected = {"a":1, "b":2}
+    self.assertEqual(deep_merge_nodes(nodes), expected)
+
+Test case 4: conflicting keys with non-dicts, last wins.
+
+def test_conflicting_non_dicts(self):
+    nodes = [{"a": 1}, {"a": 2}]
+    expected = {"a":2}
+    self.assertEqual(deep_merge_nodes(nodes), expected)
+
+Test case 5: conflicting keys with both being dicts → merged.
+
+def test_conflicting_dicts(self):
+    nodes = [{"a": {"x": 1}}, {"a": {"y": 2}}]
+    expected = {"a": {"x":1, "y":2}}
+    self.assertEqual(deep_merge_nodes(nodes), expected)
+
+Test case 6: existing is dict, current is non-dict → current replaces.
+
+def test_existing_dict_current_non_dict(self):
+    nodes = [{"a": {"x":1}}, {"a": 3}]
+    expected = {"a":3}
+    self.assertEqual(deep_merge_nodes(nodes), expected)
+
+Test case 7: existing is non-dict, current is dict → current replaces (so merged becomes the dict).
+
+def test_existing_non_dict_current_dict(self):
+    nodes = [{"a":5}, {"a": {"y":2}}]
+    expected = {"a": {"y":2}}
+    self.assertEqual(deep_merge_nodes(nodes), expected)
+
+Test case 8: nested merge with conflicting sub-keys.
+
+def test_nested_merge_with_conflict(self):
+    nodes = [
+        {"a": {"x": 1, "y": 2}},
+        {"a": {"x": 3, "z":4}}
+    ]
+    expected = {"a": {"x":3, "y":2, "z":4}}
+    self.assertEqual(deep_merge_nodes(nodes), expected)
+
+Test case 9: multiple layers of merging.
+
+Maybe something like:
+
+nodes = [
+    {"level1": {"level2": {"a": 1}}},
+    {"level1": {"level2": {"b": 2}, "level2a": 3}}
+]
+expected = {"level1": {"level2": {"a":1, "b":2}, "level2a":3}}
+
+So the first level1's level2 has a, the second's level2 has b. So merged level2 has both, and level2a is added from second.
+
+Another test case where a key is present in the first node but later nodes have non-dict values.
+
+Hmm, perhaps these tests cover the main cases.
+
+Now, after writing the tests, the code can be written as per the earlier outline. Let's code.
+
+Wait, but in the code, the function is called with a list of nodes. Each node is a dict. So the code loops through each node in nodes, then each key in the node. The existing_val is checked, and so on.
+
+Now, in the code, when merging two dicts (existing_val and current_val), the function calls deep_merge_nodes([existing_val, current_val]). That's correct, because existing_val comes from the previous nodes (so it's the first element in the list), and current_val is from the current node (so the second element in the list). Thus, when merging, the current_val's values will override existing_val's non-dict keys, as desired.
+
+Wait, but in the case where existing_val is a dict and current_val is a dict, then the deep_merge is done between those two. So the code is correct.
+
+Now, what about if a node is not a dict? The problem's function signature says nodes is a list of nodes, but what's a node? The docstring says "Merge any node values corresponding to duplicate keys". So I think each node is a dictionary-like object, with keys and values. So the code assumes that each node in the nodes list is a dict (or a subclass). 
+
+Therefore, the code should work as outlined.
+
+Now, writing the code:
+
+def deep_merge_nodes(nodes):
+    merged = {}
+    for node in nodes:
+        for key in node:
+            current_val = node[key]
+            existing_val = merged.get(key)
+            if existing_val is None:
+                merged[key] = current_val
+            else:
+                if isinstance(existing_val, dict) and isinstance(current_val, dict):
+                    # Merge the two sub-dicts
+                    merged[key] = deep_merge_nodes([existing_val, current_val])
+                else:
+                    # Replace with current_val
+                    merged[key] = current_val
+    return merged
+
+Hmm, that's the code. Let me check for possible issues.
+
+Wait, what if a node is not a dictionary? Like if a node is a list or a string? The problem probably expects that each node is a dictionary. So the function may not handle non-dict nodes. But according to the problem's description, the nodes are probably all mappings (since they have keys and values). So the code is okay.
+
+Another possible edge case: if a key is present in multiple nodes, some as a dict and some not. Like:
+
+nodes = [{"a": {"x":1}}, {"a": 2}, {"a": {"y":3}}]
+
+The first occurrence of 'a' is a dict. The second is a non-dict, so merged 'a' becomes 2. The third node's 'a' is a dict, so existing_val is 2 (non-dict), so the third's value is a dict, so the existing is non-dict and current is dict → the else clause replaces existing_val (2) with the dict. So the final 'a' would be the third's dict? Wait no:
+
+Wait, the nodes are processed in order. The first node sets a to {"x":1}. The second node's a is 2 (non-dict). Since existing_val (from first) is a dict and current_val is non-dict, so in the else clause, merged['a'] becomes 2. Then the third node's a is a dict. existing_val is 2 (non-dict), current_val is a dict. So in the check, existing is not a dict, so the else clause replaces existing_val (2) with the current_val (dict). So the final 'a' is the third's dict. So the merged would be {'a': {'y':3}}.
+
+Wait, but the third node's a is a dict, so when processing the third node:
+
+existing_val (from the merged after second node) is 2 (non-dict). current_val is a dict. So the code's condition (existing and current are both dicts?) is false. So it replaces existing_val (2) with current_val (the dict). So yes, that's correct.
+
+Another test case for that scenario.
+
+Hmm, the code seems correct.
+
+Now, the code in markdown format, only the code. The user said to output only the code in python markdown format, which is ```python ... ```.
+
+So the final code is:
+
+```python
+def deep_merge_nodes(nodes):
+    merged = {}
+    for node in nodes:
+        for key in node:
+            current_val = node[key]
+            existing_val = merged.get(key)
+            if existing_val is None:
+                merged[key] = current_val
+            else:
+                if isinstance(existing_val, dict) and isinstance(current_val, dict):
+                    merged[key] = deep_merge_nodes([existing_val, current_val])
+                else:
+                    merged[key] = current_val
+    return merged
+```

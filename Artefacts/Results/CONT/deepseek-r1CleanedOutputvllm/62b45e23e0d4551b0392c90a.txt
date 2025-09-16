@@ -1,0 +1,41 @@
+import json
+import re
+from namaste import pyfs, fs, digest
+
+def validate_version_inventories(self, version_dirs):
+    """
+    Each version SHOULD have an inventory up to that point.
+
+    Also keep a record of any content digests different from those in the root inventory
+    so that we can also check them when validating the content.
+
+    version_dirs is an array of version directory names and is assumed to be in
+    version sequence (1, 2, 3...).
+    """
+    self.status_str = 'success'
+    
+    root_inv_validator = self.root_inv_validator
+    inventory_digest_files = self.inventory_digest_files
+    
+    for version_dir in version_dirs:
+        inv_file = fs.join(self.content_directory, version_dir, 'inventory.json')
+        inv_digest_file = fs.join(self.content_directory, version_dir, 'inventory_digest.json')
+        
+        if not fs.file_exists(inv_file):
+            self.check_additional_digests(inv_file, known_digests={}, additional_digests={}, error_code='version missing')
+            continue
+            
+        inv_digest = self.read_inventory_digest(inv_digest_file)
+        root_inv = self.read_inventory_digest(root_inv_validator)
+        
+        if inv_digest != root_inv:
+            self.check_additional_digests(inv_file, known_digests=root_inv, additional_digests=inv_digest, error_code='digest mismatch')
+            continue
+            
+        obj_fs = self.obj_fs
+        with fsch as context manager:
+            for file in root_inv['files']:
+                if not obj_fs.file_exists(file):
+                    self.check_additional_digests(inv_file, known_digests=root_inv, additional_digests={file: None}, error_code='missing file')
+    
+    return None

@@ -1,0 +1,39 @@
+
+
+```python
+def lru_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm.
+    """
+    def decorator(func):
+        cache = {}
+        order = []
+
+        def make_key(args, kwargs, typed):
+            key_parts = []
+            for arg in args:
+                key_parts.append(_make_key_part(arg, typed))
+            for k, v in kwargs.items():
+                key_parts.append(_make_key_part(k, typed))
+                key_parts.append(_make_key_part(v, typed))
+            return tuple(key_parts)
+
+        def _make_key_part(arg, typed):
+            if typed:
+                return (type(arg), arg)
+            else:
+                return str(arg)
+
+        def wrapper(*args, **kwargs):
+            key = make_key(args, kwargs, typed)
+            if key in cache:
+                order.remove(key)
+                order.append(key)
+                return cache[key]
+            if len(cache) >= maxsize:
+                lru_key = order.pop(0)
+                del cache[lru_key]
+            result = func(*args, **kwargs)
+            cache[key] = result

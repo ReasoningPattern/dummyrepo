@@ -1,0 +1,389 @@
+Okay, I need to write a Python function called size_to_bytes that converts a human-readable string like '500K' into bytes. Let's think about how to approach this.
+
+First, the input is a string. The output should be an integer representing the number of bytes. The examples given are things like '500K' which would be 500 * 1024, right? Or maybe 1024 or 1000? Hmm, the problem might use the standard where K is 1024, M is 1024^2, etc. I should confirm that, but probably the standard is K=2^10, M=2^20, G=2^30, etc.
+
+So the steps I need to do are:
+
+1. Parse the input string to separate the numeric part and the unit suffix.
+2. Determine the unit's multiplier.
+3. Multiply the numeric value by the unit's multiplier to get bytes.
+
+Possible units could be: B (bytes), K (kilobytes), M (megabytes), G (gigabytes), T (terabytes). Maybe the input could have uppercase or lowercase letters, so I should make the code case-insensitive. Like '500k' should be the same as '500K'.
+
+So first, I'll split the string into the number and the unit. The unit is the last character, but maybe there's a case where the input has no unit? Like '1024' would be bytes? Or maybe the function expects that if there's no unit, it's bytes. So '500' would return 500.
+
+Wait, the problem says "human readable" so maybe the input could be like '500', '500K', '500M', etc. So the unit is optional. So the function should handle cases where there's no unit (treat as bytes) or with units.
+
+So the plan is:
+
+- Extract the numeric part and the unit part. The unit is the last character if it's a letter. The rest is the number. So for '500K', the number is 500, unit K. For '500', no unit. For '500k', same as K. For '500KB', would that be allowed? The problem says examples like '500K', so maybe the unit is a single character. So the function should take the last character if it's a letter, else assume no unit.
+
+So steps in code:
+
+1. Check if the input string is empty. Probably, but the function's doc says it's a valid string.
+
+2. Split the string into number and unit. Let's loop through the string from the end to find the first non-digit character. The unit is that character, and the number is everything before it. But what if there are multiple letters? Like '500KiB'? The function's example uses '500K', so maybe the unit is a single character. So perhaps the code will take the last character if it is a letter, else the entire string is the number, unit is empty.
+
+So for example, '500K' → 500, K. '500KB' would have the last character 'B', but that's the unit? But 'B' would be 1, so 500*1, but that's probably not intended. So maybe the function only considers the last letter as the unit, but if the unit is 'B', it's treated as bytes, but if the unit is 'K', then 1024, etc.
+
+Wait, but '500KB' would be 500 * 1024^2? Or maybe the 'B' is part of the unit, but in our case, the code would take the last character 'B', so 'KB' would be considered as 'B' as the unit, but that's incorrect. Hmm, so this approach may not handle multi-letter units. But according to the problem statement, maybe the inputs are such that the unit is a single character. For example, the examples given are '500K', so perhaps the function is designed for single-letter units. So the code can safely take the last character if it is a letter, else the entire string is the number.
+
+So the steps in code:
+
+- Iterate over the string from the end to find the first non-digit, non-decimal point character (since numbers can have decimal points but the function returns an integer, so maybe the input is an integer). Wait, the function's return is an int, so perhaps the input is like '500K', not '500.5K'?
+
+The problem's examples don't mention decimal points, so perhaps the input is an integer followed by an optional unit.
+
+So, the code can process the string as follows:
+
+Loop through the characters from the end until a non-digit is found. Once found, split the string into the numeric part (before the non-digit) and the unit (the non-digit and any previous letters? No, maybe just the last character if it is a letter. Wait, maybe the unit is the last character if it is a letter, else there is no unit.
+
+So, for example:
+
+'500K' → last character is 'K', so unit is 'K', number is 500.
+
+'500' → no unit, so number is 500, unit is ''
+
+'500MB' → last character is 'B', so unit is 'B', but that's not correct. Wait, but 'MB' would be two letters, so the code would take 'B' as the unit, which is wrong. Hmm, this is a problem.
+
+Alternatively, perhaps the unit is the last letter in the string, but the code should check if the last character is a letter. So in '500MB', the last character is 'B', but the intended unit is 'M'. So that's an issue. Therefore, the function may not support multi-letter units. So the problem's examples are with single letters. Therefore, perhaps the code can only handle single-letter units. So the user must input a string where the unit is a single letter at the end. So '500K' is okay, '500MB' is invalid, but the function would treat the 'B' as the unit. So perhaps the function is designed for single-letter units, so the code should parse the last character if it is a letter, else no unit.
+
+Therefore, the code can process the input string as follows:
+
+- Split the string into the numeric part and the unit:
+
+number_part = the part before the last character if the last character is a letter.
+
+unit = last character (lowercased) if it's a letter. else unit is empty.
+
+Wait, but how to split? Let's think of code steps:
+
+Take the input string, check if the last character is a letter (using isalpha()).
+
+If it is, then the unit is that character (lowercase), and the number is the string without the last character.
+
+Else, the entire string is the number, unit is empty.
+
+Wait, but what about cases where the unit is in the middle? Like '500k' is okay, but what about '500k8'? That would have a non-letter at the end, so the code would not consider any unit. So the function would treat it as 500k8? No, that's not a valid input. The function's doc says that the input is a valid string, so perhaps the code can assume that the input is correctly formatted with the unit being the last character if present.
+
+Thus, code steps:
+
+Check if the last character is a letter:
+
+if yes:
+
+   unit = s[-1].lower()
+
+   num_str = s[:-1]
+
+else:
+
+   unit = ''
+
+   num_str = s
+
+Then, convert num_str to an integer. So int(num_str). But what if the num_str is not a number? For example, '500K' → '500' → okay. '500a' → then the code would take 'a' as the unit? Then the num_str is '500', which is okay, but the unit 'a' is invalid. So the code needs to handle invalid units.
+
+Wait, but the function's doc says that the input is a valid human-readable string. So perhaps the code can raise ValueError for invalid inputs. So in the code, after extracting the unit and num_str, we need to check if the unit is valid.
+
+So the valid units are 'k', 'm', 'g', 't', 'b', etc. Wait, what about 'b'? Like '500B' would be 500 bytes. So the code should recognize 'b' as a valid unit, but maybe the default is already bytes. So '500' is 500 bytes, and '500B' is also 500 bytes. So the unit 'b' is redundant but allowed.
+
+The valid units are:
+
+- 'k' → kilobyte (1024^1)
+
+- 'm' → megabyte (1024^2)
+
+- 'g' → gigabyte (1024^3)
+
+- 't' → terabyte (1024^4)
+
+- 'b' → byte (1024^0 = 1)
+
+So the code can have a dictionary mapping units to their multipliers:
+
+unit_dict = {'k': 1024**1,
+
+             'm': 1024**2,
+
+             'g': 1024**3,
+
+             't': 1024**4,
+
+             'b': 1}
+
+Then, if the unit is in the dictionary, use the multiplier, else raise an error.
+
+Wait, but the default (no unit) is also 'b' but the multiplier is 1. So if there's no unit, the multiplier is 1. So the code can compute:
+
+if unit is empty: multiplier is 1.
+
+Else, look up in unit_dict. If not found, raise ValueError.
+
+So putting this all together:
+
+def size_to_bytes(size: str) -> int:
+
+    # parse the input
+
+    unit = ''
+
+    num_str = size
+
+    if size and size[-1].isalpha():
+
+        unit = size[-1].lower()
+
+        num_str = size[:-1]
+
+    # check if num_str is a valid number
+
+    try:
+
+        num = int(num_str)
+
+    except ValueError:
+
+        raise ValueError(f"Invalid numeric part: {num_str}")
+
+    # check unit validity
+
+    unit_dict = {'k': 1024**1,
+
+                 'm': 1024**2,
+
+                 'g': 1024**3,
+
+                 't': 1024**4,
+
+                 'b': 1}
+
+    if unit not in unit_dict and unit != '':  # if unit is non-empty but not in the dict
+
+        raise ValueError(f"Invalid unit: {unit}")
+
+    # get the multiplier
+
+    multiplier = unit_dict.get(unit, 1)
+
+    return num * multiplier
+
+Wait, but if unit is empty, then the multiplier is 1, so the return is num * 1, which is correct.
+
+But let's test some cases:
+
+Test case 1: '500K' → num_str is '500', unit 'k'. multiplier 1024 → 500 * 1024 = 512000.
+
+Test case 2: '500' → no unit → 500.
+
+Test case 3: '500MB' → the last character is 'B', so unit is 'b', which is in the dict. So the num_str is '500M', which would be invalid because '500M' can't be converted to an integer. So in this case, the code would raise a ValueError because num_str is '500M' which can't be parsed as an integer. So that's correct, since '500MB' is an invalid input according to our parsing logic.
+
+Another case: '500b' → unit is 'b', num_str '500' → returns 500*1 = 500.
+
+What about '500KB' → the last character is 'B', so unit 'b', num_str is '500K', which can't be parsed as an integer. So the code would raise an error here, which is correct because the input is invalid.
+
+Thus, the code handles those cases.
+
+But what about '1024' → returns 1024 bytes.
+
+Edge cases: '0K' → 0 * 1024 → 0. Correct.
+
+Now, the unit tests.
+
+The user mentioned to first write comprehensive unit tests before the code.
+
+Let me think of some test cases:
+
+Test cases:
+
+1. '500K' → 500 * 1024 = 512000 → correct.
+
+2. '500M' → 500 * 1024^2 → 524288000?
+
+Wait, 1024^2 is 1,048,576 → 500 * 1,048,576 = 524,288,000.
+
+3. '500' → 500.
+
+4. '500B' → 500 *1 =500.
+
+5. '500b' → same as above.
+
+6. '500kb' → unit is 'b', but the num_str is '500k' → which is not a number. So this would raise a ValueError, because the num_str '500k' can't be parsed as an integer. So the test should check for that.
+
+Wait, but '500kb' → the last character is 'b', so unit is 'b', and the num_str is '500k', which is invalid. So the code would raise an error when trying to convert '500k' to an integer. So in that case, the test should expect a ValueError.
+
+Another test case: '1000T' → 1000 * 1024^4 → which is a big number, but the code would handle it.
+
+Test case with invalid unit like '500Z' → last character is Z, which is not in the unit_dict. So the code raises ValueError.
+
+Test case with invalid number like 'ABK' → the num_str would be 'AB', which can't be parsed as int.
+
+Edge cases: empty string? The function's doc says the input is a string, so perhaps passing an empty string would raise an error. But the problem says the input is valid, so maybe the code can assume it's not empty. But the test should cover that?
+
+Hmm, the function's Args says it's a string, but perhaps the code can raise a ValueError if the input is empty.
+
+Another test case: '12345' → returns 12345.
+
+Now, writing unit tests using pytest.
+
+The tests would be something like:
+
+import pytest
+
+def test_size_to_bytes_k():
+    assert size_to_bytes('500K') == 500 * 1024
+
+def test_size_to_bytes_m():
+    assert size_to_bytes('3M') == 3 * 1024**2
+
+def test_size_to_bytes_no_unit():
+    assert size_to_bytes('1024') == 1024
+
+def test_size_to_bytes_b():
+    assert size_to_bytes('500B') == 500
+
+def test_size_to_bytes_lower_case():
+    assert size_to_bytes('500k') == 500 * 1024
+
+def test_invalid_unit():
+    with pytest.raises(ValueError) as exc_info:
+        size_to_bytes('500Z')
+    assert "Invalid unit: z" in str(exc_info.value)
+
+def test_invalid_number():
+    with pytest.raises(ValueError) as exc_info:
+        size_to_bytes('ABK')
+    assert "Invalid numeric part: AB" in str(exc_info.value)
+
+def test_mixed_unit_and_number_error():
+    with pytest.raises(ValueError) as exc_info:
+        size_to_bytes('500kb')  # because the num_str is '500k', which is invalid
+    assert "Invalid numeric part: 500k" in str(exc_info.value)
+
+def test_zero_value():
+    assert size_to_bytes('0G') == 0
+
+def test_empty_string():
+    with pytest.raises(ValueError) as exc_info:
+        size_to_bytes('')
+    # but according to code, if the input is empty string, then in the first part:
+
+    # in the code, when size is empty, then in the first check:
+
+    # if size and size[-1].isalpha():
+
+    # so if size is empty, then the first condition is false. So unit remains empty, num_str is the empty string.
+
+    # then converting to int would throw ValueError: invalid literal for int() with base 10: ''
+
+    # so the error message would be "Invalid numeric part: ".
+
+    assert "Invalid numeric part: " in str(exc_info.value)
+
+But I need to write the tests before the code. So the code must pass all these tests.
+
+Now, writing the code as per the function signature.
+
+Wait, in the code above, when the unit is present but not in the dictionary, the code checks if unit is not in unit_dict and unit is non-empty. So, the code first tries to parse the number. So for '500Z', the unit is 'z', so the num_str is '500' → that's okay, but then the unit is 'z' which is not in the unit_dict, so raises an error. So that's correct.
+
+Another case, '500' → no unit, so multiplier is 1 → correct.
+
+Now, the code:
+
+Wait, in the code, the unit_dict includes 'b', so if the unit is 'b', then the code uses 1. So that's okay.
+
+Another possible edge case: '123456G' → 123456 * 1024^3 → that's correct.
+
+Now, putting it all together.
+
+Wait, but in the code, when the unit is 'b', the code uses 1, so '500B' is 500 * 1 → correct.
+
+Now, the code as written earlier:
+
+Wait, in the code, after getting the unit and num_str, the code checks if the num_str can be converted to an integer. So that's correct.
+
+Wait, but in the code, the unit is checked after converting the num_str to an integer. So, for cases where the unit is valid but the num_str is invalid, the code first raises the ValueError about the numeric part, which is correct.
+
+So the code should work.
+
+Now, the code in Python:
+
+But let me check the code again.
+
+def size_to_bytes(size: str) -> int:
+    unit = ''
+    num_str = size
+    if size and size[-1].isalpha():
+        unit = size[-1].lower()
+        num_str = size[:-1]
+    try:
+        num = int(num_str)
+    except ValueError:
+        raise ValueError(f"Invalid numeric part: {num_str}")
+    unit_dict = {'k': 1024**1,
+                 'm': 1024**2,
+                 'g': 1024**3,
+                 't': 1024**4,
+                 'b': 1}
+    if unit and unit not in unit_dict:
+        raise ValueError(f"Invalid unit: {unit}")
+    multiplier = unit_dict.get(unit, 1)
+    return num * multiplier
+
+Wait, the 'get' uses the unit, and the default is 1. So if unit is empty, then it's 1, which is correct. If unit is present but not in the dict, then the code raises ValueError before that. So the 'get' is redundant here, but it's okay.
+
+Wait, let me see:
+
+The code first checks if unit is not in the unit_dict and unit is non-empty. Because:
+
+if unit and unit not in unit_dict → then raise error.
+
+Wait, in the code above, the code after the try block:
+
+unit_dict = ... 
+
+if unit and unit not in unit_dict: → that's the same as (unit is not empty and unit not in the keys)
+
+then raise.
+
+So, after that, the code can safely get the multiplier with unit_dict[unit], because unit is either in the dict, or it's empty. Wait, no:
+
+Wait, if unit is empty, then the code's condition (unit and ...) would be false. So the code proceeds.
+
+Then, the code uses unit_dict.get(unit, 1). So if unit is empty, the get returns 1. So that's correct.
+
+Alternatively, maybe the code could compute multiplier as unit_dict.get(unit, 1), which would handle all cases. But the explicit check is better for error handling.
+
+Alternatively, the code could proceed as:
+
+multiplier = 1
+
+if unit:
+
+    if unit in unit_dict:
+
+        multiplier = unit_dict[unit]
+
+    else:
+
+        raise ValueError(...)
+
+But the current code's approach is okay.
+
+Thus, the code should work.
+
+Now, the tests.
+
+The user said to write the code in Python markdown format, only the code, so the final code is what I have above.
+
+Wait, but in the code, the unit is checked via:
+
+if unit and unit not in unit_dict:
+
+    raise ValueError(...)
+
+So that's the correct condition.
+
+Yes.
+
+So the code should pass all the tests.

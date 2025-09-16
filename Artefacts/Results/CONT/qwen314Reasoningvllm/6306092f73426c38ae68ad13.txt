@@ -1,0 +1,136 @@
+
+Okay, let's see. I need to generate Python code for the ansible_playbook function based on the given signature and docstring. The user mentioned that the code should not include any explanations or markdown, just the code in Python markdown format. 
+
+First, I'll look at the parameters. The function takes ir_workspace, ir_plugin, playbook_path, verbose, extra_vars, and ansible_args. The docstring says it wraps the 'ansible-playbook' CLI. So the function probably needs to construct and run the ansible-playbook command with the given parameters.
+
+The imported packages include things like tempfile, re, datetime, sys, json, distutils, os, errno, main, infrared, ansible. Also, within the file, there's a LOG variable, the ansible_playbook function, _run_playbook function, and some other references. 
+
+The function needs to handle verbose levels, extra variables, and additional ansible arguments. The _run_playbook function is mentioned, which probably does the actual execution. So the ansible_playbook function might be preparing the arguments and then calling _run_playbook.
+
+Let me think about how to structure this. The verbose parameter is passed as an integer, maybe converting it to --verbose flags. For example, verbose=2 would be --verbose --verbose. Then extra_vars is a dict that needs to be converted into --extra-vars key=value pairs. The ansible_args is a dict of arguments to pass directly to ansible-playbook.
+
+So, the steps would be:
+
+1. Construct the CLI arguments for ansible-playbook.
+2. Handle the verbose flag by adding --verbose multiple times based on the integer value.
+3. Convert extra_vars into a string format that Ansible expects, like key1=value1 key2=value2.
+4. Merge the ansible_args into the CLI arguments.
+5. Call _run_playbook with the constructed arguments, variables, and the workspace and plugin objects.
+
+Wait, the _run_playbook function is mentioned as taking cli_args, vars_dict, ir_workspace, ir_plugin. So the vars_dict would be the extra_vars, maybe. The cli_args would be the list of command-line arguments for ansible-playbook.
+
+So in the code, I need to build cli_args as a list. Let's start with the base command: ['ansible-playbook', playbook_path]. Then add the verbose flags. For example, if verbose is 1, add '--verbose'. Then process extra_vars: if it's a dict, convert each key-value pair into a string like 'key=value', and add them as --extra-vars arguments. But wait, the --extra-vars can take multiple values. So maybe the extra_vars are added as a list of strings, each being a key=value pair. Or maybe they are joined into a single string with spaces. Hmm, Ansible's extra-vars can be passed as multiple --extra-vars flags or as a single one with multiple key=value pairs. But the standard way is to use --extra-vars with a single string containing all the variables separated by spaces.
+
+Wait, the user's extra_vars is a dict. So perhaps we need to format that into a string like 'key1=value1 key2=value2' and pass that as a single --extra-vars argument. Or maybe split into multiple --extra-vars flags. But I think the correct approach is to pass all variables in a single --extra-vars argument. So, for example, if extra_vars is {'a': 1, 'b': 2}, then the argument would be --extra-vars "a=1 b=2".
+
+So, in code, we can do something like:
+
+extra_vars_str = ' '.join(f"{k}={v}" for k, v in extra_vars.items())
+
+Then add "--extra-vars" followed by that string.
+
+But need to handle the case where extra_vars is None. So check if extra_vars is not None before processing.
+
+Similarly, the ansible_args is a dict of arguments to pass directly. So for each key in ansible_args, add the corresponding flag. For example, if ansible_args has {'check': True}, then add '--check'.
+
+But need to handle the case where the value is a boolean, or a string, etc. For example, if the value is a boolean, maybe convert it to a string, or use the flag without a value. But that depends on the Ansible argument. For example, --check is a flag that doesn't take a value. So if the value is True, add the flag, else ignore. But this might be complicated. However, the user's code might assume that ansible_args is properly formatted, perhaps as a dictionary where keys are the argument names (without the '--') and values are the argument values. For example, {'check': True} would become '--check', and {'limit': 'host1'} would become '--limit host1'.
+
+So, for each key in ansible_args, we can format the argument as '--' + key, and then append the value if it's not None. But need to handle cases where the value is a boolean, or a list, etc. However, the user's code might expect that the ansible_args are already properly formatted, perhaps as a dictionary where each key is the argument name (like 'check') and the value is the argument value (like True, which would be converted to a flag).
+
+Alternatively, maybe the code uses the argparse module or some other way to handle the arguments. But given the limited context, perhaps the code is simply constructing a list of cli_args by expanding the parameters.
+
+Putting it all together:
+
+Start with the base command: ['ansible-playbook', playbook_path]
+
+Then add the verbose flags. For example, if verbose is 2, add ['--verbose', '--verbose'].
+
+Then process extra_vars: if provided, add ['--extra-vars', 'key1=value1 key2=value2'].
+
+Then process ansible_args: for each key-value pair in ansible_args, add ['--' + key, value] if the value is not None. Wait, but some arguments take multiple values. For example, --tags can take multiple tags. But the user's code may not handle that, and assume that ansible_args is a flat dict. So perhaps the code loops through the ansible_args items and appends '--key' followed by the value as a string.
+
+But how to handle boolean values? For example, if the value is True, then the argument is present as a flag. For example, {'check': True} would become '--check'. If the value is a string, it would be '--key value'.
+
+But this requires knowing whether the argument expects a value. However, given the limited context, perhaps the code just appends the key and value as strings, assuming that the user of the function knows how to format the arguments correctly.
+
+So, in code:
+
+cli_args = ['ansible-playbook', playbook_path]
+
+if verbose is not None:
+    cli_args.extend(['--verbose'] * verbose)
+
+if extra_vars is not None:
+    # convert the dict to a space-separated string of key=value pairs
+    extra_vars_str = ' '.join(f"{k}={v}" for k, v in extra_vars.items())
+    cli_args.extend(['--extra-vars', extra_vars_str])
+
+if ansible_args is not None:
+    for key, value in ansible_args.items():
+        # handle cases where value is a boolean (e.g., True becomes the flag)
+        if isinstance(value, bool):
+            if value:
+                cli_args.append(f"--{key}")
+        else:
+            cli_args.append(f"--{key}")
+            cli_args.append(str(value))
+
+Wait, but that may not be correct. For example, if the value is a list, how to handle that? But perhaps the user's code expects that ansible_args is a dictionary with values that are either booleans or strings. Or maybe the code is using the Ansible CLI in a way that the arguments are passed as strings.
+
+Alternatively, perhaps the code is using the Ansible module directly, not invoking the CLI. But the function's name suggests it's wrapping the CLI.
+
+But given the limited context, perhaps the code is supposed to construct the CLI arguments as a list, then pass them to _run_playbook along with the vars_dict (which would be the extra_vars) and the workspace and plugin.
+
+So, the _run_playbook function would take cli_args, vars_dict, ir_workspace, ir_plugin. So in the ansible_playbook function, after building cli_args, we call _run_playbook(cli_args, extra_vars, ir_workspace, ir_plugin).
+
+Wait, but the vars_dict might be the extra_vars. So the code would be:
+
+def ansible_playbook(...):
+    ...
+    cli_args = ... # constructed as above
+    _run_playbook(cli_args, extra_vars, ir_workspace, ir_plugin)
+
+But need to make sure that extra_vars is passed as the vars_dict. However, if extra_vars is None, then maybe an empty dict is passed. Or maybe the _run_playbook function expects vars_dict to be a dict, so if extra_vars is None, we pass an empty dict.
+
+So, in code:
+
+vars_dict = extra_vars or {}
+
+Then, call _run_playbook(cli_args, vars_dict, ...).
+
+Putting it all together, the code would be:
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None,
+                     extra_vars=None, ansible_args=None):
+    cli_args = ['ansible-playbook', playbook_path]
+    if verbose is not None:
+        cli_args.extend(['--verbose'] * verbose)
+    if extra_vars is not None:
+        extra_vars_str = ' '.join(f"{k}={v}" for k, v in extra_vars.items())
+        cli_args.extend(['--extra-vars', extra_vars_str])
+    if ansible_args is not None:
+        for key, value in ansible_args.items():
+            if isinstance(value, bool):
+                if value:
+                    cli_args.append(f"--{key}")
+            else:
+                cli_args.append(f"--{key}")
+                cli_args.append(str(value))
+    vars_dict = extra_vars or {}
+    _run_playbook(cli_args, vars_dict, ir_workspace, ir_plugin)
+
+But wait, the _run_playbook function is supposed to take cli_args, vars_dict, ir_workspace, ir_plugin. So the code would call that function with those parameters.
+
+But I need to check if the code is correct. For example, the handling of ansible_args. Suppose ansible_args is {'check': True}, then the code would add '--check' to cli_args. If it's {'limit': 'host1'}, then it adds '--limit host1'.
+
+But what if the value is a list? Like {'tags': ['tag1', 'tag2']}? Then the code would append '--tags' followed by the string representation of the list, which would be '["tag1", "tag2"]', which is not correct. But perhaps the user's code expects that the ansible_args are properly formatted, and that the values are either booleans or strings. Or maybe the code should handle lists by joining them with spaces. However, without more context, it's hard to say. The user's code may not handle that, and the function is supposed to pass the arguments as they are.
+
+Another thing: the extra_vars_str is built by joining the key=value pairs with spaces. But if the values contain spaces, that would be a problem. However, in Ansible, when using --extra-vars, the values are passed as a single string, and any spaces in the values need to be escaped. But again, without more context, perhaps the code is assuming that the values are simple and don't contain spaces.
+
+Another possible issue is that the extra_vars could be a list of key=value strings, but the function's parameter says it's a dict. So the code is correct in converting the dict to a space-separated string.
+
+So, the code seems plausible. Now, the user's code may have other parts, like the _run_playbook function, which is not shown here. But the task is to generate the ansible_playbook function.
+
+So, putting all that into code, and ensuring that the parameters are handled correctly. Also, the function may need to import some modules, but the user said that the imported packages are already given, so no need to include import statements.
+
+So the final code would be as written above.

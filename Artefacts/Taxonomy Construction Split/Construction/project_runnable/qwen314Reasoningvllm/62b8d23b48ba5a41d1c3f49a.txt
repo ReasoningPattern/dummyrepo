@@ -1,0 +1,400 @@
+
+Okay, I need to create a Python decorator called mru_cache that implements a Most Recently Used (MRU) cache with a specified maxsize. Let me think about how to approach this.
+
+First, I remember that Python's standard library has functools.lru_cache, which uses Least Recently Used. But here, the requirement is MRU, so the eviction policy is different. For MRU, when the cache is full, the most recently used item is kept, and the least recently used is evicted. Wait, no, actually MRU cache evicts the most recently used item when the cache is full. Wait, that doesn't sound right. Let me confirm: MRU cache replaces the most recently accessed item when a new one is added, which might not be the typical use case. But maybe the user wants that. Hmm, perhaps I should check the standard implementations. Oh right, sometimes MRU is used in specific scenarios, but usually, LRU is more common. Anyway, the user specified MRU, so I need to go with that.
+
+So, the decorator should memoize function calls, storing up to maxsize results. When the cache is full, adding a new item should evict the most recently used one. Wait, that's a bit counterintuitive. Normally, you'd want to keep the most recently used items, but MRU evicts the most recent. Maybe the user has a specific reason for that. Let's proceed.
+
+The steps to implement this:
+
+1. Create a cache that stores the most recent entries. But how to track the most recently used items? Maybe using a dictionary to store the cached results and a separate structure to track the order of usage. For MRU, the most recently used item is the one that was accessed last. So when a new item is added, it becomes the most recent, and when eviction is needed, the oldest item (the one that was used least recently) is removed. Wait, no, that's LRU. Wait, I'm confused. Let me think again.
+
+Wait, MRU cache evicts the most recently used item when the cache is full. So when a new item comes in, if the cache is at maxsize, we remove the most recently used item to make space. But that seems odd because the most recent is likely to be needed again. Maybe the user made a mistake, but I have to follow the given spec.
+
+Alternatively, perhaps the user intended to use MRU as a way to track the most recent entries, but the eviction policy is actually LRU. Wait, no. The docstring says "saves up to maxsize results based on a Most Recently Used (MRU) algorithm." So the algorithm here is MRU, which probably means that when evicting, the most recently used item is kept, and the least recently used is evicted. Wait, that's conflicting. Let me clarify.
+
+Wait, the MRU cache typically evicts the most recently used item when a new one is added. But that's not common. Maybe the user meant that the cache keeps the most recently used items, and when it's full, the least recently used is evicted. That would be LRU. But the name is MRU. Maybe there's a misunderstanding here. Alternatively, perhaps the user wants the cache to evict the most recently used item when it's full. That would be unusual, but I have to follow the instruction.
+
+Alternatively, maybe the user intended to have a cache that evicts the least recently used, but called it MRU by mistake. However, since the function is named mru_cache, I need to proceed with the MRU logic.
+
+So, to implement an MRU cache, each time a key is accessed, it becomes the most recently used. When adding a new key and the cache is full, we remove the least recently used key. Wait, no, that's LRU. If it's MRU, then the most recently used is the one that was accessed last. So when inserting a new item, if the cache is full, we remove the most recently used item. That would make the new item the most recent, and the previous most recent is evicted. But that seems like it would cause frequent evictions of items that are just being used again.
+
+Alternatively, maybe the user is referring to a cache that keeps track of the most recently used items, but when evicting, it removes the oldest ones. That's not MRU. I'm a bit confused here. Let me check some references. Oh, wait, maybe the user made a mistake in the docstring and intended LRU. But I can't assume that. The function is named mru_cache, so I have to implement MRU.
+
+But how to implement an MRU cache? Let's think. For MRU, when a new item is added, it becomes the most recently used. When the cache is full, the least recently used item is evicted. Wait, that's LRU. So perhaps the user intended LRU but wrote MRU. But since the function is named mru_cache, maybe they want the opposite: when evicting, the most recently used is removed. That would be unusual. Let me think of the data structure.
+
+If the cache is supposed to evict the most recently used item when full, then perhaps we can use a queue where the most recent is at the front. When inserting, we add to the front. When evicting, we remove from the front. But that's not typical. Alternatively, maybe the user wants the cache to keep the most recently used items, and when a new item is added, it's placed at the front, and when evicting, the last item is removed. That would be LRU. Hmm.
+
+This is a bit of a problem. The term MRU can be ambiguous. However, given the function name, I need to proceed with the assumption that the cache evicts the most recently used item when it's full. But how to track that?
+
+Alternatively, maybe the user intended to use MRU as a way to track the most recent entries, but the eviction policy is actually LRU. That's possible. But without more information, I have to go with the given name.
+
+Alternatively, perhaps the MRU cache is implemented using a linked list where the most recently used is at the head, and when inserting a new item, it's added to the head. When evicting, the tail is removed. That's LRU. So maybe the user made a mistake in the docstring and the actual intended behavior is LRU. But since the function is named mru_cache, I have to follow that.
+
+Wait, perhaps the user meant that the cache is ordered by most recently used, so when you access an item, it's moved to the front. Then, when evicting, you remove the least recently used (the one at the end). That's LRU. So maybe the docstring has a typo. But given that the user provided the name as mru_cache, I need to proceed with that.
+
+Alternatively, perhaps the user wants that when the cache is full, the most recently used item is replaced. That would be a different approach. For example, if you have a cache of size 2, and you access items A, B, then C comes in. Since the cache is full, you evict B (the most recent before C). But that seems odd. However, for the sake of the task, I need to implement the MRU cache as per the user's instruction.
+
+So, the plan is:
+
+- Create a cache that stores the function's arguments and results.
+- When a function is called, check if the arguments are in the cache.
+- If they are, return the cached result and update the usage order (marking it as most recent).
+- If not, compute the result, store it in the cache, and if the cache is over maxsize, evict the most recently used item.
+
+Wait, but that would mean that when you add a new item, you evict the most recent one. That seems counterintuitive. Let me think of an example. Suppose maxsize is 2. The cache has items A and B. Now, when you add C, since the cache is full, you evict the most recently used (which is B, assuming B was the last one accessed). Then, C is added. But if you access B again, it's now the most recent. Then adding D would evict B again.
+
+But this would lead to the cache evicting items that are just being used again. That's not efficient. However, perhaps the user wants that behavior. So, the code needs to track the most recently used items and evict them when necessary.
+
+But how to track the usage order. Maybe using an OrderedDict or a list. However, for MRU, each access moves the item to the front. Wait, no. For MRU, the most recently used is the one that was accessed last. So, when you access an item, it becomes the most recent. When inserting a new item, it's added as the most recent. When evicting, you remove the least recently used item. Wait, that's LRU again. So perhaps the user intended LRU but named it MRU.
+
+This is confusing. Maybe I should check the standard implementations. Wait, in some contexts, MRU cache is used, but it's less common. For example, in some scenarios, you might want to evict the most recently used item to make space for new ones, but that's not typical. However, given the function name, I need to proceed.
+
+Alternatively, maybe the user meant that the cache keeps the most recently used items, and when evicting, the least recently used is removed. That would be LRU. But the name is mru_cache. Maybe the user is confused between LRU and MRU.
+
+But since the task is to generate code based on the given function signature and docstring, I have to follow that. The docstring says "saves up to maxsize results based on a Most Recently Used (MRU) algorithm." So perhaps the cache is ordered such that the most recently used items are kept, and the least recently used are evicted. That would be LRU. So maybe the user made a mistake in the docstring. But I can't be sure.
+
+Alternatively, perhaps the MRU algorithm here refers to the cache being ordered by the most recent usage, and when evicting, the oldest entry is removed. But that's again LRU.
+
+This is a problem. To resolve this, perhaps I should look for existing implementations of MRU cache in Python. However, I know that in Python's standard library, there's no MRU cache, but there are LRU caches.
+
+Alternatively, perhaps the user intended to implement an LRU cache but named it mru_cache. But given the name, I need to proceed with MRU.
+
+Alternatively, maybe the user is referring to the cache being a Most Recently Used cache, which would mean that when the cache is full, the most recently used item is kept, and the least recently used is evicted. Wait, that's the same as LRU. No, that's not. In LRU, the least recently used is evicted. In MRU, the most recently used is evicted. So, if the cache is full, adding a new item would evict the most recently used one. That's different.
+
+But how to implement that. Let's think of the data structure. For example, when a new item is added, it's placed at the front. When evicting, remove the front item. So, the cache would have a queue where the most recent is at the front. When inserting a new item, if the cache is full, we remove the front (most recent) and add the new one to the front. That way, the least recently used is the one at the end. But that would be an MRU cache. Wait, but that seems odd.
+
+Let me think of an example. Suppose the cache is size 2. The items are A and B. If we add C, since the cache is full, we evict the most recent (B) and add C. Then the cache has A and C. Now, if we access A, it becomes the most recent. Then, adding D would evict C (the most recent), resulting in A and D. So, the cache is keeping the most recent items, but evicting the previous most recent when a new one is added. That seems like it would cause the cache to not retain useful items. But perhaps that's the intended behavior.
+
+Alternatively, maybe the user wants the opposite: when evicting, the least recently used is removed. That would be LRU. But given the name, perhaps the user made a mistake.
+
+This is a critical point. If I proceed with LRU, the code would be similar to functools.lru_cache, but with the name mru_cache. However, the user might have intended that. But since the function is named mru_cache, I need to proceed with the MRU logic.
+
+But perhaps the user is confused between MRU and LRU. Let me check the standard definitions again.
+
+In an MRU cache, the most recently used item is the one that was accessed last. When inserting a new item, if the cache is full, the MRU item is evicted. So, for example, if the cache has items A, B, and C (with maxsize 3), and the next access is to B, then B becomes the new MRU. If we add D, the cache is full, so we evict B (the MRU) and add D. Then the cache would have A, C, D. So the next access to D would make it the MRU again.
+
+This seems counterintuitive, but perhaps the user wants that. However, this would mean that the cache is not very effective because it's evicting the most recently used item, which is likely to be needed again.
+
+But regardless, I need to implement the MRU cache as per the given function name and docstring. So, the approach would be:
+
+- Use a data structure that allows tracking of the most recently used items.
+- When a new item is added, it's placed at the front (as the most recent).
+- When evicting, remove the front item (the most recent one).
+
+But that would be an MRU cache. However, this is not a standard approach, so perhaps the user intended LRU. But without more information, I have to proceed with the given name.
+
+Alternatively, maybe the user intended that the cache keeps the most recently used items, and when evicting, the least recently used is evicted. Which is LRU. So perhaps the docstring has a typo. But again, I can't be sure.
+
+In any case, the user's function is named mru_cache, so I need to code accordingly. However, implementing an MRU cache with eviction of the most recently used is not standard, but I can proceed.
+
+So, the plan is:
+
+- Create a decorator that uses a cache (like a dictionary) to store the results.
+- Track the usage order. For MRU, each time an item is accessed, it's marked as the most recent. So, perhaps using a list or a deque to track the order of usage.
+- When a new item is added, it's placed at the front of the list. If the cache is over maxsize, remove the last item (the least recently used) or the first item (the most recently used)? Wait, if the cache is full and a new item is added, we need to evict the most recently used. So, for example, if the cache is [A, B], with maxsize 2. Adding C would evict B (the most recent), resulting in [A, C]. Then, adding D would evict C, resulting in [A, D]. But if we access A again, it becomes the most recent, so the order would be [A, D], and adding E would evict D, resulting in [A, E].
+
+But in this case, the cache is keeping the most recent items. However, the eviction is of the previous most recent. That's possible.
+
+But how to track that. Let's think of using an OrderedDict. For LRU, we move accessed items to the end, and when evicting, we remove from the beginning. For MRU, perhaps we move accessed items to the front, and when evicting, we remove from the end. Wait, that would be LRU. No, that's not. If accessed items are moved to the front, then the least recently used is at the end. So when evicting, you remove the least recently used (the end), which is LRU. So maybe the user intended LRU but named it MRU. Alternatively, maybe the user wants that when evicting, the most recently used is removed, which would be the front of the list.
+
+But this is conflicting. Let me think again. If the cache is supposed to evict the most recently used item when it's full, then inserting a new item would require evicting the current most recent. For example, with maxsize 2:
+
+- Insert A → cache: [A]
+- Insert B → cache: [A, B]
+- Insert C → cache is full, evict B (most recent), add C → cache: [A, C]
+- Now, if we access A, it becomes the most recent → cache: [A, C] (but A is now the most recent, so maybe the order is [C, A] if we track insertion order. Wait, no. If accessing A makes it the most recent, then the order would be [A, C], and inserting D would evict A (the most recent) and add D, resulting in [C, D].
+
+But this seems like the cache is not useful. However, given the function name, I need to proceed.
+
+Alternatively, perhaps the user meant that the cache is ordered by most recent, and when evicting, the oldest entry is removed. Which is LRU. So maybe the docstring is incorrect. But since the user provided the name, I need to code for MRU.
+
+Alternatively, maybe the user wants the cache to keep the most recently used items, but the eviction is based on the most recent. But how?
+
+This is a bit of a dilemma. However, given that the user is asking for an MRU cache, perhaps the correct approach is to use a data structure that tracks the order of usage, and when evicting, remove the most recently used item. But that would be unusual.
+
+Alternatively, perhaps the user intended to use LRU. In that case, the code would be similar to lru_cache, but with the name mru_cache. However, since the user specified MRU, I need to proceed with that.
+
+But perhaps the user made a mistake. Let me check the original question again. The function signature is mru_cache, and the docstring says "saves up to maxsize results based on a Most Recently Used (MRU) algorithm."
+
+In that case, maybe the MRU algorithm here is intended to keep the most recently used items, and when the cache is full, the least recently used is evicted. Which is LRU. So the name in the docstring might be a mistake. But how to know?
+
+Alternatively, perhaps the user wants to implement an MRU cache where the most recently used items are kept, and the least recently used are evicted. That's the same as LRU. So maybe the name is incorrect, and the actual implementation is LRU.
+
+But given that the user has specified the name as mru_cache, perhaps I should proceed with the standard LRU implementation but name it mru_cache. However, that would be incorrect. Alternatively, maybe the user is using MRU to mean that the cache keeps the most recent entries, but the eviction is based on the least recent. Which is LRU.
+
+This is getting too confusing. Let me think of the standard approach for LRU and see if I can adapt it for MRU.
+
+In LRU, the cache is ordered with the least recently used at the front. When inserting a new item, if the cache is full, the front (LRU) is evicted. When an item is accessed, it's moved to the end (so it's the most recently used).
+
+For MRU, perhaps the cache is ordered with the most recently used at the front. When inserting a new item, if the cache is full, we evict the front (the most recent) and add the new one to the front. But that would mean that each new insertion evicts the previous most recent. Which is not typical.
+
+Alternatively, maybe the user wants that when the cache is full, the least recently used is evicted, which is LRU. So perhaps the function name is a typo.
+
+But given that the user provided the name as mru_cache, I need to code accordingly. However, without knowing the exact eviction policy, it's hard. Maybe I should proceed with the standard LRU implementation but name it mru_cache, and note that in the code. But the user said not to include any explanation, so I have to code based on the given info.
+
+Alternatively, perhaps the MRU cache is implemented by keeping track of the most recent usage and evicting the least recent. That's LRU again.
+
+Wait, maybe the user intended to have a cache that evicts the least recently used, but named it MRU. That's possible. In that case, the code would be similar to lru_cache. However, the function name is mru_cache, which is conflicting.
+
+Alternatively, perhaps the user is referring to the cache being a Most Recently Used cache, meaning that when you access an item, it's marked as the most recent. When the cache is full, the least recently used is evicted. Which is LRU.
+
+This seems like a mistake in the docstring. But since I can't ask for clarification, I need to make an assumption.
+
+Given that, perhaps the user intended to implement LRU. So I'll proceed with that, but name the function mru_cache as per the given.
+
+But how to confirm. Let's think of the standard LRU implementation. The code for lru_cache uses an OrderedDict, and moves accessed items to the end. When inserting a new item, if the cache is full, the first item (the least recently used) is removed.
+
+So, for the mru_cache, perhaps the code is the same as lru_cache but with a different name. However, the user might have made a mistake. But given that, I'll proceed with implementing LRU, but name it mru_cache.
+
+Alternatively, maybe the user wants the opposite: when inserting a new item, the most recently used is kept, and the least is evicted. Which is the same as LRU. So perhaps the name is a mistake.
+
+In any case, the code would be similar to lru_cache. Let me think of writing a decorator that uses a dictionary and an OrderedDict to track the order of insertion, but for MRU, perhaps the order is reversed.
+
+Alternatively, perhaps the user wants to implement a cache that evicts the most recently used item. So, when inserting a new item, if the cache is full, the most recent (the one that was just added before) is evicted. But that's not useful.
+
+But given that the user has asked for an MRU cache, perhaps I should proceed with that. However, I need to code it properly.
+
+Let me think of using a deque. For MRU, each time an item is accessed, it's moved to the front. When inserting a new item, if the cache is full, the last item (the least recently used) is evicted. Wait, that's LRU. No, if you move accessed items to the front, then the least recently used is at the end. So, when evicting, you remove the least recently used (the end), which is LRU. So perhaps the user intended LRU, and the name is a mistake.
+
+In that case, the code would be similar to lru_cache. But again, without knowing, it's hard to say.
+
+Alternatively, perhaps the user wants the cache to evict the most recently used item. So, when inserting a new item, the most recent is evicted. Let's think of how to do that.
+
+For example, with maxsize 2:
+
+- Insert A → cache: {A: ...}, order: [A]
+- Insert B → cache: {A, B}, order: [A, B]
+- Insert C → cache is full, evict B (most recent), add C. Now order is [A, C]
+- Access A → move to front → order [A, C] (no change since it's already the front)
+- Insert D → evict C (most recent), add D. Order [A, D]
+
+But this seems like the cache is keeping the oldest items. That's not typical. However, perhaps the user wants that.
+
+But how to track the order. For example, using a list where the most recent is at the front. When inserting, we add to the front. If the cache is full, we remove the last element (the least recent). Wait, that's not MRU. That would be a FIFO cache. Hmm.
+
+Alternatively, if inserting a new item adds it to the front, and when evicting, we remove the front. That would be MRU. But that would mean that the most recently used is evicted when adding a new item. Which is not standard.
+
+This is getting too stuck. Given that, perhaps the user intended to implement an LRU cache. So, I'll proceed with that, but with the name mru_cache. However, the code would be similar to lru_cache.
+
+So, the code would use an OrderedDict, and when a key is accessed, it's moved to the end. When inserting a new key, if the cache is full, the first item is removed.
+
+But the function is named mru_cache, which is conflicting. However, given that, perhaps the user made a mistake, and I should proceed with LRU.
+
+Alternatively, maybe the user wants to use MRU as the eviction policy, which would require that the most recently used is evicted. So, when inserting a new item, the most recent is evicted. But how to track that.
+
+Let me think of using a list to track the order of usage. For each access, the item is added to the front of the list. When evicting, remove the last item (the least recently used). Wait, that would be LRU again. No, if you add to the front on access, then the least recently used is at the end. So when evicting, you remove the least recent. That's LRU.
+
+So, in that case, the code would be the same as LRU. Therefore, perhaps the user's docstring has a typo, and the intended algorithm is LRU. But since the function is named mru_cache, I need to code accordingly.
+
+Alternatively, maybe the user wants the cache to evict the most recently used item. So, when inserting a new item, the most recent (which was just inserted) is kept, and the previous most recent is evicted. But that's not useful. However, to code it, perhaps using a deque where each new insertion is added to the front, and when evicting, we remove the front. But that would be a FIFO approach, not MRU.
+
+This is getting too complicated. Given that, perhaps the user intended to use LRU, and the name is a mistake. So I'll proceed with implementing an LRU cache, but with the name mru_cache as per the given.
+
+In that case, the code would be similar to the standard lru_cache decorator. Let me recall how that works.
+
+The standard lru_cache uses an OrderedDict. When a key is accessed, it's moved to the end. When inserting a new key, if the size exceeds maxsize, the first item (the least recently used) is removed.
+
+So, for the mru_cache, perhaps the code is similar but with the name. However, the user might have intended that.
+
+Alternatively, maybe the user wants to use MRU, which would require that when evicting, the most recently used is removed. So, the code would track the most recent and evict it when necessary. But that's not typical.
+
+In any case, the user's request is to generate code for mru_cache. So, perhaps I should proceed with the standard LRU implementation but name it mru_cache. But that's not correct. Alternatively, perhaps the user made a mistake and wants LRU.
+
+But since the user is asking for MRU, I need to code that. However, I'm not sure how to implement it. Let me think of the data structure again.
+
+An MRU cache would track the most recently used items. When a new item is added, it becomes the most recent. When evicting, the most recent is evicted. That seems odd, but perhaps that's the case.
+
+Wait, if the cache is full and a new item is added, then the most recent item (the one that was just added) is kept, and the previous most recent is evicted. That would mean that the cache is always keeping the new items, but that's not useful.
+
+Alternatively, maybe the user wants to evict the least recently used. Which is LRU.
+
+Given the confusion, perhaps the best approach is to implement LRU and name it mru_cache, as the user might have made a mistake. However, I should proceed with the assumption that the name is correct and the eviction is based on MRU.
+
+But I need to code it. Let me think of the steps again.
+
+The decorator should memoize function calls, saving up to maxsize results. The MRU algorithm would track which items are most recently used. When the cache is full, the most recently used item is evicted. Wait, that doesn't make sense. Why would you evict the most recently used item? That would mean that the next time you need it, it's gone. So perhaps the user intended to evict the least recently used, which is LRU.
+
+In that case, the code is similar to lru_cache. So, I'll proceed with that, but with the name mru_cache. However, the user might have a different intention.
+
+Alternatively, perhaps the user is referring to the cache being ordered by most recently used, and when evicting, the least recently used is evicted. Which is LRU. So the code is the same as lru_cache.
+
+Therefore, I'll proceed to implement an LRU cache, but name it mru_cache. The user might have made a mistake in the docstring.
+
+So, the code will be similar to the standard lru_cache decorator. Let me write that.
+
+The code would use a dictionary for the cache and an OrderedDict to track the usage order. When a key is accessed, it's moved to the end of the OrderedDict. When inserting a new key, if the size exceeds maxsize, the first item (the least recently used) is removed.
+
+So, the code would look something like this:
+
+import functools
+from collections import OrderedDict
+
+def mru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        cache = OrderedDict()
+        def wrapper(*args, **kwargs):
+            # Check if the arguments are in the cache
+            key = (args, frozenset(kwargs.items())) if typed else (args, kwargs)
+            if key in cache:
+                # Move to end to mark as most recently used
+                cache.move_to_end(key)
+                return cache[key]
+            else:
+                # Compute the result
+                result = func(*args, **kwargs)
+                # Add to cache
+                cache[key] = result
+                # If cache is over maxsize, evict the least recently used (the first item)
+                if len(cache) > maxsize:
+                    cache.popitem(last=False)
+                return result
+        return wrapper
+    return decorator
+
+Wait, but in this code, when a key is accessed, it's moved to the end. When inserting a new key, if the cache is over maxsize, the first item (least recently used) is evicted. That's LRU. So the name mru_cache is incorrect here.
+
+But if the user wants MRU, then perhaps the code should move the accessed item to the front, and when evicting, remove the last item. That would be LRU again. Wait, no. If accessed items are moved to the front, then the least recently used is at the end. So evicting the last item is LRU. So that code would be LRU. Therefore, perhaps the user made a mistake in the name and the docstring.
+
+But since I have to follow the given name, perhaps I should proceed with the LRU code but name it mru_cache. However, that's not correct. Alternatively, maybe the user wants the opposite: when evicting, remove the most recently used item. Which would be the end of the OrderedDict if we move accessed items to the end. Wait, no. If we move accessed items to the end, then the most recently used is at the end. So evicting the end would be MRU.
+
+Wait, let's think again. Suppose we have an OrderedDict, and for MRU, we want to evict the most recently used when the cache is full. So, when a new item is added, it's placed at the end. When evicting, we remove the last item (the most recent). But that would be MRU. So, for example:
+
+maxsize=2.
+
+Insert A → cache: [A]
+Insert B → cache: [A, B]
+Insert C → cache is full, evict B (the most recent), add C → cache: [A, C]
+Access A → move to end → cache: [C, A]
+Insert D → evict A (most recent), add D → cache: [C, D]
+
+This way, the most recently used items are kept, and the least are evicted. Wait, no. In this case, when evicting, we remove the most recent. Which is not typical. But that's what the code would do if we use popitem(last=True) for eviction. Wait, the OrderedDict's popitem(last=True) removes the last item (the most recently added). So, in this scenario, when inserting a new item, it's added to the end. If the cache is full, we remove the last item (the most recently used). That would be an MRU cache.
+
+But how to track the usage. For example, when a key is accessed, it's moved to the end. So, the most recently accessed is at the end. When evicting, remove the last item (most recent). That would be MRU. But that's not standard. However, this is the way to implement MRU.
+
+So, the code would be:
+
+import functools
+from collections import OrderedDict
+
+def mru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        cache = OrderedDict()
+        def wrapper(*args, **kwargs):
+            key = (args, frozenset(kwargs.items())) if typed else (args, kwargs)
+            if key in cache:
+                # Move to end to mark as most recently used
+                cache.move_to_end(key)
+                return cache[key]
+            else:
+                # Compute the result
+                result = func(*args, **kwargs)
+                # Add to cache
+                cache[key] = result
+                # If cache is over maxsize, evict the most recently used (the last item)
+                if len(cache) > maxsize:
+                    cache.popitem(last=True)
+                return result
+        return wrapper
+    return decorator
+
+Wait, but in this code, when inserting a new item, it's added to the end. When evicting, we remove the last item (the most recently used). That would be an MRU cache. But that seems counterintuitive. However, this would be the correct way to implement MRU.
+
+But then, when a key is accessed, it's moved to the end. So, the most recently accessed is at the end. When evicting, we remove the last item. That would be MRU.
+
+But in this case, the cache would evict the most recently used item when inserting a new one. Which is not useful, but perhaps that's what the user wants.
+
+However, the standard LRU cache uses the same approach but evicts the first item. So, the code for MRU would be similar but with popitem(last=True).
+
+So, the code above would implement an MRU cache. But I need to test it mentally.
+
+Let me take an example. Suppose maxsize=2.
+
+Call f(1) → key (1, {}) is added to the cache. cache is {1: ...} (OrderedDict with one item).
+
+Call f(2) → key (2, {}) is added. cache has two items.
+
+Call f(3) → cache is full. Evict the last item (most recent), which is 2. Now, cache has 1 and 3. So, the next time f(2) is called, it's recomputed.
+
+But if I call f(1) again, it's moved to the end. So, the cache becomes {3, 1}.
+
+Then call f(4) → evict 1 (the last item), cache becomes {3, 4}.
+
+This seems to be an MRU cache. But why would you want that? Well, maybe in some specific use cases where you want to keep older items. But regardless, the user's request is to implement MRU.
+
+So, the code above would be the correct approach for MRU.
+
+But wait, the key is generated as (args, frozenset(kwargs.items())) if typed else (args, kwargs). However, for the standard lru_cache, the key is generated with args and kwargs, but with typed=False, the kwargs are considered as a dictionary, but for MRU, perhaps the same applies.
+
+So, the code would be similar to the standard lru_cache, but with the eviction policy changed to remove the most recently used item (the last one in the OrderedDict).
+
+But I need to make sure that the code is correct. Also, the typed parameter is handled, which affects how the key is generated. If typed is True, then different types are considered different keys. For example, 1 and 1.0 would be different keys if typed is True.
+
+So, the code would need to generate the key correctly, considering typed.
+
+Thus, the generated code would be as above. However, I need to make sure that the key is properly generated. Also, the wrapper function should handle the *args and **kwargs correctly.
+
+But wait, the standard lru_cache uses a more complex key generation. For example, it uses a tuple of the arguments, and for keyword arguments, it uses a frozenset of the items. But in the code above, the key is (args, frozenset(kwargs.items())) if typed else (args, kwargs). However, this may not be correct. For example, if the function has multiple keyword arguments, the order might not matter. But the standard lru_cache uses a tuple for args and a frozenset for kwargs. So, perhaps that's the right approach.
+
+But for the purposes of this code, the key generation is similar to lru_cache's, but with the eviction policy changed.
+
+So, the code I wrote earlier would be correct for an MRU cache.
+
+But then, the name is mru_cache, and the docstring says it's based on MRU algorithm. So, that's the code.
+
+But perhaps the user intended LRU. However, without more information, I can't be sure. But given the name and the docstring, this is the best approach.
+
+Another thing to consider: the original lru_cache decorator is in functools, and the code here would need to be a decorator that wraps the function, similar to that.
+
+So, the final code would be:
+
+import functools
+from collections import OrderedDict
+
+def mru_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Most Recently Used (MRU)
+    algorithm.
+    """
+    def decorator(func):
+        cache = OrderedDict()
+        def wrapper(*args, **kwargs):
+            # Generate the key based on args and kwargs
+            if typed:
+                key = (args, frozenset(kwargs.items()))
+            else:
+                key = (args, kwargs)
+            if key in cache:
+                # Move to end to mark as most recently used
+                cache.move_to_end(key)
+                return cache[key]
+            else:
+                # Compute the result
+                result = func(*args, **kwargs)
+                # Add to cache
+                cache[key] = result
+                # If cache is over maxsize, evict the most recently used (the last item)
+                if len(cache) > maxsize:
+                    cache.popitem(last=True)
+                return result
+        return functools.wraps(func)(wrapper)
+    return decorator
+
+Wait, but in this code, the key is generated as (args, frozenset(kwargs.items())) or (args, kwargs). However, for the OrderedDict, the key is a tuple. But in Python, tuples can be keys in a dictionary. However, if the args are mutable, like a list, this would cause issues. But the standard lru_cache handles that by converting args to a tuple, and for keyword arguments, using frozenset. So, perhaps this is correct.
+
+But the code may have issues with mutable types in args or kwargs. However, the user's function signature is similar to lru_cache, so I'll proceed with that.
+
+But the user's code may have a mistake in the key generation. For example, if the function has keyword arguments, the code uses frozenset(kwargs.items()) if typed is True. However, the standard lru_cache uses a tuple of the arguments, and for keyword arguments, it uses a frozenset of the items. So, the code is similar.
+
+But perhaps the user wants to have the same key generation as lru_cache. Therefore, this code is acceptable.
+
+Another thing: the decorator should return the wrapper function, and use functools.wraps to preserve the function's metadata.
+
+So, the code would be as above.
+
+But I need to make sure that the key is correctly generated. For example, if the function is called with different keyword arguments, even if the values are the same but the types differ, it would be considered different if typed is True.
+
+Yes, that's correct.
+
+So, the final code is as written above. However, the eviction is based on MRU, which is the last item in the OrderedDict. Therefore, this should be the correct implementation.

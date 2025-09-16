@@ -1,0 +1,48 @@
+
+
+```python
+import functools
+from collections import deque
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    def decorator(func):
+        cache = {}
+        entry_order = deque()
+        
+        def get_current_time():
+            return timer()
+        
+        def is_expired(entry_time):
+            return get_current_time() - entry_time > ttl
+        
+        def add_to_cache(args, kwargs, result, entry_time):
+            if len(cache) >= maxsize:
+                oldest_entry = entry_order.popleft()
+                del cache[oldest_entry]
+            cache[args] = (result, entry_time)
+            entry_order.append(args)
+        
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            entry_time = get_current_time()
+            if args in cache:
+                if is_expired(cache[args][1]):
+                    del cache[args]
+                    entry_order.remove(args)
+                else:
+                    cache[args] = (cache[args][0], entry_time)
+                    entry_order.append(args)
+            else:
+                result = func(*args, **kwargs)
+                add_to_cache(args, kwargs, result, entry_time)
+            return result
+        
+        return wrapper
+    
+    return decorator
+```

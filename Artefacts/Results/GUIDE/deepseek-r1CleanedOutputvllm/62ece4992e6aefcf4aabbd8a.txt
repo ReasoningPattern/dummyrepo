@@ -1,0 +1,38 @@
+import logging
+import yaml
+import time
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    """
+    Given a sequence of configuration filenames, load and validate each configuration file. If the configuration file
+    cannot be read due to insufficient permissions or error parsing configuration file, the error log will
+    be recorded. Otherwise, return the results as a tuple of: dict of configuration filename to corresponding parsed configuration,
+    and sequence of logging.LogRecord instances containing any parse errors.
+    """
+    
+    configs = {}
+    errors = []
+    
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                # Load the configuration
+                parsed_config = yaml.safe_load(f)
+                
+                # Apply overrides if provided
+                if overrides is not None:
+                    parsed_config.update(overrides)
+                
+                configs[filename] = parsed_config
+        except (PermissionError, IOError, ValueError) as e:
+            # Create a logging record for the error
+            log_record = logging.LogRecord(
+                timestamp=time.time(),
+                level=logging.ERROR,
+                message=f"Error parsing {filename}: {str(e)}",
+                args=(type(e), e),
+                exc_info=exc_info(e)
+            )
+            errors.append(log_record)
+    
+    return configs, errors

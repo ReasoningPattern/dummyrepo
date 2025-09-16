@@ -1,0 +1,74 @@
+
+
+```python
+import logging
+import configparser
+import os
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    """
+    Given a sequence of configuration filenames, load and validate each configuration file. If the configuration file
+    cannot be read due to insufficient permissions or error parsing configuration file, the error log will
+    be recorded. Otherwise, return the results as a tuple of: dict of configuration filename to corresponding parsed configuration,
+    and sequence of logging.LogRecord instances containing any parse errors.
+    """
+    config_dict = {}
+    errors = []
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                content = f.read()
+        except Exception as e:
+            msg = f"Failed to read config file {filename}: {str(e)}"
+            log_record = logging.LogRecord(
+                name=__name__,
+                level=logging.ERROR,
+                pathname=__file__,
+                lineno=0,
+                msg=msg,
+                args=None,
+                exc_info=None,
+                func=None
+            )
+            errors.append(log_record)
+            continue
+
+        config_parser = configparser.ConfigParser()
+        try:
+            config_parser.read_string(content)
+        except configparser.Error as e:
+            msg = f"Error parsing config file {filename}: {str(e)}"
+            log_record = logging.LogRecord(
+                name=__name__,
+                level=logging.ERROR,
+                pathname=__file__,
+                lineno=0,
+                msg=msg,
+                args=None,
+                exc_info=None,
+                func=None
+            )
+            errors.append(log_record)
+            continue
+
+        config = {}
+        for section in config_parser.sections():
+            config[section] = dict(config_parser.items(section))
+
+        if overrides:
+            for key, value in overrides.items():
+                parts = key.split('.')
+                if len(parts) == 2:
+                    section_name, key_name = parts
+                    if section_name in config:
+                        config[section_name][key_name] = value
+
+        if resolve_env:
+            for section in config:
+                for key in config[section]:
+                    config[section][key] = os.path.expandvars(config[section][key])
+
+        config_dict[filename] = config
+
+    return config_dict, errors
+```

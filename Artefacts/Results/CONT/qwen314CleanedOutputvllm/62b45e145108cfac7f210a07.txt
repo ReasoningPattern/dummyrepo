@@ -1,0 +1,48 @@
+def validate(self, inventory, extract_spec_version=False):
+    """
+    Validate a given inventory. If extract_spec_version is True then will look at the type value to determine the specification version. In the case that there is no type value or it isn't valid, then other tests will be based on the version given in self.spec_version. (D)
+    """
+    if extract_spec_version:
+        if hasattr(inventory, 'type'):
+            type_str = inventory.type
+            match = re.search(r'/spec/(\d+\.\d+)', type_str)
+            if match:
+                spec_version = match.group(1)
+            else:
+                spec_version = self.spec_version
+        else:
+            spec_version = self.spec_version
+    else:
+        spec_version = self.spec_version
+
+    if spec_version not in self.spec_versions_supported:
+        self.error(f"Unsupported spec version: {spec_version}")
+        return False
+
+    if not self.validate_manifest(inventory):
+        return False
+
+    manifest_files = self.manifest_files
+    digests_used = set()
+    if not self.check_digests_present_and_used(manifest_files, digests_used):
+        return False
+
+    all_versions = self.all_versions
+    if not self.check_content_paths_map_to_versions(manifest_files, all_versions):
+        return False
+
+    unnormalized_digests = self.unnormalized_digests
+    if not self.validate_versions(self.inventory.versions, all_versions, unnormalized_digests):
+        return False
+
+    if not self.validate_version_sequence(self.inventory.versions):
+        return False
+
+    for manifest in inventory.manifests:
+        if not self.validate_state_block(manifest, spec_version, unnormalized_digests):
+            return False
+
+    if not self.validate_fixity(inventory.fixity, manifest_files):
+        return False
+
+    return True

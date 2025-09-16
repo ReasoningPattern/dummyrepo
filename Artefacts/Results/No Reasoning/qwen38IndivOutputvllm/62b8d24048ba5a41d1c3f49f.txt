@@ -1,0 +1,50 @@
+<think>
+
+</think>
+
+```python
+import time
+from functools import wraps
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    def decorator(func):
+        cache = OrderedDict()
+        hits = 0
+        misses = 0
+
+        def wrapper(*args, **kwargs):
+            nonlocal hits, misses
+            key = (args, kwargs) if typed else args
+            key = key if not typed else (key[0], frozenset(kwargs.items()))
+
+            if key in cache:
+                # Check if the cached value is still valid
+                if timer() - cache[key][1] < ttl:
+                    hits += 1
+                    return cache[key][0]
+                else:
+                    # Remove expired item
+                    del cache[key]
+            misses += 1
+
+            # If cache is full, remove the least recently used item
+            if len(cache) >= maxsize:
+                cache.popitem(last=False)
+
+            # Store the result with the current time
+            result = func(*args, **kwargs)
+            cache[key] = (result, timer())
+            return result
+
+        wrapper.cache_info = lambda: (hits, misses, len(cache))
+        wrapper.cache_clear = lambda: cache.clear()
+        return wrapper
+
+    return decorator
+```

@@ -1,0 +1,48 @@
+def generate_default_observer_schema_dict(manifest_dict, first_level=False):
+    """
+    Generate a default observer schema dictionary based on the value types in the manifest dictionary.
+    """
+    schema = {}
+    
+    def get_type_name(value):
+        type_name = type(value).__name__
+        return type_name if type_name != 'dict' else 'dict'  # Handle dict specifically
+    
+    def generate_schema(value):
+        type_name = get_type_name(value)
+        if isinstance(value, list):
+            return [{'type': t, 'example': example} for t, example in zip(get_type_name(v) for v in value), value)]
+        elif isinstance(value, dict):
+            return {'$type': 'dict', 'items': {}, 'values': {}}  # Simplified dict schema
+        else:
+            return {'type': type_name, 'example': value}
+    
+    for key, value in manifest_dict.items():
+        if isinstance(value, dict):
+            # Handle nested structures
+            nested_schema = {}
+            for k, v in value.items():
+                nested_schema[k] = generate_schema(v)
+            schema[key] = nested_schema
+        else:
+            schema_key = get_type_name(value)
+            schema[schema_key] = generate_schema(value)
+    
+    return schema
+
+def test_generate_default_observer_schema_dict():
+    import unittest
+    from unittest.mock import patch
+
+    @patch('generate_default_observer_schema_dict')
+    def test_basic_case(mock):
+        manifest = {'a': 1, 'b': 2, 'c': [3, {'d': 4}], 'e': 'string'}
+        expected_schema = {
+            'int': {'type': 'int', 'example': 2},
+            'str': {'type': 'str', 'example': 'string'},
+            'list': [{'type': 'int', 'example': 3}, {'type': 'dict', 'example': {'d': 4}}]
+        }
+        actual_schema = generate_default_observer_schema_dict(manifest)
+        assert expected_schema == actual_schema
+
+    test_basic_case()

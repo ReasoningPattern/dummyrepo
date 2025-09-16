@@ -1,0 +1,115 @@
+
+
+To implement the `validate_from_content` function and its corresponding test cases, we'll follow a structured approach. The function will validate that the provided YAML content contains all required fields specified by the class. Below is the complete Python code, including the function and comprehensive unit tests.
+
+```python
+import os
+import yaml
+from unittest import TestCase
+
+from irvalidator.exceptions import IRValidatorException
+
+class ValidateFromContent:
+    def __init__(self, cls):
+        self.cls = cls
+        self.REQUIRED_KEYS = cls.REQUIRED_KEYS  # Assuming class has this attribute
+
+    def validate_from_content(self, spec_content=None):
+        """
+        Validates that the spec content contains all required fields.
+
+        :param spec_content: YAML content to validate
+        :raises IRValidatorException: If any required fields are missing
+        :return: A dictionary containing the parsed YAML content
+        """
+        if spec_content is None:
+            raise ValueError("spec_content must be provided")
+
+        try:
+            content = yaml.safe_load(spec_content)
+        except yaml.YAMLError as e:
+            raise IRValidatorException(f"Invalid YAML content: {str(e)}")
+
+        required_fields = self.REQUIRED_KEYS
+        missing_fields = [field for field in required_fields if field not in content]
+        
+        if missing_fields:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing_fields)}"
+            )
+        
+        return content
+
+class TestValidateFromContent(TestCase):
+    def test_validate_from_content_all_fields_present(self):
+        # Setup
+        test_content = """
+        required_key1: value1
+        required_key2: value2
+        """
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute
+        result = validator.validate_from_content(test_content)
+        
+        # Assert
+        self.assertEqual(result, {
+            'required_key1': 'value1',
+            'required_key2': 'value2'
+        })
+    
+    def test_validate_from_content_missing_field(self):
+        # Setup
+        test_content = """
+        required_key1: value1
+        """
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute and assert exception
+        with self.assertRaises(IRValidatorException) as context:
+            validator.validate_from_content(test_content)
+        
+        self.assertTrue("missing required_key2" in str(context.exception))
+    
+    def test_validate_from_content_no_content(self):
+        # Setup
+        test_content = ""
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute
+        result = validator.validate_from_content(test_content)
+        
+        # Assert
+        self.assertEqual(result, {})
+    
+    def test_validate_from_content_invalid_yAML(self):
+        # Setup
+        test_content = "invalid YAML"
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute and assert exception
+        with self.assertRaises(IRValidatorException) as context:
+            validator.validate_from_content(test_content)
+        
+        self.assertTrue("Malformed YAML" in str(context.exception))
+```
+
+### Explanation
+
+1. **Function Implementation (`validate_from_content`)**:
+   - **Parameter Handling**: The function takes `spec_content` which is the YAML content to validate. If `spec_content` is `None`, it raises a `ValueError`.
+   - **YAML Loading**: Uses `yaml.safe_load` to parse the YAML content safely.
+   - **Required Fields Check**: Checks if all required fields (stored in `cls.REQUIRED_KEYS`) are present in the parsed content. If any are missing, it raises an `IRValidatorException`.
+   - **Return Value**: Returns the parsed YAML content as a dictionary.
+
+2. **Test Cases**:
+   - **Test 1**: Verifies that all required fields are present and correctly parsed.
+   - **Test 2**: Ensures that an exception is raised when a required field is missing.
+   - **Test 3**: Checks the function's behavior when no content is provided.
+   - **Test 4**: Tests error handling for invalid YAML content.
+
+This implementation ensures that the function robustly validates the presence of required fields and handles various edge cases, providing clear feedback through exceptions when validation fails.

@@ -1,0 +1,42 @@
+from collections import defaultdict, deque
+
+def lfu_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Frequently Used (LFU)
+    algorithm.
+    """
+    def decorator(func):
+        cache = {}
+        freq = {}
+        freq_map = defaultdict(deque)
+        size = 0
+
+        def wrapper(*args, **kwargs):
+            nonlocal size
+            key = (args, tuple(sorted(kwargs.items()))) if not typed else (args, tuple(sorted(kwargs.items())))
+            if key in cache:
+                current_freq = freq[key]
+                freq_map[current_freq].remove(key)
+                if not freq_map[current_freq]:
+                    del freq_map[current_freq]
+                new_freq = current_freq + 1
+                freq[key] = new_freq
+                freq_map[new_freq].append(key)
+                return cache[key]
+            else:
+                if size >= maxsize:
+                    min_freq = min(freq_map.keys())
+                    lru_key = freq_map[min_freq].popleft()
+                    if not freq_map[min_freq]:
+                        del freq_map[min_freq]
+                    del cache[lru_key]
+                    del freq[lru_key]
+                    size -= 1
+                cache[key] = func(*args, **kwargs)
+                freq[key] = 1
+                freq_map[1].append(key)
+                size += 1
+                return cache[key]
+        return wrapper
+    return decorator

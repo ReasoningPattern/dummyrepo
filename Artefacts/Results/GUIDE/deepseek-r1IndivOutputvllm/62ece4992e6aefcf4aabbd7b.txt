@@ -1,0 +1,82 @@
+
+
+To solve this problem, we need to create a function that writes a YAML configuration file to a specified path. The function should handle cases where the file already exists and either overwrite it or raise an error. Additionally, it should respect file permissions specified by a mode parameter.
+
+### Approach
+1. **Function Definition**: The function `write_configuration` takes four parameters: `config_filename` (the path to the output file), `rendered_config` (the YAML content to write), `mode` (file permissions), and `overwrite` (boolean to determine if the file should be overwritten if it exists).
+2. **File Check**: The function first checks if the file exists. If it does not, it writes the YAML content to the file.
+3. **Overwrite Check**: If the file exists, the function checks the `overwrite` flag. If `overwrite` is `True`, it writes the YAML content to the file. If `overwrite` is `False`, it raises a `FileNotFoundError`.
+4. **Mode Handling**: The function uses the specified `mode` to determine the file's writable permissions. This ensures that the file can be opened and written to based on the given permissions.
+
+### Solution Code
+```python
+import os
+import yaml
+
+def write_configuration(config_filename, rendered_config, mode=0o600, overwrite=False):
+    """
+    Given a rendered config YAML, write it out to target file.
+    But if the file already exists and overwrite is False,
+    abort before writing anything.
+    If the file does not exist, create it.
+    Write to the file otherwise.
+
+    Returns: None
+    """
+    if not os.path.exists(config_filename):
+        with open(config_filename, mode=mode, encoding='utf-8') as f:
+            yaml.dump(rendered_config, f)
+    else:
+        if overwrite:
+            with open(config_filename, mode=mode, encoding='utf-8') as f:
+                yaml.dump(rendered_config, f)
+        else:
+            raise FileNotFoundError(
+                f"File {config_filename} exists and overwrite is False; "
+                "cannot proceed."
+            )
+
+def test_write_configuration_file_does_not_exist():
+    """Test that file is written when it does not exist."""
+    test_config = """some_config:
+        value: test"""
+    write_configuration("test_config.yaml", test_config)
+    assert os.path.exists("test_config.yaml")
+    with open("test_config.yaml", 'r') as f:
+        loaded_config = yaml.safe_load(f)
+        assert loaded_config == {"some_config": {"value": "test"}}
+
+def test_write_configuration_file_exists_with_overwrite():
+    """Test that file is written when it exists and overwrite is True."""
+    test_config = """test_config:
+        value: 1"""
+    initial_config = """initial_config:
+        value: 0"""
+    write_configuration("test_config.yaml", test_config, overwrite=True)
+    assert os.path.exists("test_config.yaml")
+    with open("test_config.yaml", 'r') as f:
+        loaded_config = yaml.safe_load(f)
+        assert loaded_config == {"test_config": {"value": "1"}}
+
+def test_write_configuration_file_exists_without_overwrite():
+    """Test that function raises error when file exists and overwrite is False."""
+    test_config = """test_config:
+        value: 1"""
+    initial_config = """initial_config:
+        value: 0"""
+    with pytest.raises FileNotFoundError:
+        write_configuration("test_config.yaml", initial_config, overwrite=False)
+
+def test_write_configuration_file_exists_without_overwrite_and_mode():
+    """Test that function raises error when file exists, overwrite is False, and mode is not writable."""
+    test_config = """test_config:
+        value: 1"""
+    initial_config = """initial_config:
+        value: 0"""
+    with pytest.raises(FileNotFoundError):
+        write_configuration("test_config.yaml", initial_config, mode=0o400, overwrite=False)
+```
+
+### Explanation
+- **Function Implementation**: The function `write_configuration` opens the specified file in the given mode and writes the YAML content if the file does not exist or if it can be overwritten. If the file exists and cannot be overwritten, it raises an error.
+- **Test Cases**: The provided tests cover scenarios where the file does not exist, where it exists and can be overwritten, where it exists and cannot be overwritten, and where the file permissions are insufficient. These tests ensure the function behaves as expected under various conditions.

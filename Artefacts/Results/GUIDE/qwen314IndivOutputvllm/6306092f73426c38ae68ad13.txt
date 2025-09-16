@@ -1,0 +1,53 @@
+
+
+```python
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None,
+                     extra_vars=None, ansible_args=None):
+    """
+    Wraps the 'ansible-playbook' CLI.
+
+    :param ir_workspace: An Infrared Workspace object represents the active
+    workspace
+    :param ir_plugin: An InfraredPlugin object of the current plugin
+    :param playbook_path: the playbook to invoke
+    :param verbose: Ansible verbosity level
+    :param extra_vars: dict. Passed to Ansible as extra-vars
+    :param ansible_args: dict of ansible-playbook arguments to plumb down
+        directly to Ansible.
+    """
+    # Construct the command
+    cmd = ['ansible-playbook', playbook_path]
+    
+    # Handle verbose
+    if verbose is not None:
+        cmd.extend(['-v'] * verbose)
+    
+    # Handle extra_vars
+    if extra_vars:
+        extra_vars_str = ' '.join(f"{k}={v}" for k, v in extra_vars.items())
+        cmd.append('--extra-vars')
+        cmd.append(extra_vars_str)
+    
+    # Handle ansible_args
+    if ansible_args:
+        for key, value in ansible_args.items():
+            cmd.append(f'--{key}')
+            cmd.append(str(value))
+    
+    # Execute the command
+    cwd = getattr(ir_workspace, 'project_dir', None)
+    env = ir_plugin.get_env() if hasattr(ir_plugin, 'get_env') else None
+    
+    result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
+    
+    # Check for errors
+    if result.returncode != 0:
+        error_msg = f"Ansible playbook failed with exit code {result.returncode}\n"
+        error_msg += f"stdout: {result.stdout}\n"
+        error_msg += f"stderr: {result.stderr}"
+        raise RuntimeError(error_msg)
+    
+    return result
+```

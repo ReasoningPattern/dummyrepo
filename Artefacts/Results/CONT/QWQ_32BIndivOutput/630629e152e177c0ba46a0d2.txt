@@ -1,0 +1,37 @@
+
+
+```python
+import requests
+import xml.etree.ElementTree as ET
+from urllib.parse import urlparse
+
+def retrieve_and_parse_diaspora_webfinger(handle):
+    handle_parts = handle.split('@')
+    if len(handle_parts) != 2:
+        return {}
+    user, domain = handle_parts
+    resource = f'acct:{handle}'
+    url = f'https://{domain}/.well-known/webfinger'
+    params = {'resource': resource}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+    except requests.exceptions.RequestException:
+        return {}
+    root = ET.fromstring(response.content)
+    ns = {'xrd': 'http://docs.oasis-open.org/ns/xri/xrd/v1.0'}
+    subject = root.find('xrd:Subject', ns)
+    if not subject:
+        return {}
+    data = {'subject': subject.text}
+    links = root.findall('xrd:Link', ns)
+    for link in links:
+        rel = link.get('rel')
+        if rel == 'http://joindiaspora.com/protocol':
+            href = link.get('href')
+            parsed_url = urlparse(href)
+            data['pod_domain'] = parsed_url.netloc
+            data['guid'] = href.split('/')[-1]
+            break
+    return data
+```

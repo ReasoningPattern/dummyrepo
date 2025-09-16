@@ -1,0 +1,55 @@
+
+
+To address the problem, we need to create a function `extostr` that formats an exception into a human-readable string, including the exception's type, message, and a limited traceback. The function should allow specifying the maximum depth for the exception hierarchy and the stack trace.
+
+### Approach
+1. **Check Exception Type**: Verify if the provided object is an exception. If not, return its string representation.
+2. **Construct Basic String**: Start by constructing a string that includes the exception's type and message.
+3. **Include Base Exceptions**: Limit the depth of the exception hierarchy to the specified `max_level` and include these base exceptions in the string.
+4. **Format Traceback**: If the exception has a traceback, limit it to the specified `max_path_level` and format each frame to include the function name, line number, and file path.
+5. **Combine Components**: Combine the type, message, base exceptions, and formatted traceback into a single string.
+
+### Solution Code
+```python
+import traceback
+from types import FrameType
+
+def extostr(cls, e, max_level=30, max_path_level=5):
+    if not isinstance(e, BaseException):
+        return str(e)
+    
+    exc_cls = e.__class__
+    s = f"{exc_cls.__name__} {e.__str__()}"
+
+    # Get base exceptions up to max_level
+    mro = exc_cls.__mro__
+    base_exceptions = []
+    for cls in mro[1:max_level + 1]:
+        if issubclass(cls, BaseException):
+            base_exceptions.append(cls.__name__)
+    s += f" bases: {', '.join(base_exceptions)}"
+
+    if hasattr(e, 'traceback') and e.traceback is not None:
+        traceback = e.traceback
+        # Slice the traceback to max_path_level
+        traceback = traceback[:max_path_level]
+        # Format each frame
+        tb_lines = []
+        for frame in traceback:
+            if isinstance(frame, FrameType):
+                tb_lines.append(f"  {frame.f_code.co_name} {frame.f_lineno}: {frame.filename}")
+            else:
+                tb_lines.append(f"  {frame.f_code.name} {frame.f_lineno}: {frame.filename}")
+        s += '\n' + '\n'.join(tb_lines)
+
+    return s
+```
+
+### Explanation
+- **Exception Check**: The function first checks if the provided object is an exception. If not, it simply returns the string representation of the object.
+- **Basic String Construction**: The string starts with the exception's type and message, providing a quick overview.
+- **Base Exceptions**: By examining the exception's MRO (Method Resolution Order), the function collects up to `max_level` base exceptions, enhancing the context for debugging.
+- **Traceback Handling**: If a traceback is available, it is sliced to the first `max_path_level` frames. Each frame is formatted to show the function name, line number, and file path, making the traceback concise yet informative.
+- **Combining Components**: All components are combined into a single string, ensuring a clear and structured representation of the exception.
+
+This approach ensures that the function is both flexible and informative, catering to different levels of detail needs by adjusting the `max_level` and `max_path_level` parameters.

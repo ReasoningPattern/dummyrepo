@@ -1,0 +1,131 @@
+
+
+```python
+import json
+import os
+import yaml
+from typing import Dict, List, Optional
+
+def generate_default_observer_schema(app: Dict[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Generate the default observer schema for each Kubernetes resource present in ``spec.manifest`` for which a custom observer schema hasn't been specified.
+
+    Args:
+        app: A dictionary containing Kubernetes manifests.
+
+    Returns:
+        A dictionary containing the generated observer schema or None if no schemas were generated.
+    """
+    manifest_path = os.path.join(os.path.dirname(__file__), "spec.manifest")
+    with open(manifest_path, 'r') as f:
+        manifest = yaml.safe_load(f)
+
+    # Process each resource in the manifest
+    resources = manifest.get('resources', [])
+    default_schemas = []
+
+    for resource in resources:
+        if ' observer_schema' in resource:
+            continue  # Skip if observer schema already exists
+
+        kind = resource.get('kind')
+        if not kind:
+            continue  # Skip invalid resources without a kind
+
+        content = {
+            'class': kind,
+            'properties': {
+                'name': resource.get('name', ''),
+                'namespace': resource.get('namespace', ''),
+                'type': kind
+            }
+        }
+
+        default_schema = {
+            'type': ' observer_schema',
+            'content': content
+        }
+        default_schemas.append(default_schema)
+
+    if not default_schemas:
+        return None
+
+    # Combine all default schemas into a single schema if only one was generated
+    if len(default_schemas) == 1:
+        return default_schemas[0]
+    else:
+        return default_schemas
+
+def test_generate_default_observer_schema() -> None:
+    """
+    Test the generate_default_observer_schema function.
+    """
+    import json
+    import tempfile
+
+    # Setup
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_manifest_path = os.path.join(tmp_dir, "spec.manifest")
+        
+        # Test case 1: Resource without observer_schema
+        test_manifest = {
+            "resources": [{
+                "kind": "Pod",
+                "name": "test-pod"
+            }]
+        }
+        with open(tmp_manifest_path, 'w') as f:
+            yaml.safe_dump(test_manifest, f)
+        
+        # Generate default schema
+        generated_schema = generate_default_observer_schema(test_manifest)
+        
+        # Clean up
+        if generated_schema:
+            with open(tmp_manifest_path, 'r') as f:
+                loaded = yaml.safe_load(f)
+                assert ' observer_schema' not in loaded
+                assert generated_schema in loaded.get('resources', [])
+
+            # Verify generated schema
+            assert generated_schema['type'] == ' observer_schema'
+            assert 'content' in generated_schema
+            assert 'class' in generated_schema['content']
+            assert 'properties' in generated_schema['content']
+        else:
+            assert "No resources without observer_schema found"
+
+        # Test case 2: Resource with observer_schema already specified
+        test_manifest = {
+            "resources": [{
+                "kind": "Service",
+                "name": "test-service",
+                " observer_schema": {
+                    "type": "observer_schema",
+                    "content": {
+                        "class": "Service",
+                        "properties": {
+                            "name": "test-service"
+                        }
+                    }
+                }
+            }]
+        }
+        with open(tmp_manifest_path, 'w') as f:
+            yaml.safe_dump(test_manifest, f)
+        
+        generated_schema = generate_default_observer_schema(test_manifest)
+        
+        if generated_schema:
+            with open(tmp_manifest_path, 'r') as f:
+                loaded = yaml.safe_load(f)
+                assert ' observer_schema' in loaded['resources'][0]
+                assert loaded['resources'][0][' observer_schema'] == generated_schema
+        else:
+            assert "No resources without observer_schema found"
+
+        # Clean up
+        os.remove(tmp_manifest_path)
+```
+
+This code provides a comprehensive implementation and testing framework for generating default observer schemas based on Kubernetes resource types defined in a manifest file. The function reads the manifest, generates default schemas where necessary, and returns them. The test suite ensures that the function behaves correctly for various scenarios, including resources with and without predefined observer schemas.

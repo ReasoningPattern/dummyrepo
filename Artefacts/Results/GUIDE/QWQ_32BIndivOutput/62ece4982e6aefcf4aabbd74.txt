@@ -1,0 +1,98 @@
+
+
+```python
+import shutil
+from pathlib import Path
+from typing import Optional, Union
+
+def prepare_repository_from_archive(
+    archive_path: str,
+    filename: Optional[str] = None,
+    tmp_path: Union[Path, str] = "/tmp",
+) -> str:
+    """
+    Given an existing archive_path, uncompress it.
+    Returns a file repo url which can be used as origin url.
+
+    This does not deal with the case where the archive passed along does not exist.
+    @param archive_path : archive file path
+    @param filename: File name
+    @param tmp_path: Temporary file path
+    @return Repo URL
+    """
+    archive_path_obj = Path(archive_path)
+    if filename is None:
+        # Extract the base name without extensions
+        base_name = archive_path_obj.stem
+        while '.' in base_name:
+            base_name = Path(base_name).stem
+        directory_name = base_name
+    else:
+        directory_name = filename
+
+    tmp_path_obj = Path(tmp_path)
+    target_dir = tmp_path_obj / directory_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.unpack_archive(archive_path, extract_dir=target_dir)
+
+    return f"file://{target_dir.resolve()}"
+```
+
+```python
+import pytest
+from pathlib import Path
+import shutil
+
+def test_prepare_repository_from_archive(tmp_path):
+    test_dir = tmp_path / "test_repo"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    
+    archive_base = tmp_path / "test"
+    archive_path = f"{archive_base}.zip"
+    shutil.make_archive(archive_base, 'zip', test_dir)
+    
+    repo_url = prepare_repository_from_archive(archive_path, tmp_path=tmp_path)
+    
+    expected_dir = tmp_path / "test"
+    assert expected_dir.exists()
+    assert (expected_dir / "file.txt").exists()
+    assert repo_url == f"file://{expected_dir.resolve()}"
+
+def test_with_filename(tmp_path):
+    test_dir = tmp_path / "original"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    
+    archive_base = tmp_path / "test"
+    archive_path = f"{archive_base}.zip"
+    shutil.make_archive(archive_base, 'zip', test_dir)
+    
+    repo_url = prepare_repository_from_archive(
+        archive_path, 
+        filename="custom_name",
+        tmp_path=tmp_path
+    )
+    
+    expected_dir = tmp_path / "custom_name"
+    assert expected_dir.exists()
+    assert (expected_dir / "file.txt").exists()
+    assert repo_url == f"file://{expected_dir.resolve()}"
+
+def test_targz(tmp_path):
+    test_dir = tmp_path / "repo"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    
+    archive_base = tmp_path / "repo"
+    shutil.make_archive(archive_base, 'gztar', test_dir)
+    archive_path = f"{archive_base}.tar.gz"
+    
+    repo_url = prepare_repository_from_archive(archive_path, tmp_path=tmp_PATH)
+    
+    expected_dir = tmp_path / "repo"
+    assert expected_dir.exists()
+    assert (expected_dir / "file.txt").exists()
+    assert repo_url == f"file://{expected_dir.resolve()}"
+```

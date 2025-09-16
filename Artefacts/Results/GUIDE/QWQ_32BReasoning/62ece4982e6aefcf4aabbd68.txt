@@ -1,0 +1,770 @@
+Okay, I need to write a Python function called int_to_string that converts a number into a string using a given alphabet. The function has parameters: number (int), alphabet (a list of strings), and an optional padding (int). The return is a string. The docstring says the output is most significant digit first. Also, there's a mention of the number being a short UUID, so maybe the conversion is similar to base conversion but with a custom alphabet.
+
+First, I should think about how to approach converting the number. Since the alphabet can be any list of characters, it's like converting the number to a base equal to the length of the alphabet. For example, if the alphabet has 62 characters, it's base62.
+
+The steps would be similar to converting a number to a different base. Let's see:
+
+The process is typically:
+1. Divide the number by the base (length of alphabet), get the remainder. The remainder gives the index into the alphabet for the current digit.
+2. The quotient becomes the new number, and this repeats until the quotient is 0.
+3. The digits are collected in reverse order (since the remainder gives the least significant digit first), so they need to be reversed at the end to get the most significant first.
+
+Wait, but the problem states the output is most significant digit first, so that's correct.
+
+But let me think again. Let's say the base is 10, and the alphabet is ['0','1',...'9'], then converting 123 would be 123 divided by 10 gives 12, remainder 3 (digit '3'), then 12 divided by 10 gives 1 remainder 2 ('2'), then 1 divided by 10 gives 0 remainder 1 ('1'). So the digits collected are [3,2,1], then reversed to [1,2,3], resulting in '123', which is correct.
+
+So the steps are correct.
+
+Now, handling padding. The padding parameter, if given, would require the output string to have at least that many characters. So if the natural length is less than padding, we need to pad it with leading zeros (i.e., the first character of the alphabet) to reach the required length.
+
+Wait, padding is an optional int. So for example, if the result is 'abc' and padding is 5, then the output should be '00abc' (assuming the first character is '0'). Wait, no, maybe it's the other way around. Let's see:
+
+Suppose the natural length is 3, and padding is 5. So we need two more characters. Since the most significant digit comes first, the padding would be added to the left? Or to the right? Wait, no. Wait, padding in numbers usually adds leading zeros. For example, if you have a number and you want to pad to 5 digits, you add leading zeros. But since the output is most significant digit first, the padding would be added to the front to reach the desired length.
+
+Wait, perhaps padding is the minimum length. So, if the result's length is less than padding, then pad with leading characters from the alphabet (probably the first element, like zero) to reach the padding length. So the padding is applied before any conversion?
+
+Wait, let me think of an example. Suppose the alphabet is ['a','b'], so base 2. The number 3 is 11 in binary, so converting to 'bb' (since 3 divided by 2 is 1 rem 1, then 1 divided by 2 is 0 rem 1; digits are 'b' and 'b', reversed gives 'bb'). If padding is 3, then we need to add a leading 'a' (the first element) to make it 'abb'? Because the natural length is 2, so adding one more to get to 3.
+
+Hmm, yes. So the padding ensures that the output is at least that long, so if necessary, leading zeros (alphabet[0]) are added.
+
+So the steps would be:
+
+1. Determine the base as the length of the alphabet. Must check that the alphabet is non-empty? Well, the function's parameters don't specify that, so perhaps the code can raise an error if alphabet is empty. But the problem's docstring says alphabet is a list with letters. So maybe it's allowed, but in code, if the alphabet is empty, division by zero, so we should handle that? But perhaps the function expects the caller to provide a non-empty alphabet.
+
+2. Convert the number to the string using the alphabet, then reverse the digits to get the correct order.
+
+3. Then, apply padding by prepending the first character of the alphabet until the desired length is reached.
+
+Wait, but how to handle the case when the number is zero? Let's see. For zero, the remainder would be zero, and the quotient would be zero. So the digits would be [alphabet[0]], so the string is that character. If padding is given, then that would be adjusted.
+
+Edge cases to consider:
+
+- number is zero.
+
+- number is negative? The function's parameter says number is an int, but does it allow negative numbers? The problem says it's a short UUID, which is a non-negative number. So probably, the function assumes the number is non-negative. So in code, perhaps we should check that the number is non-negative. But the problem's docstring doesn't mention that. Hmm. The problem might not require handling negative numbers, so perhaps the code can raise an error if the number is negative, but maybe it's up to the user.
+
+But in any case, let's proceed under the assumption that the number is non-negative.
+
+Now, the steps in code:
+
+First, get the base: base = len(alphabet). Must check that base is at least 1. But if alphabet is empty, then the code will have an error. But the problem's docstring says alphabet is a list with letters, so maybe it's up to the user to ensure that. So the code may not handle that.
+
+Now, the algorithm:
+
+Initialize digits list.
+
+while number > 0:
+
+    remainder = number % base
+
+    digits.append(alphabet[remainder])
+
+    number = number // base
+
+If the number was zero, then digits is empty, so we need to add alphabet[0]?
+
+Wait, let's see for number 0:
+
+The loop won't run (since number is 0). So digits is empty. Then, after the loop, we need to handle that. So after the loop, if digits is empty, we add alphabet[0] (since 0 is represented by the first character). So that's a case to handle.
+
+So, after the loop, if digits is empty, append the first character.
+
+Then, reverse the digits (since we collected them in reverse order) to get the correct order.
+
+Wait, let's see:
+
+Suppose the digits were collected as [a, b, c], then reversing gives [c, b, a], which would be the correct most significant first?
+
+Wait, let me think again. Let's take the example of 123 in base 10, with alphabet of digits 0-9. The loop would process:
+
+number = 123.
+
+remainder 3, digits [3], number becomes 12.
+
+remainder 2, digits [3,2], number 1.
+
+remainder 1, digits [3,2,1], number 0.
+
+Exit loop. digits is [3,2,1], then reversed gives [1,2,3], so the string is '123', which is correct.
+
+Wait, no. Wait, the digits are stored in the order of remainders, which are the least significant digits first. So to get the most significant first, you need to reverse the list. So in the example, the digits list is [3,2,1], reversed becomes [1,2,3], so the string is '1223'? Wait, no. The actual digits would be 1,2,3? Wait, no, 123 is 1*100 + 2*10 +3. So the digits are 1,2,3. So the reversed list of [3,2,1] gives 123. So that works.
+
+So, in code, after collecting the digits in the list (in reverse order), we reverse them to get the correct order.
+
+But for the zero case:
+
+If number is zero, the loop doesn't run, so digits is empty. So after that, we have to check if digits is empty, and if so, append alphabet[0], then reverse (which will be a single character, so same). So that works.
+
+So the steps are:
+
+Initialize digits as empty list.
+
+loop:
+
+number, rem = divmod(number, base)
+
+digits.append(rem)
+
+Wait, but perhaps better to use mod and then integer division.
+
+Wait, the code steps:
+
+digits = []
+
+while number >0:
+
+    remainder = number % base
+
+    digits.append( remainder )
+
+    number = number // base
+
+Then, after the loop, if digits is empty (number was zero), append 0.
+
+Then, the digits list is the remainders in reverse order (since we collected least significant first), so the actual digits in the correct order would be the reversed list.
+
+Wait, but the digits list is [3,2,1] for the example. Reversed gives [1,2,3], which are the indices. Then we need to map those indices to the alphabet characters.
+
+Wait, in the code above, I stored the remainders, but the code needs to map those to the alphabet's characters. So in the code, instead of storing the remainder, we can store alphabet[remainder].
+
+Wait, let me re-examine the code steps.
+
+Alternative approach:
+
+Initialize digits as empty list.
+
+while number >0:
+
+    remainder = number % base
+
+    digits.append( alphabet[remainder] )
+
+    number = number // base
+
+After the loop, if digits is empty (number was zero), append alphabet[0].
+
+Then, reverse the digits list, and join into a string.
+
+Wait, no. Wait, in this case, for the example of 123, digits would be ['3','2','1'], then reversed becomes ['1','2','3'], so the string is '123'.
+
+Wait, but in this code, the digits list is the characters in the reverse order, so reversing them gives the correct order.
+
+So that works.
+
+Wait, but in the code, the digits are stored as the characters. So the code would be:
+
+digits = []
+
+while number >0:
+
+    remainder = number % base
+
+    digits.append( alphabet[remainder] )
+
+    number = number // base
+
+if not digits:
+
+    digits.append( alphabet[0] )
+
+result = ''.join(reversed(digits))
+
+Wait, but in the code above, the digits are stored in the order of the remainders (LSB to MSB), so when you reverse them, you get the MSB first.
+
+Yes.
+
+So that's the plan.
+
+Now, the padding part.
+
+After getting the result string, check if padding is specified.
+
+The current length is len(result). If padding is given and len < padding, then we need to pad with the first character (alphabet[0]) on the left to reach the desired length.
+
+For example, if the result is 'abc' and padding is 5, then the desired length is 5. So we need to add two 'a's (assuming alphabet[0] is 'a') before the string, resulting in 'aababc'? Wait, no. Wait, the result is 'abc', length 3. To reach 5, need 2 more. So the padding is added to the front. So the new string is 'a a bc' → 'aaabc'?
+
+Wait, the padding is the minimal length. So the total length after padding must be max(len(result), padding). So if padding is 3 and the result is already 3, no change. If the result is 2, and padding is 3, then add one character.
+
+So the code for padding:
+
+if padding is not None:
+
+    padded_length = max(len(result), padding)
+
+    # compute how many more characters needed.
+
+    # the current length is len(result), so the difference is padded_length - len(result)
+
+    # we need to prepend (since most significant first) the first character (alphabet[0]) that many times.
+
+    # so the padded string is (alphabet[0] * (padded_length - len(result))) + result
+
+    # but only if padding is larger than the current length.
+
+    if len(result) < padding:
+
+        result = alphabet[0] * (padding - len(result)) + result
+
+Wait, yes. So in code, after computing the result, check if padding is given and the length is less than padding. Then prepend the required number of first characters.
+
+Putting it all together.
+
+Now, the code steps:
+
+def int_to_string(number: int, alphabet: List[str], padding: Optional[int] = None) -> str:
+
+    base = len(alphabet)
+
+    if base == 0:
+
+        raise ValueError("Alphabet cannot be empty")
+
+    digits = []
+
+    n = number
+
+    while n > 0:
+
+        remainder = n % base
+
+        digits.append(alphabet[remainder])
+
+        n = n // base
+
+    if not digits:
+
+        digits.append(alphabet[0])
+
+    # Reverse to get MSB first
+
+    result = ''.join(reversed(digits))
+
+    if padding is not None and len(result) < padding:
+
+        pad = alphabet[0] * (padding - len(result))
+
+        result = pad + result
+
+    return result
+
+Wait, but what if the number is zero? Let's test that.
+
+Test case 1: number = 0, alphabet = ['a','b'], padding None.
+
+digits would be empty. So after the loop, digits is empty → append 'a', then reversed is ['a'], so result is 'a'. Correct.
+
+Test case 2: number = 3, alphabet is ['a','b'] → base 2.
+
+3 in binary is 11 → remainders 1, 1 → digits ['b','b'], then reversed gives 'bb'.
+
+With padding of 3 → the result is 'bbb'? No, because the original length is 2, so adding 1 'a' → 'abb'? Wait, no, the padding is 3. The code would check len(result) (2) <3 → yes. So pad with (3-2)=1 'a's. So 'a' + 'bb' → 'abb'.
+
+Wait, but the desired result would be to have the minimal length. So for 3, the natural length is 2, so with padding 3, the result is 'abb'?
+
+Wait, but in the alphabet ['a','b'], the first element is 'a', so the padding adds 'a's. So that's correct.
+
+Another test case: number =5, alphabet is ['0','1','2'], base 3.
+
+5 in base3 is 12 (since 3*1 + 2 =5). So digits would be 2, then 1 → so digits list is ['2','1'] → reversed gives '12', so the string is '12'.
+
+With padding 3 → the length is 2 <3 → so pad with one '0' → '012'.
+
+Yes.
+
+Edge case: padding is smaller than the result length → no change.
+
+So the code seems to handle that.
+
+Now, what about when the number is zero and padding is specified?
+
+Say number=0, padding=2, alphabet=['a','b'].
+
+The result is 'a', then with padding 2, since len is 1 <2, add one 'a' → 'aa'.
+
+Which is correct.
+
+Now, what if the alphabet is longer, say 10 elements, and the number is 0, padding 5 → the result is 'aaaaa' (assuming the first element is 'a').
+
+Yes.
+
+Now, possible error cases: if the alphabet is empty, then the code raises ValueError. But in the problem's function signature, the alphabet is a List[str], so it's possible for it to be empty. The code checks that base = len(alphabet) is zero and raises.
+
+Now, what about if the number is negative? The code would enter the loop, but since base is positive, the remainder could be negative? Wait, in Python, the modulus operator with negative numbers can give negative remainders. For example, -5 % 3 is 1 (since -5 = (-2)*3 +1). Wait, no, let me check:
+
+Wait, in Python, -5 divided by 3 is -2 (since 3*-2 is -6, which is less than -5. Then remainder is 1 (since -5 - (-6) is 1). So -5 %3 is 1. So even for negative numbers, the remainder is positive. But if the number is negative, then the code would proceed to loop until n becomes positive?
+
+Wait, but the problem's description says the number is a short UUID, which is a non-negative integer. So perhaps the function should raise an error if the number is negative. The current code does not check that. So in the code, perhaps we should add an assertion:
+
+if number <0:
+
+    raise ValueError("Number cannot be negative")
+
+But the problem's docstring doesn't mention that, but since it's a UUID, maybe it's safe to assume number is non-negative. However, the code as written could handle negative numbers, but perhaps that's unintended. The problem might expect that the number is non-negative, so adding a check is better.
+
+So adding:
+
+if number <0:
+
+    raise ValueError("Number must be non-negative")
+
+At the start.
+
+So updating the code:
+
+def int_to_string(number: int, alphabet: List[str], padding: Optional[int] = None) -> str:
+
+    if number < 0:
+
+        raise ValueError("Number must be non-negative")
+
+    base = len(alphabet)
+
+    if base ==0:
+
+        raise ValueError("Alphabet cannot be empty")
+
+    digits = []
+
+    n = number
+
+    while n >0:
+
+        remainder = n % base
+
+        digits.append(alphabet[remainder])
+
+        n = n // base
+
+    if not digits:
+
+        digits.append(alphabet[0])
+
+    result = ''.join(reversed(digits))
+
+    if padding is not None and len(result) < padding:
+
+        pad = alphabet[0] * (padding - len(result))
+
+        result = pad + result
+
+    return result
+
+Now, unit tests.
+
+The user mentioned to first generate comprehensive unit tests before writing the code. So let me think of test cases.
+
+Test case 1: number 0, alphabet ['a','b'], padding None → returns 'a'.
+
+Test case 2: number 0, padding 3 → 'aaa'.
+
+Test case 3: number 3, alphabet ['a','b'] → 3 in base2 is 11 → 'bb'.
+
+Test case 4: number 5, alphabet ['0','1','2'] → 5 is 12 in base3 → '12'.
+
+Test case5: number=0, alphabet=['0','1','2'], padding=0 → but padding can be zero? The parameter is Optional[int], so if padding is zero, then the code would check len(result) (1) <0? No, so no padding. So returns '0'.
+
+Wait, but what if padding is zero? The code would not do anything. But since padding is optional, perhaps the user can set it to zero to disable padding. But the problem says padding is an optional int. So it's allowed.
+
+Another test case: number=1, alphabet=['a'], base 1. But base1 is allowed? Well, in mathematics, base1 is not standard, but perhaps the code can handle it. However, for base 1, the digits would be 0 or 1?
+
+Wait, if the alphabet is ['a'], then base is 1. The number 0 would be 'a'. The number 1 would be 1 mod 1 is 0, so the remainder is 0. So digits would be ['a'], and n becomes 1//1 =1. Then the loop continues until n becomes 0? Wait, no: n is 1, then after first iteration, remainder is 0, digits append 'a', n becomes 1//1=1. So the loop runs again, same remainder. This is an infinite loop.
+
+Ah, here's a problem. For base 1, the code will loop infinitely because when number is 1, base is 1, so remainder is 0, but n//base is 1 again. So it never exits. So the code must handle base 1 specially?
+
+Hmm. The problem's function signature says alphabet is a list of strings. So if someone passes an alphabet of length 1, then the code would have a base of 1, which could lead to infinite loops for numbers >=1.
+
+This is a problem. So, perhaps the code needs to check that the base is at least 2, or handle base 1 specially.
+
+But according to the problem's description, the number is a short UUID. Maybe it's intended that the alphabet has at least two characters. Or perhaps the code should raise an error if the base is less than 2.
+
+Alternatively, in the case of base 1, the only possible number is 0, because any number greater than zero would require infinite digits. So perhaps, when base is 1, the code can only represent 0, and any other number would cause an error?
+
+So perhaps the code should raise an error if base is less than 2 and number is not 0?
+
+Alternatively, in the code, when base is 1, and number is non-zero, then the loop will run forever. So we need to handle that.
+
+Hmm, this is a potential bug. So to handle that, perhaps in the code, before the loop, check if base is 1 and number is not zero. Then raise an error.
+
+Alternatively, in the loop, after some iterations, if it's going into an infinite loop, but how can we detect that?
+
+Alternatively, perhaps the function's design expects that the alphabet has at least 2 characters, so the code can add a check that base >=2.
+
+So adding:
+
+if base < 2:
+
+    raise ValueError("Alphabet must have at least two characters")
+
+Wait, but the problem's docstring says "alphabet: List with letters". So perhaps the user is supposed to provide a valid alphabet. But to prevent infinite loops, the code should check that base is at least 2.
+
+So modifying the code:
+
+after checking base ==0, also check if base <2:
+
+    if base <2:
+
+        raise ValueError("Alphabet must have at least two characters")
+
+Wait, but in the case of base 1, if the number is zero, then it's okay. So the code can allow base 1 but only for number 0.
+
+Hmm, but it's complicated. Maybe better to add the check for base >=2.
+
+Because in practice, a base of 1 is not useful for numbers beyond zero, and the problem's context (short UUID) probably requires a base >=2.
+
+So modifying the code to add:
+
+if base < 2:
+
+    raise ValueError("Alphabet must have at least two characters")
+
+But then, if the user passes a single-character alphabet and number 0, it would fail. But perhaps that's acceptable.
+
+Alternatively, allow base 1 but handle the case when the number is non-zero:
+
+In the loop, when base is 1, and number is non-zero, then it would loop infinitely. So we can add a check before the loop:
+
+if base == 1 and number !=0:
+
+    raise ValueError("Cannot represent number {} with a single-character alphabet".format(number))
+
+But that complicates the code. Given that the problem's context is a short UUID, perhaps the alphabet is expected to be at least 2 characters, so the code can enforce that.
+
+So adding:
+
+base = len(alphabet)
+
+if base <1:
+
+    raise ValueError("Alphabet cannot be empty")
+
+if base <2:
+
+    raise ValueError("Alphabet must have at least two characters")
+
+Wait, but the first check (base==0) is already there. So combining:
+
+if base <2:
+
+    raise ValueError("Alphabet must have at least two characters")
+
+Wait, but if base is 1, then the error is raised.
+
+So that would prevent the infinite loop.
+
+Thus, the code now has that check.
+
+Now, back to the test cases.
+
+Another test case: number=0, alphabet=['a'], padding=1 → base is 1, so the check would raise ValueError. So the code is correct.
+
+Now, the unit tests.
+
+First, the user wants to generate comprehensive unit tests first. Let me think of some test cases.
+
+Test case 1: Basic case with base 2.
+
+Test that converting 3 with alphabet ['a','b'] gives 'bb'.
+
+Test case 2: Zero with no padding.
+
+Test that converting 0 with ['a','b'] gives 'a'.
+
+Test case 3: Zero with padding 3 → 'aaa'.
+
+Test case 4: number 5 with base 3 (alphabet ['0','1','2'] → '12' → with padding 3 → '012'.
+
+Test case 5: number 255 with alphabet of 16 chars (base16), but let's pick a specific example.
+
+Wait, perhaps a test case where the number is 0 and the alphabet is ['a'], but that should raise an error because base is 1 and number is non-zero? No, if number is zero, then base 1 is allowed.
+
+Wait, if the alphabet is ['a'], then base is 1. The code's checks would say base <2 → raise error. So even for number 0, it would raise an error. But maybe the user wants to have a single character alphabet for a zero?
+
+Hmm, but according to the code's check, it would raise an error. So perhaps the code should allow base 1 only when the number is zero.
+
+But that complicates the code. Maybe better to proceed as before.
+
+Test case 6: number = 1, alphabet of ['a','b'] → should be 'b'.
+
+Wait, let's see:
+
+number 1, base2.
+
+Loop runs:
+
+n =1.
+
+remainder =1 mod2 →1 → digit 'b' added.
+
+n becomes 0.
+
+digits is ['b'] → reversed gives 'b' → the result is 'b'.
+
+Yes.
+
+Another test case: number=2, alphabet ['a','b'] → 10 in binary → 'a' (since 2 divided by 2 is 1 rem 0 → digits ['a'], then 1 divided by 2 is 0 rem 1 → 'b'. So digits would be [ 'a', 'b' ] → reversed gives 'ba'.
+
+Wait, let's walk through it step by step.
+
+number=2, base=2.
+
+n starts at 2.
+
+First iteration:
+
+remainder = 2 %2 →0 → append 'a' (alphabet[0]).
+
+n becomes 2//2 =1.
+
+Second iteration:
+
+n is 1.
+
+remainder 1%2 →1 → append 'b'.
+
+n becomes 0.
+
+Loop ends. digits is ['a','b']. reversed → ['b','a'] → 'ba'.
+
+So the string is 'ba', which is correct since 2 in base2 is 10, so the most significant digit first is '10' → 'ba'.
+
+Yes.
+
+So another test case for number=2 → 'ba'.
+
+Test case 7: padding with number 5 (base3, alphabet ['0','1','2'] → '12', padding 3 → '012'.
+
+Test case 8: padding larger than needed. Let's say the result is length 4 and padding is 3 → no change.
+
+Test case 9: number=0 with base 2 → 'a'.
+
+Test case 10: number=0 with padding 0 → 'a' (since padding is 0, but the result length is 1, which is greater than padding 0 → no padding added).
+
+Wait, if padding is 0, then len(result) is 1 which is greater than 0 → so no change. So returns 'a'.
+
+Test case 11: negative number → should raise ValueError.
+
+Now, writing the unit tests.
+
+We can use pytest.
+
+Sample test code:
+
+import pytest
+
+from typing import List, Optional
+
+def test_int_to_string_zero():
+
+    assert int_to_string(0, ['a', 'b']) == 'a'
+
+def test_int_to_string_one():
+
+    assert int_to_string(1, ['a', 'b']) == 'b'
+
+def test_int_to_string_two():
+
+    assert int_to_string(2, ['a', 'b']) == 'ba'
+
+def test_int_to_string_three():
+
+    assert int_to_string(3, ['a', 'b']) == 'bb'
+
+def test_int_to_string_zero_with_padding():
+
+    assert int_to_string(0, ['a', 'b'], padding=3) == 'aaa'
+
+def test_int_to_string_with_padding():
+
+    assert int_to_string(5, ['0','1','2'], padding=3) == '012'
+
+def test_int_to_string_base_less_than_two():
+
+    with pytest.raises(ValueError):
+
+        int_to_string(0, ['a'])  # base 1, but requires at least 2
+
+def test_negative_number():
+
+    with pytest.raises(ValueError):
+
+        int_to_string(-1, ['a','b'])
+
+def test_empty_alphabet():
+
+    with pytest.raises(ValueError):
+
+        int_to_string(0, [])
+
+def test_padding_smaller_than_length():
+
+    assert int_to_string(123, ['a','b','c'], padding=2) == 'bca' # wait, need to calculate what 123 is in base3.
+
+Wait, let's compute 123 in base3:
+
+3^4 =81, 3^5 is 243.
+
+123 divided by 3^4 (81) → 1*81=81, remainder 42.
+
+42 divided by 3^3 (27) → 1*27 → rem 15.
+
+15 divided by 3^2 (9) →1*9 → rem6.
+
+6 divided by 3^1 (3) → 2*3 → rem0.
+
+0 divided by 3^0 →0.
+
+So digits are 1 (from 3^4), 1 (3^3), 1 (3^2), 2 (3^1), 0 (3^0).
+
+Wait, maybe better to do the actual calculation.
+
+Let me compute 123 in base3:
+
+123 divided by 3 is 41 rem 0.
+
+41 divided by 3 is 13 rem 2.
+
+13 divided by 3 is 4 rem 1.
+
+4 divided by 3 is 1 rem 1.
+
+1 divided by 3 is 0 rem 1.
+
+So the remainders are 0,2,1,1,1 → digits collected in reverse order (0,2,1,1,1 → reversed gives 1,1,1,2,0 → so the digits are '1','1','1','2','0' → the alphabet is ['a','b','c'] so the digits would be:
+
+0 → 'a'
+
+2 → 'c'
+
+1 → 'b'
+
+1 → 'b'
+
+1 → 'b'
+
+Wait, no. Let me think:
+
+The remainders are:
+
+First division: 123 %3 →0 → digit is alphabet[0] → 'a'
+
+then 41 (123//3=41)
+
+41%3 →2 → 'c'
+
+41//3 =13 → next.
+
+13%3 →1 → 'b'
+
+13//3=4.
+
+4%3 →1 → 'b'
+
+4//3=1.
+
+1%3 →1 → 'b'
+
+1//3=0.
+
+So digits are ['a','c','b','b','b'] → reversed gives ['b','b','b','c','a'] → the string would be 'bbbbca'? Wait, no:
+
+Wait the digits list is [ 'a', 'c', 'b', 'b', 'b' ] (from the remainders in order 0,2,1,1,1).
+
+Reversing gives ['b','b','b','c','a'] → so the string is 'bbbca'.
+
+The length is 5. If padding is 2, which is less than 5, so no padding. So the test case would check that.
+
+But perhaps I should choose a simpler example for the test.
+
+Alternatively, perhaps test a case where padding is larger than the result.
+
+Another test case: number=0 with padding=0 → returns 'a'.
+
+Another test case for base 1:
+
+def test_base_one():
+
+    with pytest.raises(ValueError):
+
+        int_to_string(0, ['a']) # base 1, which is less than 2 → error.
+
+Wait, according to the code's checks, yes.
+
+Another test case for base exactly 2:
+
+def test_base_two():
+
+    assert int_to_string(0, ['a', 'b']) == 'a'
+
+    assert int_to_string(1, ['a','b']) == 'b'
+
+    assert int_to_string(2, ['a','b']) == 'ba'
+
+Now, with all these tests, the code should pass.
+
+Now, the code as written includes the base check.
+
+Now, putting it all together.
+
+The final code would be:
+
+But I need to make sure to include the checks for base and number.
+
+The code:
+
+Now, the code with the checks:
+
+def int_to_string(number: int, alphabet: List[str], padding: Optional[int] = None) -> str:
+
+    if number < 0:
+
+        raise ValueError("Number must be non-negative")
+
+    base = len(alphabet)
+
+    if base < 1:
+
+        raise ValueError("Alphabet cannot be empty")
+
+    if base < 2:
+
+        raise ValueError("Alphabet must have at least two characters")
+
+    digits = []
+
+    n = number
+
+    while n > 0:
+
+        remainder = n % base
+
+        digits.append(alphabet[remainder])
+
+        n = n // base
+
+    if not digits:
+
+        digits.append(alphabet[0])
+
+    # Reverse to get MSB first
+
+    result = ''.join(reversed(digits))
+
+    if padding is not None and len(result) < padding:
+
+        pad = alphabet[0] * (padding - len(result))
+
+        result = pad + result
+
+    return result
+
+Wait, but in the case where the alphabet has exactly two characters, it's okay. The check for base <2 is for when base is 1.
+
+Yes.
+
+Now, testing with the test case where the alphabet has two characters, it should work.
+
+Now, the code should handle all the cases.
+
+Now, the user wants the code in Python markdown format, only the code.
+
+So the final code is as above.

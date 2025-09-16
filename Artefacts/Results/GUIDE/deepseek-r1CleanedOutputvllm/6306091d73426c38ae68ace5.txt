@@ -1,0 +1,68 @@
+import importlib
+from collections.abc import Mapping
+
+def _include_groups(self, parser_dict):
+    """
+    Resolves the include dict directive in the spec files.
+    
+    Args:
+        parser_dict (dict): Configuration settings including an 'include' key.
+        
+    Returns:
+        dict: The updated configuration with merged groups.
+    """
+    include_path = parser_dict.get('include', None)
+    if not include_path:
+        return parser_dict
+    
+    try:
+        module = importlib.import_module(include_path)
+    except ImportError:
+        return parser_dict
+    
+    # Assuming the module contains a 'groups' attribute or can be parsed similarly
+    groups = module.groups if hasattr(module, 'groups') else {}
+    
+    # Merge the groups into the parser_dict
+    for key, value in groups.items():
+        parser_dict[key] = value
+    
+    return parser_dict
+
+def test_include_groups():
+    """Test the _include_groups function with various scenarios."""
+    import json
+    from unittest import TestCase
+    
+    class TestGroups(TestCase):
+        def test_simple_include(self):
+            parser_dict = {'include': 'test/specs/group1'}
+            expected = {'group1': {'a': 1, 'b': 2}}
+            result = _include_groups(parser_dict)
+            self.assertEqual(result, expected)
+        
+        def test_include_missing(self):
+            parser_dict = {'include': 'test/specs/missing'}
+            result = _include_groups(parser_dict)
+            self.assertEqual(result, parser_dict)
+        
+        def test_include_relative(self):
+            parser_dict = {'include': 'test/specs/group2'}
+            expected = {'group1': {'a': 1, 'b': 2}, 'group2': {'c': 3}}
+            result = _include_groups(parser_dict)
+            self.assertEqual(result, expected)
+        
+        def test_multiple_includes(self):
+            parser_dict = {
+                'include': 'test/specs/group3',
+                'group1': {'x': 10}
+            }
+            expected = {
+                'group1': {'x': 10},
+                'group3': {'a': 4, 'b': 5}
+            }
+            result = _include_groups(parser_dict)
+            self.assertEqual(result, expected)
+
+if __name__ == "__main__":
+    test_include_groups()

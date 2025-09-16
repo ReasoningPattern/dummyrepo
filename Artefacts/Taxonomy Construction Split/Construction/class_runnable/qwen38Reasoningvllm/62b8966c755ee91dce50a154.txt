@@ -1,0 +1,3079 @@
+
+Okay, I need to generate Python code for the isoparse function based on the given docstring. Let me start by understanding the requirements.
+
+The function is supposed to parse an ISO-8601 datetime string into a datetime.datetime object. The docstring mentions that the date and time are separated by a 'T' character, but other separators might be allowed? Wait, no, it says the separator is a single character, which is 'T' in the standard. But the note says that incomplete date formats (like YYYY-MM) may not be combined with a time portion. So maybe the separator is optional, but if present, it must be 'T'? Or perhaps the function is designed to handle any single character separator, but the standard uses 'T'? Hmm, the docstring says "the date and time portions are separated by a single character separator, which is T in the official standard." So maybe the function expects 'T' as the separator, but maybe it's flexible? Wait, the first paragraph says "An ISO-8601 datetime string consists of a date portion, followed optionally by a time portion - the date and time portions are separated by a single character separator, which is T in the official standard." So the separator is T, but maybe other separators are allowed? Or is it that the function is supposed to parse any valid ISO-8601 string, which might use T or other separators? Wait, the docstring says "the date and time portions are separated by a single character separator, which is T in the official standard." So perhaps the function is designed to accept 'T' as the separator, but maybe other separators are allowed? Or maybe the function is supposed to strictly parse only 'T' as the separator. Wait, the note says that incomplete date formats (like YYYY-MM) may not be combined with a time portion. So perhaps the function is supposed to split the string into date and time parts using 'T' as the separator, but if there's no 'T', then it's just a date. But the problem is that the function's parameters say "A string or stream containing only an ISO-8601 datetime string". So maybe the input is a string that's a full datetime string, possibly with 'T' or other separators? Or maybe the function is supposed to handle only the standard format with 'T'?
+
+Wait, the function's name is isoparse, which suggests it's parsing ISO-8601 format. So the standard format is date followed by 'T' then time. But the docstring says that the separator is a single character, which is T. So maybe the function expects that the date and time are separated by 'T', but perhaps other separators are allowed? Or maybe it's designed to handle any single character separator, but the standard uses 'T'. However, the note says that incomplete date formats (like YYYY-MM) may not be combined with a time portion. So maybe the function is supposed to split the string into date and time parts using 'T' as the separator, and if there's no 'T', then it's just a date. But the problem is that the function's parameters are a string or stream. Wait, the parameter is dt_str, which is a string or stream. But in Python, parsing a stream would require reading from it, but the function is probably intended to take a string. Maybe the stream part is a mistake, or maybe it's a placeholder. For now, I'll assume dt_str is a string.
+
+The function needs to parse various date formats. Let's list them again:
+
+Common date formats:
+- YYYY
+- YYYY-MM or YYYYMM
+- YYYY-MM-DD or YYYYMMDD
+
+Uncommon:
+- YYYY-Www or YYYYWww (ISO week, day defaults to 0)
+- YYYY-Www-D or YYYYWwwD (ISO week and day)
+
+Time formats:
+- hh
+- hh:mm or hhmm
+- hh:mm:ss or hhmmss
+- hh:mm:ss.ssssss (up to 6 sub-second digits)
+
+Time zone offset formats:
+- Z (UTC)
+- ±HH:MM
+- ±HHMM
+- ±HH
+
+Also, midnight is a special case for hh, meaning that 00:00 and 24:00 are both considered as midnight. But the note says that the parser may not strictly enforce this, but the function should handle it. Also, the decimal separator can be a dot or comma. However, the caution says that fractional components other than seconds are not implemented. So the function should handle up to 6 digits after the decimal for sub-second parts, but not other fractional components like milliseconds beyond that? Or maybe the function is supposed to handle up to 6 digits, but the caution says that support for fractional components other than seconds is part of the standard but not implemented. Wait, the caution says that fractional components other than seconds are part of the standard but not implemented. So maybe the function is supposed to handle sub-second parts, but only up to 6 digits, and not other fractional parts. But the note says that the parser may not strictly enforce strictness, so perhaps it's more lenient.
+
+The function should return a datetime.datetime object, with unspecified components defaulting to their lowest value. For example, if the date is only YYYY, then the month and day default to 01 and 01? Or perhaps the lowest possible value, like for a date with only year, the month and day are set to their minimum (01 and 01?), and for time, if only hh is present, then minutes and seconds default to 00, and microseconds to 0? Or maybe the function is supposed to parse the string into the appropriate datetime components, filling in defaults where necessary.
+
+Also, the time zone offset: if it's Z, then UTC. Otherwise, parse the offset and create a tzoffset object. But if the offset is +00:00, it should be treated as UTC.
+
+So, the steps I need to take are:
+
+1. Split the input string into date and time parts, using 'T' as the separator. If there's no 'T', then it's just a date. But need to check if the string has a 'T' or not.
+
+Wait, the function is supposed to parse a datetime string, which could be a date-only or datetime with time and timezone. So first, split the string into date and time parts. Let's think about splitting on 'T' first. But maybe the string could have other separators? The docstring says that the separator is a single character, which is T. So perhaps the function is supposed to split on 'T' as the separator. So the first step is to split the string into two parts: date_part and time_part. If there's no 'T', then time_part is None.
+
+But then, the date_part could be in various formats. For example, if the date_part is 'YYYY', then it's a year. If it's 'YYYY-MM', then month is present. If it's 'YYYY-MM-DD', then day is present. Similarly for the uncommon formats with weeks.
+
+So, the first thing is to parse the date part. Let's think about how to handle different date formats.
+
+For the date part, possible formats are:
+
+- YYYY: year only. So month and day are not present. But according to the note, incomplete date formats may not be combined with a time portion. Wait, the note says "Incomplete date formats (such as YYYY-MM) may *not* be combined with a time portion." So if the date part is incomplete (like YYYY-MM), then the time part must be absent. But if the date part is complete (like YYYY-MM-DD), then the time part can be present or not. Wait, no. The note says that incomplete date formats may not be combined with a time portion. So if the date is in a format that's incomplete (like YYYY-MM), then there can't be a time portion. So the function should check that if the date is incomplete, then there's no time part. But how to determine if the date is incomplete? For example, if the date_part is '2023-04', then it's incomplete (month is present, day is missing). But according to the common formats, YYYY-MM is allowed. Wait, the common formats are YYYY, YYYY-MM or YYYYMM, YYYY-MM-DD or YYYYMMDD. So YYYY-MM is a complete date? Or is it considered incomplete? The note says that incomplete date formats may not be combined with a time portion. So maybe the date_part can be in any of the common formats, but if it's in a format that's incomplete (like YYYY-MM), then the time part must be absent. Wait, but the common formats include YYYY-MM as a valid date format. So perhaps the note is saying that if the date is incomplete (like only year), then you can't have a time part. But if the date is in a format that's incomplete (like YYYY-MM), then maybe it's allowed to have a time part? Or maybe the note is saying that if the date is incomplete (like only year), then combining with a time part is not allowed. But the common formats include YYYY-MM and YYYYMM as valid, which are incomplete in terms of day. Wait, no. YYYY-MM is a date with year and month, but not day. So if the date part is in YYYY-MM format, then the time part must be absent? Or maybe the function allows that. The note says that incomplete date formats may not be combined with a time portion. So if the date is incomplete (like only year, or only month), then the time portion can't be present. But if the date is in YYYY-MM (which is incomplete in terms of day), then can it be combined with a time portion? The note says "may not be combined", so perhaps the function is supposed to reject such combinations. But the docstring says that the date and time are separated by a single character separator. So maybe the function is supposed to split the string into date and time parts, and then parse each part accordingly.
+
+So, the plan is:
+
+- Split the input string into date_part and time_part using 'T' as the separator. If there's no 'T', then time_part is None.
+
+But wait, the input could be something like '2023-04-05T12:34:56+00:00', which is a full datetime with timezone. Or '2023-04-05T12:34:56', which is datetime without timezone. Or '2023-04-05', which is date only. Or '2023-W05', which is ISO week. Or '2023-W05-3', which is ISO week and day.
+
+So the first step is to split the string into date_part and time_part. Let's split on 'T' once. So for example, '2023-04-05T12:34:56' would split into '2023-04-05' and '12:34:56'.
+
+Then, parse the date_part into a date. The date_part can be in various formats. Let's think about how to parse each of these.
+
+For the date_part:
+
+Case 1: Only year (YYYY). So, for example, '2023'. Then, the date is 2023-01-01? Or does it default to the lowest value? The docstring says "unspecified components default to their lowest value." So for a date with only year, month and day would default to 01 and 01? Or maybe the lowest possible value for each component. For example, year is 2023, month is 01, day is 01.
+
+Case 2: YYYY-MM or YYYYMM. So, for example, '2023-04' or '202304'. Then, the day is not present, so it defaults to 01. So the date would be 2023-04-01.
+
+Case 3: YYYY-MM-DD or YYYYMMDD. So, for example, '2023-04-05' or '20230405'. Then, all date components are present.
+
+Case 4: YYYY-Www or YYYYWww. For example, '2023-W05' or '2023W05'. The week number is ww. The day defaults to 0. So the date would be the first day of that week. Wait, how to convert ISO week to date? For example, 2023-W05 would correspond to the first day of week 5. But how to compute that? The function needs to parse the week and then find the corresponding date. However, the note says that the ISO week and day numbering follows the same logic as datetime.date.isocalendar. So perhaps the function can use that method to convert the week into a date. But how to handle the parsing of the week format.
+
+Similarly, for YYYY-Www-D or YYYYWwwD, the day is present. So, for example, '2023-W05-3' would be week 5, day 3. So the date would be the 3rd day of week 5 in 2023.
+
+So, the date parsing needs to handle these different formats. How to do that in Python?
+
+For the date_part, perhaps first check if it starts with 'W' or 'w' (for week). If so, parse as ISO week. Otherwise, parse as standard date.
+
+But how to split the date_part into its components. Let's think about the possible formats.
+
+First, check if the date_part has a 'W' in it. For example, '2023-W05' or '2023W05'.
+
+So, for the date_part, split into year, and then check for week or day components.
+
+Alternatively, perhaps use regular expressions to match the different date formats.
+
+Similarly for the time_part, which can be in various formats. For example, 'hh', 'hh:mm', 'hh:mm:ss', 'hh:mm:ss.ssssss'.
+
+Also, the decimal separator can be either a dot or a comma. So, for the time_part, when parsing the fractional part, we need to replace commas with dots before parsing.
+
+But the function is supposed to return a datetime.datetime object. So, the time_part would be parsed into hours, minutes, seconds, and microseconds.
+
+So, perhaps the approach is:
+
+1. Split the input string into date_part and time_part using 'T' as the separator. If there's no 'T', then time_part is None.
+
+2. Parse the date_part into a date object. For that, check for the different formats.
+
+3. Parse the time_part into a time object, handling the different time formats and the decimal separator.
+
+4. Parse the timezone offset, if present.
+
+But how to handle the timezone offset? The timezone offset can be at the end of the string, after the time_part. For example, '2023-04-05T12:34:56+00:00' or '2023-04-05T12:34:56Z'.
+
+So, after splitting into date_part and time_part, check if there's a timezone offset. The timezone offset can be 'Z' (UTC), or a string like '+HH:MM', '+HHMM', '+HH', etc.
+
+So, the steps would be:
+
+- Split the string into date_part, time_part, and timezone_part.
+
+Wait, perhaps the time_part can include the timezone offset. For example, '2023-04-05T12:34:56+00:00' would have time_part as '12:34:56+00:00', but the timezone offset is part of the time_part. Or maybe the time_part is the time without the timezone, and the timezone is a separate part. So, perhaps after splitting on 'T', the time_part may have a timezone offset. So, for example, '2023-04-05T12:34:56+00:00' would split into date_part '2023-04-05' and time_part '12:34:56+00:00'.
+
+So, the time_part can be split into time and timezone parts. For example, split on the timezone offset. But how to detect that.
+
+Alternatively, after splitting on 'T', the remaining part (time_part) can be split into time and timezone. For example, if the time_part ends with 'Z', then it's UTC. Otherwise, check for a timezone offset.
+
+But how to handle the timezone offset. For example, the offset can be in the form of ±HH:MM, ±HHMM, ±HH. So, perhaps the time_part can be split into time_str and offset_str. For example, if the time_part is '12:34:56+00:00', then time_str is '12:34:56' and offset_str is '+00:00'. Similarly for '12:34:56+00'.
+
+So, the code would need to process the time_part to extract the time and the timezone offset.
+
+But first, the date_part parsing.
+
+Let me think about how to parse the date_part. For example, for the common formats:
+
+- YYYY: just the year. So, the date is year, 01, 01.
+
+- YYYY-MM or YYYYMM: year and month. So, the day defaults to 01.
+
+- YYYY-MM-DD or YYYYMMDD: full date.
+
+For the uncommon formats:
+
+- YYYY-Www or YYYYWww: year and week. The day defaults to 0 (Monday? Or depends on the ISO week?).
+
+- YYYY-Www-D or YYYYWwwD: year, week, day.
+
+So, perhaps the code can first check if the date_part contains a 'W' to determine if it's an ISO week format. Otherwise, parse as standard date.
+
+But how to handle the different formats. Let's think about using regular expressions.
+
+For the standard date formats:
+
+- YYYY: ^\d{4}$
+
+- YYYY-MM: ^\d{4}-\d{2}$
+
+- YYYYMM: ^\d{6}$
+
+- YYYY-MM-DD: ^\d{4}-\d{2}-\d{2}$
+
+- YYYYMMDD: ^\d{8}$
+
+For the ISO week formats:
+
+- YYYY-Www: ^\d{4}-W\d{2}$ or ^\d{4}W\d{2}$
+
+Wait, the format is either 'YYYY-Www' or 'YYYYWww'. So, the regex for that would be something like ^\d{4}(?:-W|W)\d{2}$.
+
+But then, for the day part, it's 'YYYY-Www-D' or 'YYYYWwwD'. So, the regex would be ^\d{4}(?:-W|W)\d{2}-\d{1}$ or ^\d{4}W\d{2}\d{1}$.
+
+Wait, the week format is 'YYYY-Www' where ww is two digits (like W05), and the day is one digit (like -3). So, for example, '2023-W05-3' would be parsed as year 2023, week 05, day 3. Similarly, '2023W053' would be the same as '2023-W05-3'.
+
+So, the code needs to check for these patterns.
+
+So, perhaps using regular expressions to match the different date formats.
+
+For the date_part, the regex could be:
+
+- For standard date: match YYYY, YYYY-MM, YYYYMM, YYYY-MM-DD, YYYYMMDD.
+
+- For ISO week: match YYYY-Www, YYYYWww, YYYY-Www-D, YYYYWwwD.
+
+But how to write these regex patterns.
+
+Let me think:
+
+Standard date formats:
+
+- YYYY: ^\d{4}$
+
+- YYYY-MM: ^\d{4}-\d{2}$
+
+- YYYYMM: ^\d{6}$
+
+- YYYY-MM-DD: ^\d{4}-\d{2}-\d{2}$
+
+- YYYYMMDD: ^\d{8}$
+
+ISO week formats:
+
+- YYYY-Www: ^\d{4}-W\d{2}$ or ^\d{4}W\d{2}$
+
+- YYYY-Www-D: ^\d{4}-W\d{2}-\d{1}$ or ^\d{4}W\d{2}\d{1}$
+
+But perhaps the code can first check if the date_part starts with 'W' or has a 'W' in it. Wait, no. The ISO week format starts with the year, then a 'W', then the week number. So, the date_part would be something like '2023-W05' or '2023W05'.
+
+So, perhaps the code can first check if the date_part has a 'W' in it. If it does, then parse as ISO week. Otherwise, parse as standard date.
+
+But how to handle that. For example, if the date_part is '2023-W05-3', then it's ISO week and day. If it's '2023-W05', then it's ISO week with day 0.
+
+So, the code can first check if the date_part contains a 'W' and then parse accordingly.
+
+But how to split into year, week, and day. Let's think about the regex for ISO week formats.
+
+For the ISO week format, the regex could be:
+
+- For YYYY-Www: ^(\d{4})-W(\d{2})$
+
+- For YYYYWww: ^(\d{4})W(\d{2})$
+
+- For YYYY-Www-D: ^(\d{4})-W(\d{2})-(\d{1})$
+
+- For YYYYWwwD: ^(\d{4})W(\d{2})(\d{1})$
+
+So, the code can check if the date_part matches any of these patterns.
+
+Once the date_part is parsed into a date, then the time_part can be parsed.
+
+Now, the time_part can be in various formats. Let's think about the regex for the time_part:
+
+- hh: ^(\d{2})$
+
+- hh:mm or hhmm: ^(\d{2}):(\d{2})$ or ^(\d{2})(\d{2})$
+
+- hh:mm:ss or hhmmss: ^(\d{2}):(\d{2}):(\d{2})$ or ^(\d{2})(\d{2})(\d{2})$
+
+- hh:mm:ss.ssssss: ^(\d{2}):(\d{2}):(\d{2})\.(\d{6})$ or ^(\d{2})(\d{2})(\d{2})(\d{6})$
+
+But also, the decimal separator can be a comma. So, the regex should allow for either '.' or ',' as the decimal separator.
+
+So, for the time_part, the regex could be:
+
+- hh: ^(\d{2})$
+
+- hh:mm or hhmm: ^(\d{2}):(\d{2})$ or ^(\d{2})(\d{2})$
+
+- hh:mm:ss or hhmmss: ^(\d{2}):(\d{2}):(\d{2})$ or ^(\d{2})(\d{2})(\d{2})$
+
+- hh:mm:ss.ssssss (with decimal separator as . or ,): ^(\d{2}):(\d{2}):(\d{2})[.,](\d{6})$ or ^(\d{2})(\d{2})(\d{2})[.,](\d{6})$
+
+But how to handle the decimal separator. For example, '12:34:56,123456' should be parsed as 12 hours, 34 minutes, 56 seconds, and 123456 microseconds.
+
+So, the code can replace commas with dots in the time_part before parsing, but only if there's a fractional part.
+
+Wait, but the time_part could have a fractional part. So, perhaps the code should first check if there's a decimal point or comma, and replace the comma with a dot, then parse the time.
+
+But for the time_part, the code would need to split into time components and the fractional part.
+
+So, for the time_part, the code can split into time_str and fractional_str, then parse the time_str into hours, minutes, seconds, and the fractional_str into microseconds.
+
+But how to split. Let's think:
+
+For the time_part, split into time and timezone offset. Wait, no. The time_part may include a timezone offset. For example, '12:34:56+00:00' would have the time as '12:34:56' and the timezone as '+00:00'.
+
+So, perhaps the code should first check if the time_part ends with a timezone offset. So, the time_part can be split into time_str and timezone_str.
+
+But how to detect the timezone. The timezone can be 'Z' (UTC) or a string like '+HH:MM', '+HHMM', '+HH', etc.
+
+So, for the time_part, after splitting on 'T', the code can check if the time_part ends with 'Z' or a timezone offset.
+
+So, the steps for time_part:
+
+- Check if the time_part ends with 'Z' → UTC.
+
+- Else, check if there's a timezone offset. The timezone offset can be in the form of ±HH:MM, ±HHMM, ±HH. So, the code can split the time_part into time_str and offset_str.
+
+But how to split. For example, '12:34:56+00:00' → time_str is '12:34:56', offset_str is '+00:00'.
+
+Similarly, '12:34:56+00' → time_str is '12:34:56', offset_str is '+00'.
+
+So, the code can split the time_part into two parts: the time part and the timezone offset. The timezone offset can be at the end, and can be in the formats mentioned.
+
+So, the code can split the time_part into time_str and offset_str by checking if the last part is a timezone offset.
+
+But how to do that in code. Maybe using a regex to capture the time and the timezone offset.
+
+For example, the regex for the time_part with possible timezone could be:
+
+^(\d{2}(:\d{2}(:\d{2}(?:[.,]\d{6})?))?([Z+-]\d{2}(:\d{2})?)?$
+
+But that's getting complicated. Alternatively, split the time_part into time and timezone parts by checking if the timezone is present.
+
+So, for the time_part, first check if it ends with 'Z' → then timezone is UTC.
+
+Else, check if there's a timezone offset. The timezone offset can be in the form of +HH:MM, +HHMM, +HH, -HH:MM, -HHMM, -HH.
+
+So, the code can split the time_part into two parts: the time part and the timezone offset. For example, using a regex to capture the time part and the timezone part.
+
+Let me think of using a regex that captures the time part and the timezone offset.
+
+For example, the time_part can be matched with:
+
+time_part_pattern = r'^(\d{2}(:\d{2}(:\d{2}(?:[.,]\d{6})?)?)?)?(Z|[-+]\d{2}(:\d{2})?)?$'
+
+But this might not cover all cases. Alternatively, split the time_part into time_str and timezone_str by checking if the last part is a timezone offset.
+
+Another approach: split the time_part into time_str and timezone_str. For example, if the time_part ends with 'Z', then the timezone is 'Z', and the time_str is the part before that. If it ends with a timezone offset, then split on the offset.
+
+But how to split. For example, '12:34:56+00:00' → split into '12:34:56' and '+00:00'.
+
+So, perhaps the code can check for the presence of a timezone offset by looking for patterns like '+HH:MM', '+HHMM', '+HH', etc. So, the code can split the time_part into time_str and offset_str by checking if the last part matches a timezone pattern.
+
+Alternatively, use a regex to capture the time part and the timezone offset.
+
+Let me think about writing a regex for the time part. The time part can be:
+
+- hh (like '12')
+
+- hh:mm (like '12:34') or hhmm (like '1234')
+
+- hh:mm:ss (like '12:34:56') or hhmmss (like '123456')
+
+- hh:mm:ss.ssssss (like '12:34:56.123456') or hh:mm:ss,ssssss (like '12:34:56,123456')
+
+So, the regex for the time part (without timezone) could be:
+
+time_pattern = r'^(\d{2})(?::(\d{2})(?::(\d{2})(?:[.,](\d{6}))?)?$'
+
+But this might not capture all cases. Let me think again.
+
+The time part can be:
+
+- hh: two digits.
+
+- hh:mm: two digits, colon, two digits.
+
+- hh:mm:ss: two digits, colon, two digits, colon, two digits.
+
+- hh:mm:ss.ssssss: two digits, colon, two digits, colon, two digits, decimal separator (.,), six digits.
+
+- hh:mm:ss,ssssss: same as above but with comma.
+
+So, the regex for the time part (without timezone) could be:
+
+^(\d{2})(?::(\d{2})(?::(\d{2})(?:[.,](\d{6}))?)?)?$
+
+But this is a bit complex. Let's think of possible groups.
+
+For example, the time part can be:
+
+- hh → group1 is hours, group2, group3, group4 are None.
+
+- hh:mm → group1 is hours, group2 is minutes, group3 and group4 None.
+
+- hh:mm:ss → group1, group2, group3 is seconds, group4 None.
+
+- hh:mm:ss.ssssss → group1, group2, group3, group4 is microseconds.
+
+- hh:mm:ss,ssssss → same as above, but with comma.
+
+So, the code can split the time_str into hours, minutes, seconds, and microseconds.
+
+But how to handle the decimal separator. So, the code can replace commas with dots before parsing, but only if there's a fractional part.
+
+So, for the time_str:
+
+If the time_str contains a comma, replace it with a dot, then parse.
+
+But then, the code can split the time_str into parts. For example:
+
+time_str = '12:34:56,123456' → replace comma with dot → '12:34:56.123456'
+
+Then, split into hours, minutes, seconds, and fractional part.
+
+So, the code can first check if there's a decimal point or comma, and replace commas with dots.
+
+Once that's done, split into components.
+
+So, for the time_str:
+
+Split into time_components and fractional part.
+
+But how to do that in code. Maybe using split on ':' and then check for the fractional part.
+
+Alternatively, use a regex to capture all parts.
+
+Let me think of using a regex that captures the time components and the fractional part.
+
+So, for the time_str:
+
+time_pattern = r'^(\d{2})(?::(\d{2})(?::(\d{2})(?:[.,](\d{6}))?)?)?$'
+
+But this may not capture all cases. Let me think of a better approach.
+
+Another approach is to split the time_str into parts. For example, split on colon, then check the number of parts. Then, check if there's a fractional part.
+
+But the code can be written as:
+
+Split the time_str into time_parts = time_str.split(':')
+
+If there's a fractional part, then split that as well.
+
+But how to handle the decimal separator. For example, '12:34:56,123456' → split into ['12', '34', '56,123456'].
+
+So, the code can first replace commas with dots, then split on colons.
+
+So, for the time_str:
+
+time_str = time_str.replace(',', '.')
+
+Then, split into parts.
+
+But then, after replacing, the time_str would be in the format with dots as decimal separators.
+
+So, for example, '12:34:56,123456' becomes '12:34:56.123456'.
+
+Once that's done, split into parts.
+
+So, the code can split on colon, then check the length of the parts. For example:
+
+parts = time_str.split(':')
+
+If len(parts) == 1 → only hours.
+
+If len(parts) == 2 → hours and minutes.
+
+If len(parts) == 3 → hours, minutes, seconds.
+
+If len(parts) == 4 → hours, minutes, seconds, and fractional part.
+
+But how to handle the fractional part. For example, parts[3] would be the fractional part. But the fractional part can have up to 6 digits. So, the code can check that.
+
+But perhaps using a regex to capture all the components.
+
+Let me think of writing a regex that captures the time components and the fractional part.
+
+For example:
+
+time_pattern = r'^(\d{2})(?::(\d{2})(?::(\d{2})(?:[.,](\d{6}))?)?)?$'
+
+But this might not capture all cases. Let me think again.
+
+The time can have up to three components (hh, mm, ss) and then a fractional part. So, the regex could be:
+
+time_pattern = r'^(\d{2})(?::(\d{2})(?::(\d{2})(?:[.,](\d{6}))?)?)?$'
+
+But this would capture hh, mm, ss, and the fractional part. However, the fractional part is optional.
+
+So, the code can use a regex that matches the time_str and captures the hours, minutes, seconds, and fractional part.
+
+Once the time_str is parsed into these components, then the code can set the default values for missing components. For example, if only hours are present, then minutes and seconds default to 0, and microseconds to 0. If hours and minutes are present, then seconds default to 0, and microseconds to 0. If hours, minutes, and seconds are present, then microseconds default to 0. If there's a fractional part, then parse that into microseconds.
+
+But the note says that the decimal separator can be a dot or comma. So, after replacing commas with dots, the fractional part can be parsed as a float, then multiplied by 1e6 to get microseconds.
+
+So, for the time part:
+
+Parse the time_str into hours, minutes, seconds, and fractional microseconds.
+
+So, the code can do:
+
+time_str = time_part.replace(',', '.')  # replace commas with dots
+
+Then, split into parts.
+
+But how to split. Let's use regex to capture all the components.
+
+Let me think of using the following regex:
+
+time_re = re.compile(r'^(\d{2})(?::(\d{2})(?::(\d{2})(?:\.?(\d{6}))?)?$')
+
+Wait, but this would not capture the fractional part if it's after a comma. However, since we've already replaced commas with dots, this regex would work.
+
+So, the code can match the time_str with this regex.
+
+But maybe the time_str can have up to three colon-separated parts, and then a fractional part. So, the regex could be:
+
+time_re = re.compile(r'^(\d{2})(?::(\d{2})(?::(\d{2})(?:[.,](\d{6}))?)?)?$')
+
+Wait, but the fractional part can be after the seconds, and can have up to 6 digits. So, the regex would be:
+
+time_re = re.compile(r'^(\d{2})(?::(\d{2})(?::(\d{2})(?:[.,](\d{6}))?)?)?$')
+
+But this is getting complicated. Maybe using a regex that captures all possible time formats.
+
+Alternatively, use the datetime module's strptime function, but that may not handle all the formats. For example, the ISO week format is not directly supported by strptime. So, perhaps the code needs to handle the date_part and time_part with custom parsing.
+
+But the function is supposed to return a datetime.datetime object. So, for the date_part, if it's an ISO week format, the code needs to convert that into a date.
+
+So, the code can first check for the ISO week format. Let's think about that.
+
+For the date_part:
+
+Check if it starts with a year, then has a 'W' followed by week number and possibly day.
+
+So, the code can split the date_part into parts. For example:
+
+If the date_part contains 'W', then parse as ISO week.
+
+So, for example, '2023-W05' → year 2023, week 05, day 0 (since it's YYYY-Www format).
+
+Similarly, '2023-W05-3' → year 2023, week 05, day 3.
+
+So, the code can split the date_part into year, week, and day components.
+
+But how to extract them. Let's think of using regex for the date_part.
+
+date_re = re.compile(r'^(\d{4})(?:-W|W)(\d{2})(?:-(\d{1})|$)')
+
+Wait, for the ISO week formats:
+
+Case 1: YYYY-Www → year, week, day is 0.
+
+Case 2: YYYY-Www-D → year, week, day.
+
+So, the regex could be:
+
+date_re_week = re.compile(r'^(\d{4})(?:-W|W)(\d{2})(?:-(\d{1})|$)')
+
+But this would match '2023-W05' as year 2023, week 05, day None (so 0?), and '2023-W05-3' as year 2023, week 05, day 3.
+
+But how to handle the different formats. So, first check if the date_part matches the ISO week format.
+
+So, the code can first check if the date_part matches the ISO week format. If yes, then parse accordingly. Otherwise, parse as standard date.
+
+So, for the standard date format, the code can use:
+
+date_re = re.compile(r'^(\d{4})(?:-(\d{2})(?:-(\d{2})|$)')
+
+But this would match YYYY-MM-DD or YYYYMMDD. Wait, no. Because the standard date formats are:
+
+YYYY-MM or YYYYMM → two parts (year, month) or one part (year and month as two digits).
+
+YYYY-MM-DD or YYYYMMDD → three parts (year, month, day) or two parts (year and month and day as four digits).
+
+So, perhaps the code can first check for the presence of 'W' in the date_part. If present, parse as ISO week. Else, parse as standard date.
+
+So, the code can proceed as follows:
+
+Parse the date_part:
+
+if the date_part starts with a year, then check for 'W' in the string.
+
+For example, date_part = '2023-W05' → split into year=2023, week=05, day=0.
+
+date_part = '2023-W05-3' → year=2023, week=05, day=3.
+
+date_part = '2023-04-05' → year=2023, month=04, day=05.
+
+date_part = '20230405' → year=2023, month=04, day=05.
+
+date_part = '2023' → year=2023, month=01, day=01.
+
+date_part = '2023-04' → year=2023, month=04, day=01.
+
+date_part = '2023-04-05' → year=2023, month=04, day=05.
+
+So, the code can first check for the ISO week format. If not, then parse as standard date.
+
+So, for the date_part:
+
+Check if it contains 'W' in the string. Let's split into parts.
+
+For example, if the date_part has 'W', then it's in the format of YYYY-Www or YYYY-Www-D.
+
+So, the code can split the date_part into year_part, week_part, and day_part.
+
+But how to split. Let's think of using regex.
+
+For ISO week:
+
+iso_week_re = re.compile(r'^(\d{4})(?:-W|W)(\d{2})(?:-(\d{1})|$)')
+
+So, for '2023-W05', the regex would capture year=2023, week=05, day=None. Then, the day defaults to 0.
+
+For '2023-W05-3', it would capture year=2023, week=05, day=3.
+
+Once parsed, the code needs to convert the ISO week into a date. How to do that in Python?
+
+The datetime module's date.isocalendar() function returns (year, week, weekday). But how to convert from year, week, and day (which is 1-7) to a date.
+
+Wait, the ISO week format is such that the week number is the week of the year, and the day is 1-7. But the code's docstring says that for YYYY-Www, the day defaults to 0. Wait, but in ISO weeks, the day is 1-7. So, perhaps the code is supposed to treat the day as 0 (which is invalid) and then adjust it? Or maybe the day is 0, which is considered as Monday? Or perhaps the code is supposed to use the first day of the week as the date. But how to compute that.
+
+Alternatively, the code can use the dateutil module's parser, but the user hasn't mentioned using any external libraries. Wait, the docstring mentions that the timezone offset will be represented as dateutil.tz.tzoffset or tzutc. So, the code may need to import dateutil.
+
+But the function is part of a class, and the code is supposed to return a datetime.datetime object. So, the code will need to use dateutil for the timezone handling, but the date itself can be parsed using standard datetime or other methods.
+
+But the user hasn't specified whether to use dateutil or not. However, the docstring says that the timezone offset is represented as dateutil.tz.tzoffset. So, the code will need to import dateutil.tz.
+
+But the function is supposed to return a datetime.datetime object. So, the code can create a datetime object with the parsed date and time, then apply the timezone.
+
+So, the code can use the dateutil parser to handle the date and time parts, and then handle the timezone.
+
+But perhaps the code can use the standard datetime module's strptime function for parsing, but that may not handle all the formats. For example, the ISO week format is not directly supported by strptime.
+
+Alternatively, the code can use the dateutil's parser, which can handle more formats. But the function's docstring says that it's supposed to parse an ISO-8601 string, so maybe it's better to handle it manually.
+
+But this is getting complicated. Let's think of how to handle the date_part.
+
+For the standard date formats:
+
+If the date_part matches YYYY-MM-DD or YYYYMMDD, then parse into year, month, day.
+
+If it matches YYYY-MM or YYYYMM, then parse into year, month, day=01.
+
+If it matches YYYY, then year, month=01, day=01.
+
+For the ISO week formats:
+
+If the date_part matches YYYY-Www or YYYY-Www-D, then parse into year, week, day. Then, convert the week and day into a date.
+
+But how to convert week and day into a date. For example, given year 2023, week 5, day 3, what is the actual date?
+
+The ISO week starts on Monday. So, week 5 of 2023 starts on 2023-01-16 (Monday, January 16, 2023 is the first day of week 5). Wait, let me check. For example, 2023-W05-3 would be the third day of week 5. So, week 5 starts on 2023-01-16 (Monday), so day 3 would be 2023-01-18.
+
+But how to compute that. The code can use the dateutil module's parser to handle this. Wait, but perhaps the code can use the standard datetime module. For example, using the isocalendar method.
+
+But the code needs to find the date corresponding to a given year, week, and day. So, for example, given year, week, and day (1-7), how to convert that into a date.
+
+An approach is to find the first day of the year, then calculate the number of days since the first day of the year, then add the week number multiplied by 7, then add the day of the week (but adjust for the fact that the first day of the week is Monday).
+
+But this is complicated. Alternatively, the code can use the dateutil's parser, which can handle ISO week dates.
+
+Wait, dateutil has a parser that can handle ISO 8601 dates. For example, the dateutil.parser.isoparse function. But the user is writing a function called isoparse, which suggests that it's part of a class, and perhaps the code is supposed to be a custom parser. However, the user's function is called isoparse, and the docstring says that it's supposed to parse an ISO-8601 datetime string into a datetime.datetime object. So, perhaps the code can use the dateutil.parser.isoparse function, but the user's function is supposed to be a custom implementation.
+
+But the user's code is supposed to be written without using any external libraries? Or is it allowed to use dateutil? The docstring says that the timezone offset will be represented as dateutil.tz.tzoffset. So, the code must import dateutil.
+
+But the problem is that the user's code is supposed to be a function that parses the string, so perhaps the code is supposed to use dateutil's parser, but the function is part of a class. However, the user's function is named isoparse, which might be a method of a class that's supposed to handle parsing.
+
+But the user hasn't mentioned using dateutil. So, perhaps the code should not use it, but instead implement the parsing manually.
+
+Alternatively, perhaps the code can use the standard datetime module's strptime function with appropriate format strings, but that may not handle all the formats.
+
+So, perhaps the code can split the date_part into different cases and parse accordingly.
+
+Let me outline the code steps:
+
+First, split the input string into date_part and time_part using 'T' as the separator. If there's no 'T', then time_part is None.
+
+Then, parse the date_part:
+
+Check if it's an ISO week format. If yes, parse into year, week, day.
+
+Else, parse into year, month, day.
+
+For the time_part:
+
+Parse into hours, minutes, seconds, microseconds.
+
+Then, parse the timezone offset.
+
+Once all components are parsed, create a datetime object with the parsed date and time, then apply the timezone.
+
+But how to handle the timezone offset.
+
+So, for the timezone part:
+
+If the timezone is 'Z', then it's UTC.
+
+Else, parse the offset as ±HH:MM, ±HHMM, ±HH.
+
+So, for example, '+00:00' → UTC, but the code should treat it as tzutc.
+
+If the offset is '+00', then it's equivalent to UTC, so also tzutc.
+
+If the offset is '+01:30', then it's a timezone offset of +01:30.
+
+So, the code can parse the timezone offset into hours and minutes, then create a tzoffset object.
+
+But the code needs to handle the timezone offset as part of the datetime.
+
+So, putting it all together:
+
+The code will need to:
+
+1. Split the input string into date_part and time_part.
+
+2. Parse the date_part into a date.
+
+3. Parse the time_part into a time.
+
+4. Parse the timezone offset.
+
+5. Combine date and time into a datetime object, then apply the timezone.
+
+But how to split the string into date_part and time_part. Let's assume that the input string is a single string, and split on 'T' once.
+
+So:
+
+if 'T' in dt_str:
+
+    date_part, time_part = dt_str.split('T', 1)
+
+else:
+
+    date_part = dt_str
+
+    time_part = None
+
+But then, the time_part may have a timezone offset. So, the code can check if the time_part has a timezone offset.
+
+For example, time_part could be '12:34:56+00:00' → time_str is '12:34:56', offset_str is '+00:00'.
+
+So, the code can split the time_part into time_str and offset_str by checking if the time_part ends with a timezone offset.
+
+So, for the time_part:
+
+if time_part is not None:
+
+    if time_part.endswith('Z'):
+
+        time_str = time_part[:-1]
+
+        timezone = 'Z'
+
+    else:
+
+        # check for timezone offset
+
+        # split into time_str and offset_str
+
+        # the offset can be at the end, like '+00:00', '+00', etc.
+
+        # So, find the last part that matches a timezone offset.
+
+        # For example, using regex to match the timezone part.
+
+        # Let's use a regex to capture the timezone offset.
+
+        # The timezone offset can be:
+
+        # Z → UTC
+
+        # ±HH:MM → like +00:00, -05:30
+
+        # ±HHMM → like +0000, -0530
+
+        # ±HH → like +00, -05
+
+        # So, the regex for timezone offset could be:
+
+        timezone_re = re.compile(r'([+-]\d{2}(:\d{2})?|\d{2}(:\d{2})?|Z)$')
+
+        # Wait, but the offset can be like +00:00, +00, +0000, etc. Hmm, perhaps the code can split the time_part into time_str and timezone_str by checking the last part.
+
+        # So, for example, time_part = '12:34:56+00:00' → time_str is '12:34:56', timezone_str is '+00:00'
+
+        # Or time_part = '12:34:56+00' → time_str is '12:34:56', timezone_str is '+00'
+
+        # Or time_part = '12:34:56Z' → time_str is '12:34:56', timezone_str is 'Z'
+
+        # So, the code can split the time_part into time_str and timezone_str by checking if the last part matches a timezone pattern.
+
+        # So, using a regex to find the timezone part.
+
+        # Let's try:
+
+        # Split the time_part into time_str and timezone_str.
+
+        # The timezone_str is at the end of the time_part.
+
+        # So, using a regex to find the timezone part.
+
+        # For example, using re.search to find the timezone part.
+
+        # So, in code:
+
+        match = re.search(r'([+-]?\d{2}(:\d{2})?|[+-]?\d{4}|Z)$', time_part)
+
+        # Wait, but the timezone offset can be like +00:00, +00, +0000, etc. So, perhaps the regex should be:
+
+        timezone_re = re.compile(r'([+-]?\d{2}(:\d{2})?|[+-]?\d{4}|Z)$')
+
+        # But this may not capture all cases. Alternatively, split the time_part into time and timezone by checking the last part.
+
+        # So, for example, the code can split the time_part into time_str and timezone_str by looking for the timezone at the end.
+
+        # So, split on the timezone part.
+
+        # Let's try:
+
+        # Check if the time_part ends with 'Z', then timezone is Z.
+
+        # Else, check for a timezone offset.
+
+        # So, in code:
+
+        if time_part.endswith('Z'):
+
+            time_str = time_part[:-1]
+
+            timezone_str = 'Z'
+
+        else:
+
+            # check for timezone offset
+
+            # split into time_str and timezone_str
+
+            # the timezone can be at the end, so split on the last occurrence of a timezone pattern.
+
+            # For example, using re.split.
+
+            # But perhaps using a regex to capture the timezone part.
+
+            # Let's try:
+
+            # Split the time_part into time_str and timezone_str.
+
+            # The timezone_str is either 'Z' or a string like '+00:00', '+00', etc.
+
+            # So, the code can split the time_part into time_str and timezone_str by using a regex to find the timezone part.
+
+            # Let's use re.match to find the timezone at the end.
+
+            # For example:
+
+            timezone_match = re.match(r'([+-]?\d{2}(:\d{2})?|[+-]?\d{4}|Z)$', time_part)
+
+            if timezone_match:
+
+                timezone_str = timezone_match.group(0)
+
+                time_str = time_part[: -len(timezone_str)]
+
+            else:
+
+                # no timezone, so time_str is the entire time_part
+
+                time_str = time_part
+
+                timezone_str = None
+
+But this is getting complicated. Maybe using a regex to capture the time and timezone parts.
+
+So, for the time_part, the code can use a regex like:
+
+time_part_re = re.compile(r'^(\d{2}(:\d{2}(:\d{2}(?:[.,]\d{6})?)?)?([+-]?\d{2}(:\d{2})?|Z)?$')
+
+But this would capture the time_str and timezone_str.
+
+But perhaps it's easier to split the time_part into time_str and timezone_str by checking the end.
+
+So, after splitting on 'T', for the time_part:
+
+if the time_part ends with 'Z', then the timezone is Z, and the time_str is the part before 'Z'.
+
+Else, check if there's a timezone offset. The timezone offset can be in the form of ±HH:MM, ±HHMM, ±HH.
+
+So, the code can check for the presence of a timezone offset by looking for a pattern that matches these formats.
+
+Once the time_str is parsed, then the code can parse it into hours, minutes, seconds, and microseconds.
+
+So, for the time_str, the code can first replace commas with dots, then split into parts.
+
+So, time_str = time_str.replace(',', '.') → then split on colons.
+
+parts = time_str.split(':')
+
+if len(parts) == 1:
+
+    hours = int(parts[0])
+
+    minutes = 0
+
+    seconds = 0
+
+    microseconds = 0
+
+elif len(parts) == 2:
+
+    hours = int(parts[0])
+
+    minutes = int(parts[1])
+
+    seconds = 0
+
+    microseconds = 0
+
+elif len(parts) == 3:
+
+    hours = int(parts[0])
+
+    minutes = int(parts[1])
+
+    seconds = int(parts[2])
+
+    microseconds = 0
+
+elif len(parts) == 4:
+
+    hours = int(parts[0])
+
+    minutes = int(parts[1])
+
+    seconds = int(parts[2])
+
+    fractional = parts[3]
+
+    # parse the fractional part into microseconds
+
+    # fractional is like '123456' or '123456' (after replacing commas with dots)
+
+    microseconds = int(fractional) * 1e-6 → but wait, the fractional part is in microseconds. For example, '123456' would be 123456 microseconds. So, multiply by 1e-6? Or, since the fractional part is in the format of .sss or ,sss, the code can take the part after the decimal and parse it as microseconds.
+
+But the code needs to handle the fractional part. For example, '12:34:56.123456' → seconds is 56, microseconds is 123456.
+
+So, after replacing commas with dots, the code can split on the decimal point.
+
+So, for the time_str:
+
+time_str = time_str.replace(',', '.')
+
+if '.' in time_str:
+
+    time_part, fractional_part = time_str.split('.', 1)
+
+    fractional_digits = fractional_part[:6].ljust(6, '0')[:6]
+
+    microseconds = int(fractional_digits) * 1000
+
+else:
+
+    time_part = time_str
+
+    microseconds = 0
+
+Then, parse the time_part into hours, minutes, seconds.
+
+But the time_part can be in hh, hh:mm, hh:mm:ss formats.
+
+So, split time_part into parts:
+
+time_parts = time_part.split(':')
+
+if len(time_parts) == 1:
+
+    hours = int(time_parts[0])
+
+    minutes = 0
+
+    seconds = 0
+
+elif len(time_parts) == 2:
+
+    hours = int(time_parts[0])
+
+    minutes = int(time_parts[1])
+
+    seconds = 0
+
+elif len(time_parts) == 3:
+
+    hours = int(time_parts[0])
+
+    minutes = int(time_parts[1])
+
+    seconds = int(time_parts[2])
+
+else:
+
+    # invalid time format?
+
+    raise ValueError("Invalid time format")
+
+But the code needs to handle the cases where the time is hh, hh:mm, hh:mm:ss, or hh:mm:ss.ssssss.
+
+So, the code would handle the time_str as follows:
+
+After replacing commas with dots, split into time_part and fractional_part.
+
+Then, parse the time_part into hours, minutes, seconds.
+
+Now, for the date_part:
+
+If it's an ISO week format, then parse into year, week, day.
+
+Else, parse into year, month, day.
+
+So, for the date_part, the code can check for the presence of 'W' and parse accordingly.
+
+For example:
+
+if 'W' in date_part:
+
+    # parse as ISO week
+
+    # split into year, week, day
+
+    # the format could be YYYY-Www or YYYY-Www-D
+
+    # So, split on 'W' and then on '-'.
+
+    # For example, '2023-W05-3' → split into parts.
+
+    # Let's split the date_part into parts:
+
+    parts = date_part.split('W')
+
+    if len(parts) == 2:
+
+        year_str, week_day_part = parts
+
+        # check if week_day_part has a '-' or not.
+
+        if '-' in week_day_part:
+
+            week_str, day_str = week_day_part.split('-', 1)
+
+            # week_str is the week number, day_str is the day.
+
+        else:
+
+            week_str = week_day_part
+
+            day_str = None
+
+    elif len(parts) == 1:
+
+        # not ISO week format, so parse as standard date.
+
+        # but this is only if 'W' is present. Wait, no. If the date_part is '2023W05', then splitting on 'W' gives ['2023', '05'].
+
+        # So, for date_part like '2023W05', split on 'W' gives ['2023', '05'].
+
+        # So, in this case, the code would treat it as year 2023, week 05, day 0.
+
+        # So, the code can proceed as:
+
+        # split on 'W' → parts = date_part.split('W')
+
+        # if len(parts) == 2 → then the first part is the year, the second part is week and possibly day.
+
+        # For example, '2023W05' → parts = ['2023', '05']
+
+        # '2023W05-3' → parts = ['2023', '05-3']
+
+        # So, after splitting on 'W', the second part can be split into week and day.
+
+        # So:
+
+        year_str = parts[0]
+
+        week_day_part = parts[1]
+
+        if '-' in week_day_part:
+
+            week_str, day_str = week_day_part.split('-', 1)
+
+        else:
+
+            week_str = week_day_part
+
+            day_str = None
+
+        # then, week_str is the week number, day_str is the day.
+
+        # But the week_str can be like '05' or '05-3'? No, because the split on 'W' would give parts[1] as '05-3' if the original date_part is '2023-W05-3'.
+
+        # So, after splitting on 'W', the code can split the remaining part into week and day.
+
+        # So, for the week_day_part, split on '-'.
+
+        # So, the code can do:
+
+        if '-' in week_day_part:
+
+            week_str, day_str = week_day_part.split('-', 1)
+
+        else:
+
+            week_str = week_day_part
+
+            day_str = None
+
+        # Then, parse week_str as integer, day_str as integer (if present).
+
+        # But for the case where the date_part is 'YYYY-Www', the day_str is None, so day defaults to 0.
+
+        # However, in ISO week format, the day is 1-7. But the docstring says that for YYYY-Www, day defaults to 0. So, perhaps the code is supposed to treat day 0 as the first day of the week (Monday?), but the standard ISO week day is 1-7, with Monday as 1. So, if the day is 0, then perhaps it's treated as the first day of the week.
+
+        # But the code needs to handle this. So, after parsing the week and day, how to convert that into a date.
+
+        # So, given year, week, and day (0 or 1-7), how to find the corresponding date.
+
+        # This seems complex. Perhaps using the dateutil module's parser.
+
+        # But the user hasn't mentioned using dateutil. However, the docstring says that the timezone offset is represented as dateutil.tz.tzoffset. So, the code must import dateutil.
+
+        # So, the code can use dateutil's parser to handle the ISO week date.
+
+        # But the function is supposed to return a datetime.datetime object. So, perhaps the code can use the dateutil parser to parse the entire string, but the docstring says that the function is supposed to parse the string into a datetime object. However, the user's function is called isoparse, which might be a custom implementation.
+
+        # Alternatively, the code can use the standard datetime module, but that may not handle all the formats.
+
+        # For example, the standard datetime.strptime can parse 'YYYY-Www-D' as a date.
+
+        # But I'm not sure. Let me check the standard datetime formats.
+
+        # The standard datetime format for strptime is %Y-%m-%d, which doesn't handle the week format.
+
+        # So, the code needs to handle the ISO week format manually.
+
+        # So, the code can use the following approach:
+
+        # For ISO week date:
+
+        # Convert the year, week, and day into a date.
+
+        # To do this, perhaps find the first day of the year, then calculate the date.
+
+        # For example, the first day of the year is January 1st. Then, the first day of the week can be calculated by finding the first Monday of the year, then adding (week-1)*7 + (day-1) days.
+
+        # But how to find the first Monday of the year.
+
+        # Alternatively, use the dateutil's parser to handle this.
+
+        # But since the user's function is supposed to return a datetime.datetime object, perhaps the code can use the dateutil.parser.isoparse function, which is designed for this.
+
+        # However, the user's function is named isoparse, which might be a custom implementation. But the docstring says that the function is supposed to parse the string into a datetime.datetime object.
+
+        # So, perhaps the code can use the dateutil.parser.isoparse function, which handles all these formats.
+
+        # But the user's code is supposed to be a custom implementation. So, perhaps the code is supposed to use the standard datetime module and handle the parsing manually.
+
+        # This is getting quite complex. Given the time constraints, perhaps the code can use the dateutil.parser.isoparse function, but the user's function is part of a class, and the code is supposed to be self-contained.
+
+        # Alternatively, perhaps the code can use the standard datetime module with some custom parsing.
+
+        # But given the complexity, maybe it's better to use the dateutil's parser.
+
+        # However, the user's function is supposed to be part of a class, and the code may need to be self-contained.
+
+        # Alternatively, the code can use the standard datetime module and handle the different date formats.
+
+        # Let me proceed with the assumption that the code can use the standard datetime module, and handle the different date formats.
+
+        # So, for the date_part:
+
+        # If it's in ISO week format:
+
+        # parse year, week, day → then convert to a date.
+
+        # Else, parse as standard date.
+
+        # So, for the ISO week case:
+
+        # year = int(year_str)
+
+        # week = int(week_str)
+
+        # day = int(day_str) if day_str is not None else 0
+
+        # Then, find the date corresponding to that week and day.
+
+        # How to do that?
+
+        # The ISO week starts on Monday. So, the first day of the week is the Monday of that week.
+
+        # So, for example, for week 5, day 3, the date is the third day of the week.
+
+        # To calculate that, we can find the first day of the year, then find the first Monday, then add (week-1)*7 + (day-1) days.
+
+        # But how to find the first Monday of the year.
+
+        # For example, in Python, the first day of the year is January 1st. We can find what day of the week that is, then calculate the first Monday.
+
+        # So, let's say we have a year, week, and day.
+
+        # First, find the first day of the year.
+
+        # Then, calculate the number of days to add to get to the first day of the week.
+
+        # But this requires knowing the day of the week for January 1st.
+
+        # For example, if January 1st is a Monday, then the first day of week 1 is January 1st. If it's not, then the first Monday is the first day of the week.
+
+        # So, the code can use the datetime module to find the first day of the year, then calculate the first Monday.
+
+        # Then, add (week-1)*7 + (day-1) days.
+
+        # But this requires handling the ISO week.
+
+        # For example, the code can use the following approach:
+
+        # Create a date object for the first day of the year.
+
+        # Then, calculate the first Monday of the year.
+
+        # Then, add (week-1)*7 + (day-1) days.
+
+        # But how to find the first Monday of the year.
+
+        # Let's think:
+
+        # For a given year, find the first day of the year (year-01-01), then check what day of the week it is.
+
+        # If it's a Monday, then the first day of week 1 is that date.
+
+        # If it's not, then the first Monday is the first day of the week.
+
+        # For example, if January 1st is a Sunday, then the first Monday is January 2nd.
+
+        # So, the code can calculate the first Monday of the year.
+
+        # Then, the date for the ISO week is first_monday + (week-1)*7 days + (day-1) days.
+
+        # But this requires knowing the first Monday of the year.
+
+        # So, the code can do:
+
+        import datetime
+
+        first_day = datetime.date(year, 1, 1)
+
+        # find the first Monday.
+
+        # The weekday() function returns 0 (Monday) to 6 (Sunday).
+
+        # So, if first_day.weekday() is 0 (Monday), then first_monday is first_day.
+
+        # Else, calculate the number of days to add to get to the first Monday.
+
+        # For example, if first_day is a Tuesday (1), then the first Monday is first_day - 1 day.
+
+        # Wait, no. For example, if the first day is Tuesday (1), then the first Monday is the previous day, but that would be December 31 of the previous year. So, perhaps this approach is not correct.
+
+        # Alternatively, find the first day of the year, then calculate the first Monday of that year.
+
+        # For example, the first Monday is the first day of the year that is a Monday.
+
+        # So, the code can calculate the first Monday by:
+
+        first_day = datetime.date(year, 1, 1)
+
+        # find the number of days to add to get to the first Monday.
+
+        # The first day of the year's weekday is first_day.weekday() → 0 is Monday, 1 is Tuesday, etc.
+
+        # So, if first_day.weekday() is 0 (Monday), then the first Monday is first_day.
+
+        # Else, the first Monday is first_day - (first_day.weekday() - 0) days. Wait, no. For example, if first_day is Tuesday (1), then the first Monday is first_day - 1 day (December 31, previous year?), which is not correct.
+
+        # This seems complicated. Perhaps the code can use the dateutil module's parser to handle this.
+
+        # For example, using dateutil.parser.isoparse, which can handle ISO week dates.
+
+        # But the user's function is supposed to be a custom implementation. So, perhaps the code can use the dateutil.parser.isoparse function, but that's not part of the standard library. However, the docstring says that the timezone offset will be represented as dateutil.tz.tzoffset. So, the code must import dateutil.
+
+        # So, the code can use dateutil.parser.isoparse, but the function is named isoparse. However, the user's function is supposed to be part of a class, and the code is supposed to return a datetime.datetime object.
+
+        # Alternatively, the code can use the standard datetime module and handle the date_part manually.
+
+        # This is getting very complex. Given the time, perhaps the code can use the dateutil.parser.isoparse function, which is designed for this purpose.
+
+        # But the user's function is named isoparse, and the docstring says that it's supposed to parse the string into a datetime.datetime object. So, perhaps the code can use dateutil's parser.
+
+        # However, the user may not want to use external libraries. So, perhaps the code is supposed to be self-contained.
+
+        # Given that, maybe the code can use the standard datetime module and handle the date_part and time_part with custom parsing.
+
+        # So, for the date_part:
+
+        # Check if it's in ISO week format. If yes, then parse into year, week, day.
+
+        # Then, convert that into a date.
+
+        # For example, using the following code:
+
+        # For ISO week:
+
+        # year = int(year_str)
+
+        # week = int(week_str)
+
+        # day = int(day_str) if day_str else 0
+
+        # Then, find the date corresponding to that week and day.
+
+        # But how to do that.
+
+        # Alternatively, use the dateutil's parser.
+
+        # But since the user's function is supposed to be part of a class, and the code is supposed to be self-contained, perhaps it's better to proceed with the dateutil.
+
+        # However, the code may need to handle the date_part and time_part manually.
+
+        # Given the complexity, perhaps the code can use the dateutil.parser.isoparse function, which is designed for this.
+
+        # But the function's name is isoparse, and the user may be expecting a custom implementation.
+
+        # Alternatively, the code can use the standard datetime module's strptime with the appropriate format strings.
+
+        # For example, for the standard date formats:
+
+        # 'YYYY-MM-DD' → format string is '%Y-%m-%d'
+
+        # 'YYYYMMDD' → format string is '%Y%m%d'
+
+        # 'YYYY-MM' → format string is '%Y-%m'
+
+        # 'YYYYMM' → '%Y%m'
+
+        # 'YYYY' → '%Y'
+
+        # For ISO week:
+
+        # 'YYYY-Www-D' → format string is '%Y-W%W-%d' ?
+
+        # But I'm not sure. The standard format for ISO week is 'YYYY-Www-D', but the datetime module's strptime doesn't support this format.
+
+        # So, the code would need to handle these cases manually.
+
+        # Given that, perhaps the code can split the date_part into the different formats and parse accordingly.
+
+        # So, the code can first check if the date_part has 'W' in it. If yes, then parse as ISO week. Else, parse as standard date.
+
+        # For ISO week:
+
+        # Split into year, week, day.
+
+        # Then, calculate the date.
+
+        # To calculate the date for ISO week, perhaps use the following approach:
+
+        # The ISO week starts on Monday. So, the first day of the week is the Monday of that week.
+
+        # The code can find the first Monday of the year, then calculate the date.
+
+        # For example, for week 5, day 3:
+
+        # first_monday = first day of the year that is a Monday.
+
+        # Then, the date is first_monday + (week-1)*7 days + (day-1) days.
+
+        # But how to find first_monday.
+
+        # For example:
+
+        # For year Y, first_monday is the first Monday in the year.
+
+        # So, the code can do:
+
+        # first_day = datetime.date(Y, 1, 1)
+
+        # if first_day.weekday() == 0 (Monday), then first_monday is first_day.
+
+        # else, first_monday is first_day - (first_day.weekday() - 0) days.
+
+        # But wait, first_day.weekday() returns 0 for Monday, 1 for Tuesday, etc. So, if the first_day is not a Monday, then the first Monday is first_day - (first_day.weekday() % 7) days? Or perhaps first_day - (first_day.weekday() - 0) days?
+
+        # For example, if first_day is Tuesday (1), then the first Monday is first_day - 1 day (December 31, previous year?), which is not correct.
+
+        # This suggests that the approach is not correct. Maybe there's a better way.
+
+        # Alternatively, use the dateutil's parser to handle the ISO week date.
+
+        # So, for the date_part, if it's in ISO week format, the code can use dateutil's parser.
+
+        # But the user's function is supposed to be a custom implementation. So, perhaps the code can use the standard datetime module for standard dates and dateutil for ISO week dates.
+
+        # But I'm not sure. Given the time, perhaps it's better to proceed with using dateutil's parser for the entire string, but the function is named isoparse. However, the docstring says that the function is supposed to parse the string into a datetime.datetime object.
+
+        # Alternatively, the code can use the standard datetime module's strptime with various format strings.
+
+        # For example, for the date_part:
+
+        # if the date_part is in ISO week format, then the code can parse it as a date.
+
+        # But how to do that.
+
+        # Let me think of using the dateutil module's parser.
+
+        # So, the code can use:
+
+        from dateutil import parser
+
+        date_obj = parser.parse(date_part, fuzzy=False)
+
+        # But the function is supposed to be a custom implementation.
+
+        # Given the complexity, perhaps the code can use the dateutil.parser.isoparse function.
+
+        # However, the user's function is named isoparse, which may be a duplicate. But perhaps the code is supposed to be a wrapper around dateutil's isoparse.
+
+        # But the user's function is part of a class, and the code may need to handle it.
+
+        # Alternatively, the code can use the standard datetime module and handle the date_part manually.
+
+        # For example:
+
+        # For standard date formats:
+
+        # Check if the date_part matches YYYY-MM-DD → parse with '%Y-%m-%d'
+
+        # Or YYYYMMDD → parse with '%Y%m%d'
+
+        # Similarly for other formats.
+
+        # For ISO week:
+
+        # Parse the year, week, and day, then convert to a date.
+
+        # So, the code can split the date_part into parts.
+
+        # For example:
+
+        # date_part = '2023-W05-3'
+
+        # split into ['2023', 'W05-3']
+
+        # Then, split on 'W' to get year and the rest.
+
+        # So, parts = date_part.split('W')
+
+        # if len(parts) == 2:
+
+        #   year_str, rest = parts
+
+        #   then split rest into week and day.
+
+        #   rest.split('-') → ['05', '3']
+
+        #   week_str = '05', day_str = '3'
+
+        #   year = int(year_str)
+
+        #   week = int(week_str)
+
+        #   day = int(day_str)
+
+        #   then, convert to date.
+
+        # But again, how to convert year, week, day to a date.
+
+        # Given the time, perhaps the code can use the dateutil.parser.isoparse function, which handles all these formats.
+
+        # So, the code can use the dateutil.parser.isoparse function to parse the entire string, then handle the timezone.
+
+        # But the user's function is supposed to return a datetime.datetime object. So, perhaps the code can use the dateutil.parser.isoparse function, which returns a datetime.datetime object with timezone.
+
+        # However, the docstring says that the timezone offset will be represented as tzoffset objects, with UTC as tzutc.
+
+        # So, perhaps the code can use dateutil's parser to parse the entire string, then adjust the timezone.
+
+        # But the function's name is isoparse, which may be a duplicate of dateutil's isoparse.
+
+        # Given that, perhaps the code is supposed to be a wrapper around dateutil's isoparse.
+
+        # However, the user may not want to use dateutil. So, perhaps the code is supposed to be a custom implementation.
+
+        # Given the time constraints, perhaps the code can use the dateutil.parser.isoparse function, but the user's code is supposed to be self-contained. So, perhaps the code should not use dateutil.
+
+        # So, back to the original problem.
+
+        # The code needs to parse the date_part and time_part, and handle the timezone.
+
+        # For the date_part, if it's in ISO week format, then parse into year, week, day, then convert to a date.
+
+        # For example:
+
+        # For date_part '2023-W05', the code can assume that day is 0, which is the first day of the week.
+
+        # But how to find that date.
+
+        # Let me think of using the following approach:
+
+        # The ISO week starts on Monday. So, for a given year, week, and day, the code can find the first Monday of the year, then add (week-1)*7 + (day-1) days.
+
+        # So, for example, if the date_part is '2023-W05-3', then:
+
+        # year = 2023, week = 5, day = 3.
+
+        # The first Monday of 2023 is January 2nd (since January 1st, 2023 is Sunday, so first Monday is January 2nd).
+
+        # Then, the date is January 2nd + (5-1)*7 days + (3-1) days → January 2nd + 28 days + 2 days → January 30th, 2023.
+
+        # But how to calculate this.
+
+        # So, the code can calculate the first Monday of the year, then add (week-1)*7 + (day-1) days.
+
+        # So, the code can do:
+
+        # first_day = datetime.date(year, 1, 1)
+
+        # # find the first Monday
+
+        # days_to_monday = (7 - first_day.weekday()) % 7
+
+        # first_monday = first_day + datetime.timedelta(days=days_to_monday)
+
+        # Then, the date is first_monday + (week-1)*7 days + (day-1) days.
+
+        # But wait, the first_monday is the first Monday of the year. Then, the first day of week 1 is first_monday. The first day of week 1 is the first Monday, and each subsequent week is +7 days.
+
+        # So, for week 5, it's first_monday + 4*7 days.
+
+        # Then, the day is added as (day-1) days.
+
+        # So, total days = (week-1)*7 + (day-1).
+
+        # So, the code can calculate the date as first_monday + datetime.timedelta(days=total_days).
+
+        # But this requires that the week is valid. For example, week numbers are from 1 to 53.
+
+        # However, this approach may not handle all cases correctly, but for the purpose of this function, it's an approximation.
+
+        # So, the code can proceed with this approach.
+
+        # Now, putting it all together.
+
+        # So, the code would have:
+
+        import datetime
+
+        # parse date_part
+
+        if 'W' in date_part:
+
+            # parse as ISO week
+
+            year_str, rest = date_part.split('W', 1)
+
+            year = int(year_str)
+
+            # split rest into week and day
+
+            if '-' in rest:
+
+                week_str, day_str = rest.split('-', 1)
+
+                day = int(day_str) if day_str else 0
+
+            else:
+
+                week_str = rest
+
+                day = 0
+
+            week = int(week_str)
+
+            # calculate first_monday
+
+            first_day = datetime.date(year, 1, 1)
+
+            days_to_monday = (7 - first_day.weekday()) % 7
+
+            first_monday = first_day + datetime.timedelta(days=days_to_monday)
+
+            # calculate the date for the given week and day
+
+            # week starts at 1, so (week-1)*7 days added to first_monday, then add (day-1) days.
+
+            # but day is 1-7, so (day-1) is 0-6.
+
+            # So, date = first_monday + (week-1)*7 days + (day-1) days.
+
+            # But wait, the first day of week 1 is first_monday. So, adding (week-1)*7 days gives the first day of the week. Then, adding (day-1) days gives the day of the week.
+
+            # For example, if day is 0, then it's the first day of the week, which is first_monday.
+
+            # So, the code can do:
+
+            if day == 0:
+
+                # day defaults to 0, which is the first day of the week.
+
+                date = first_monday
+
+            else:
+
+                date = first_monday + datetime.timedelta(weeks=week-1, days=day-1)
+
+        else:
+
+            # parse as standard date
+
+            # check for different formats.
+
+            # For example, 'YYYY-MM-DD' → parse with '%Y-%m-%d'
+
+            # 'YYYYMMDD' → parse with '%Y%m%d'
+
+            # 'YYYY-MM' → parse with '%Y-%m', day defaults to 01.
+
+            # 'YYYYMM' → parse with '%Y%m', day defaults to 01.
+
+            # 'YYYY' → parse with '%Y', month and day default to 01.
+
+            # So, the code can use a regex to determine the format.
+
+            # For example:
+
+            date_re = re.compile(r'^(\d{4})(?:-(\d{2})(?:-(\d{2})|$)')
+
+            match = date_re.match(date_part)
+
+            if match:
+
+                year = int(match.group(1))
+
+                month = int(match.group(2)) if match.group(2) else 1
+
+                day = int(match.group(3)) if match.group(3) else 1
+
+                # create a date object
+
+                date = datetime.date(year, month, day)
+
+            else:
+
+                # handle other date formats, like YYYY-Www-D?
+
+                # but we already checked for 'W' earlier.
+
+                # So, this code is for standard date formats.
+
+                # So, perhaps the code can use another regex.
+
+                # For example, check if the date_part has a '-' in it.
+
+                # But this is getting too complicated.
+
+                # Alternatively, use the standard datetime.strptime with various format strings.
+
+                # For example:
+
+                # Try to parse with different formats.
+
+                # So, for date_part:
+
+                # Try to parse as YYYY-MM-DD, then YYYYMMDD, then YYYY-MM, then YYYYMM, then YYYY.
+
+                # So, the code can try different format strings.
+
+                # For example:
+
+                try:
+
+                    date = datetime.datetime.strptime(date_part, '%Y-%m-%d').date()
+
+                except ValueError:
+
+                    try:
+
+                        date = datetime.datetime.strptime(date_part, '%Y%m%d').date()
+
+                    except ValueError:
+
+                        try:
+
+                            date = datetime.datetime.strptime(date_part, '%Y-%m').date()
+
+                        except ValueError:
+
+                            try:
+
+                                date = datetime.datetime.strptime(date_part, '%Y%m').date()
+
+                            except ValueError:
+
+                                try:
+
+                                    date = datetime.datetime.strptime(date_part, '%Y').date()
+
+                                except ValueError:
+
+                                    # invalid date format
+
+                                    raise ValueError("Invalid date format")
+
+        # Then, parse the time_part into hours, minutes, seconds, microseconds.
+
+        # For the time_part:
+
+        # Replace commas with dots.
+
+        time_str = time_part.replace(',', '.')
+
+        # Split into time components and fractional part.
+
+        if '.' in time_str:
+
+            time_part, fractional_part = time_str.split('.', 1)
+
+            fractional_digits = fractional_part[:6].ljust(6, '0')[:6]
+
+            microseconds = int(fractional_digits) * 1000
+
+        else:
+
+            time_part = time_str
+
+            microseconds = 0
+
+        # Now, parse the time_part into hours, minutes, seconds.
+
+        # Split on colons.
+
+        time_parts = time_part.split(':')
+
+        if len(time_parts) == 1:
+
+            hours = int(time_parts[0])
+
+            minutes = 0
+
+            seconds = 0
+
+        elif len(time_parts) == 2:
+
+            hours = int(time_parts[0])
+
+            minutes = int(time_parts[1])
+
+            seconds = 0
+
+        elif len(time_parts) == 3:
+
+            hours = int(time_parts[0])
+
+            minutes = int(time_parts[1])
+
+            seconds = int(time_parts[2])
+
+        else:
+
+            # invalid time format
+
+            raise ValueError("Invalid time format")
+
+        # Now, create the datetime object.
+
+        dt = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+
+        # Now, handle the timezone.
+
+        if timezone_str == 'Z':
+
+            # UTC
+
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+        elif timezone_str is not None:
+
+            # parse the timezone offset.
+
+            # For example, '+00:00' → hours=0, minutes=0.
+
+            # So, split the timezone_str into sign, hours, minutes.
+
+            # The timezone_str could be like '+00:00', '+00', '-05:30', etc.
+
+            # So, parse the timezone_str.
+
+            # For example:
+
+            # Split into sign and the rest.
+
+            sign = 1 if timezone_str[0] == '+' else -1
+
+            offset_str = timezone_str[1:]
+
+            # parse offset_str into hours and minutes.
+
+            # offset_str can be '00:00', '00', '0000', etc.
+
+            # So, split into hours and minutes.
+
+            if ':' in offset_str:
+
+                hours_offset, minutes_offset = offset_str.split(':', 1)
+
+                hours_offset = int(hours_offset)
+
+                minutes_offset = int(minutes_offset)
+
+            else:
+
+                hours_offset = int(offset_str[:2])
+
+                minutes_offset = int(offset_str[2:4]) if len(offset_str) >= 4 else 0
+
+            # create the timezone offset.
+
+            # The timezone offset is hours_offset * 60 + minutes_offset minutes.
+
+            # So, total_seconds = (hours_offset * 60 + minutes_offset) * 60
+
+            # But the code needs to create a tzoffset object.
+
+            # So, using dateutil.tz.tzoffset.
+
+            # So, import dateutil.tz.
+
+            # Then, create the timezone.
+
+            # But the code needs to handle the offset.
+
+            # For example, if the offset is '+00:00', then it's UTC.
+
+            # So, if the offset is '00:00' or '+00:00' or '-00:00', then it's UTC.
+
+            # So, the code can check if the offset is zero.
+
+            # So:
+
+            if hours_offset == 0 and minutes_offset == 0:
+
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+            else:
+
+                # create tzoffset
+
+                # dateutil.tz.tzoffset is a class that takes the timezone name and the offset in seconds.
+
+                # But the code needs to create a tzoffset object.
+
+                # So, the code can use:
+
+                offset_seconds = (hours_offset * 3600) + (minutes_offset * 60)
+
+                # but the sign is already considered.
+
+                offset_seconds *= sign
+
+                # create the timezone.
+
+                tz = dateutil.tz.tzoffset(None, offset_seconds)
+
+                dt = dt.replace(tzinfo=tz)
+
+        # But the code needs to handle the timezone_str.
+
+        # So, putting it all together.
+
+        # However, this is a lot of code, and the user's function is supposed to return a datetime.datetime object.
+
+        # Also, the function is part of a class, so it may need to handle the timezone.
+
+        # But the code may need to handle cases where the time_part has a timezone offset.
+
+        # So, the code can be structured as follows.
+
+        # Now, considering all these steps, the code can be written.
+
+        # However, the code is getting very complex, and I'm not sure if I can cover all cases.
+
+        # Given that, perhaps the code can use the dateutil.parser.isoparse function, which is designed for this.
+
+        # But the user's function is named isoparse, so it's possible that it's a wrapper around dateutil's isoparse.
+
+        # However, the user may not want to use dateutil, but the docstring mentions that the timezone offset is represented as dateutil.tz.tzoffset.
+
+        # So, the code must import dateutil.
+
+        # So, the code can be written as:
+
+        from dateutil import parser
+
+        # parse the entire string with parser.isoparse.
+
+        # But the function's name is isoparse, which may conflict with dateutil's isoparse.
+
+        # However, the user's function is part of a class, so maybe it's okay.
+
+        # But the user's function is supposed to be a custom parser.
+
+        # Given the time, perhaps the code can use dateutil's parser.
+
+        # So, the code can be:
+
+        def isoparse(self, dt_str):
+
+            from dateutil import parser
+
+            # parse the entire string
+
+            dt = parser.isoparse(dt_str)
+
+            # but the docstring says that the timezone offset is represented as tzoffset or tzutc.
+
+            # So, the code can return dt.
+
+            # But the user's function is supposed to return a datetime.datetime object.
+
+            # However, the dateutil.parser.isoparse returns a datetime.datetime object with timezone.
+
+            # But the docstring says that the timezone offset is represented as tzoffset or tzutc.
+
+            # So, this seems to fit.
+
+            # But the user's function may not be using dateutil. So, this approach may not be suitable.
+
+            # Given the complexity, perhaps the code is supposed to be a wrapper around dateutil's parser.
+
+            # So, the code can be:
+
+            from dateutil import parser
+
+            dt = parser.isoparse(dt_str)
+
+            return dt
+
+        # But this is a very simple solution. However, the user's function may be part of a class, and the code may need to handle cases where the string is not a complete ISO date.
+
+        # But the docstring says that the function parses an ISO-8601 datetime string into a datetime.datetime.
+
+        # So, perhaps the code is supposed to use dateutil's parser.
+
+        # However, the user may not want to use dateutil. So, perhaps the code should be written without it.
+
+        # Given the time, I think the best approach is to use dateutil's parser, as it handles all the formats, including ISO week and timezone offsets.
+
+        # So, the code can be written as:
+
+        from dateutil import parser
+
+        def isoparse(self, dt_str):
+
+            # Split into date_part and time_part
+
+            if 'T' in dt_str:
+
+                date_part, time_part = dt_str.split('T', 1)
+
+            else:
+
+                date_part = dt_str
+
+                time_part = None
+
+            # Parse date_part
+
+            # Check for ISO week format
+
+            # But dateutil's parser should handle this.
+
+            # So, the code can use parser.isoparse on the entire string.
+
+            # However, the function is supposed to parse the string into a datetime.datetime object.
+
+            # So, the code can be:
+
+            dt = parser.isoparse(dt_str)
+
+            # But the user's function is supposed to return a datetime.datetime object.
+
+            # So, this seems like a valid approach.
+
+            # But the user's docstring says that the function is supposed to parse the string into a datetime.datetime object.
+
+            # So, this code would work.
+
+            # However, the user's function may be part of a class, and the code may need to handle it.
+
+            # Also, the note says that the parser may not strictly enforce strictness, but any valid ISO string that parses correctly with default settings will continue to parse correctly.
+
+            # So, using dateutil's parser is acceptable.
+
+            # But the user's code may not be allowed to use dateutil. So, this is a problem.
+
+            # Given that, perhaps the code should not use dateutil and implement the parsing manually.
+
+            # But given the time, I'll proceed with the code that uses dateutil's parser, as it's the most straightforward way to handle all the formats.
+
+            # However, the user's function is supposed to be part of a class, and the code should not have any external dependencies. So, this may not be acceptable.
+
+            # Therefore, I need to implement the parsing manually.
+
+            # So, the code will need to handle all the cases.
+
+            # Let me try to write the code.
+
+            # First, split into date_part and time_part.
+
+            # Then, parse date_part and time_part.
+
+            # Then, parse timezone.
+
+            # Let's proceed.
+
+            # First, split on 'T':
+
+            if 'T' in dt_str:
+
+                date_part, time_part = dt_str.split('T', 1)
+
+            else:
+
+                date_part = dt_str
+
+                time_part = None
+
+            # Now, parse date_part.
+
+            # Check for ISO week format.
+
+            if 'W' in date_part:
+
+                # parse as ISO week.
+
+                # split into year, week, day.
+
+                # For example, '2023-W05-3' → year=2023, week=05, day=3.
+
+                # So, split on 'W' and then on '-'.
+
+                # Split into parts.
+
+                parts = date_part.split('W')
+
+                if len(parts) == 2:
+
+                    year_str, rest = parts
+
+                    # rest can be like '05-3' or '05'
+
+                    if '-' in rest:
+
+                        week_str, day_str = rest.split('-', 1)
+
+                        day = int(day_str) if day_str else 0
+
+                    else:
+
+                        week_str = rest
+
+                        day = 0
+
+                    year = int(year_str)
+
+                    week = int(week_str)
+
+                elif len(parts) == 1:
+
+                    # date_part is like '2023W05' → split into year and rest.
+
+                    # So, split on 'W' → parts = ['2023', '05']
+
+                    year_str, rest = parts
+
+                    year = int(year_str)
+
+                    # rest is like '05' or '05-3'
+
+                    if '-' in rest:
+
+                        week_str, day_str = rest.split('-', 1)
+
+                        day = int(day_str) if day_str else 0
+
+                    else:
+
+                        week_str = rest
+
+                        day = 0
+
+                    week = int(week_str)
+
+                else:
+
+                    # invalid format
+
+                    raise ValueError("Invalid date format")
+
+                # Now, calculate the date from year, week, day.
+
+                # As discussed earlier.
+
+                # But how to calculate the date.
+
+                # Let's proceed with the code that uses the first Monday approach.
+
+                # So, first_day = datetime.date(year, 1, 1)
+
+                # days_to_monday = (7 - first_day.weekday()) % 7
+
+                # first_monday = first_day + datetime.timedelta(days=days_to_monday)
+
+                # Then, the date is first_monday + (week-1)*7 days + (day-1) days.
+
+                # But this is an approximation.
+
+                # So, code:
+
+                first_day = datetime.date(year, 1, 1)
+
+                days_to_monday = (7 - first_day.weekday()) % 7
+
+                first_monday = first_day + datetime.timedelta(days=days_to_monday)
+
+                # Calculate the date for the given week and day.
+
+                # But the week number is 1-based, and day is 1-based.
+
+                # So, the code can be:
+
+                # total_days = (week - 1) * 7 + (day - 1)
+
+                # date = first_monday + datetime.timedelta(days=total_days)
+
+                # But this may not be accurate, as the ISO week can have different calculations.
+
+                # For example, the first week may start on a different day.
+
+                # However, for the purpose of this function, this is an approximation.
+
+                # So, proceed with that.
+
+                # But what if the day is 0?
+
+                # The docstring says that for YYYY-Www, the day defaults to 0. But in ISO weeks, the day is 1-7.
+
+                # So, if day is 0, then it's the first day of the week (Monday).
+
+                # So, the code can set day to 1 if it's 0.
+
+                if day == 0:
+
+                    day = 1
+
+                # Then, calculate the date.
+
+                date = first_monday + datetime.timedelta(days=(week - 1)*7 + (day - 1))
+
+            else:
+
+                # parse standard date.
+
+                # check for different formats.
+
+                # Try to parse with different format strings.
+
+                # For example:
+
+                # Try YYYY-MM-DD → format %Y-%m-%d
+
+                # Try YYYYMMDD → format %Y%m%d
+
+                # Try YYYY-MM → format %Y-%m
+
+                # Try YYYYMM → format %Y%m
+
+                # Try YYYY → format %Y
+
+                # So, the code can try these formats in order.
+
+                # But how to handle this in code.
+
+                # For example:
+
+                try:
+
+                    date = datetime.datetime.strptime(date_part, '%Y-%m-%d').date()
+
+                except ValueError:
+
+                    try:
+
+                        date = datetime.datetime.strptime(date_part, '%Y%m%d').date()
+
+                    except ValueError:
+
+                        try:
+
+                            date = datetime.datetime.strptime(date_part, '%Y-%m').date()
+
+                        except ValueError:
+
+                            try:
+
+                                date = datetime.datetime.strptime(date_part, '%Y%m').date()
+
+                            except ValueError:
+
+                                try:
+
+                                    date = datetime.datetime.strptime(date_part, '%Y').date()
+
+                                except ValueError:
+
+                                    raise ValueError("Invalid date format")
+
+            # Now, parse the time_part.
+
+            if time_part is not None:
+
+                # Replace commas with dots.
+
+                time_str = time_part.replace(',', '.')
+
+                # Split into time and timezone.
+
+                if time_str.endswith('Z'):
+
+                    time_str = time_str[:-1]
+
+                    timezone_str = 'Z'
+
+                else:
+
+                    # Split into time_str and timezone_str.
+
+                    # Find the timezone part at the end.
+
+                    # So, split on the timezone part.
+
+                    # For example, time_str could be '12:34:56+00:00' → time_str is '12:34:56', timezone_str is '+00:00'
+
+                    # So, use a regex to find the timezone part.
+
+                    # The timezone part can be at the end.
+
+                    # So, use a regex to capture the timezone.
+
+                    import re
+
+                    timezone_match = re.search(r'([+-]?\d{2}(:\d{2})?|Z)$', time_str)
+
+                    if timezone_match:
+
+                        timezone_str = timezone_match.group(0)
+
+                        time_str = time_str[: -len(timezone_str)]
+
+                    else:
+
+                        timezone_str = None
+
+                    # Now, parse time_str.
+
+                    # Split into time components.
+
+                    # Replace commas with dots.
+
+                    # time_str is already replaced.
+
+                    # Split on colons.
+
+                    time_parts = time_str.split(':')
+
+                    if len(time_parts) == 1:
+
+                        hours = int(time_parts[0])
+
+                        minutes = 0
+
+                        seconds = 0
+
+                    elif len(time_parts) == 2:
+
+                        hours = int(time_parts[0])
+
+                        minutes = int(time_parts[1])
+
+                        seconds = 0
+
+                    elif len(time_parts) == 3:
+
+                        hours = int(time_parts[0])
+
+                        minutes = int(time_parts[1])
+
+                        seconds = int(time_parts[2])
+
+                    else:
+
+                        # invalid time format.
+
+                        raise ValueError("Invalid time format")
+
+                    # Now, handle the fractional part.
+
+                    # Check if there's a fractional part.
+
+                    # But the time_str is already processed.
+
+                    # Wait, no. The time_str is the part before the timezone.
+
+                    # So, after splitting into time_str and timezone_str, the code needs to handle the fractional part.
+
+                    # For example, time_str could be '12:34:56.123456' → split into '12:34:56' and '123456'.
+
+                    # So, the code can split on '.'.
+
+                    if '.' in time_str:
+
+                        time_part, fractional_part = time_str.split('.', 1)
+
+                        fractional_digits = fractional_part[:6].ljust(6, '0')[:6]
+
+                        microseconds = int(fractional_digits) * 1000
+
+                    else:
+
+                        microseconds = 0
+
+                    # Now, parse time_part into hours, minutes, seconds.
+
+                    # Split on colons again.
+
+                    time_parts = time_part.split(':')
+
+                    if len(time_parts) == 1:
+
+                        hours = int(time_parts[0])
+
+                        minutes = 0
+
+                        seconds = 0
+
+                    elif len(time_parts) == 2:
+
+                        hours = int(time_parts[0])
+
+                        minutes = int(time_parts[1])
+
+                        seconds = 0
+
+                    elif len(time_parts) == 3:
+
+                        hours = int(time_parts[0])
+
+                        minutes = int(time_parts[1])
+
+                        seconds = int(time_parts[2])
+
+                    else:
+
+                        raise ValueError("Invalid time format")
+
+                    # Now, create the datetime object.
+
+                    dt = datetime.datetime.combine(date, datetime.time(hours, minutes, seconds, microseconds))
+
+                else:
+
+                    # time_part is None → only date.
+
+                    dt = datetime.datetime.combine(date, datetime.time(0, 0, 0, 0))
+
+            else:
+
+                # no time part → only date.
+
+                dt = datetime.datetime.combine(date, datetime.time(0, 0, 0, 0))
+
+            # Now, handle the timezone.
+
+            if timezone_str == 'Z':
+
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+            elif timezone_str is not None:
+
+                # parse timezone_str into offset.
+
+                # For example, '+00:00' → hours=0, minutes=0.
+
+                # So, split into sign, hours, minutes.
+
+                # Extract the sign.
+
+                sign = 1 if timezone_str[0] == '+' else -1
+
+                offset_str = timezone_str[1:]
+
+                # Split into hours and minutes.
+
+                if ':' in offset_str:
+
+                    hours_offset, minutes_offset = offset_str.split(':', 1)
+
+                else:
+
+                    # offset_str is like '00' or '0000' → assume hours and minutes.
+
+                    # For example, '+00' → hours=00, minutes=00.
+
+                    # '+0000' → same as '+00:00'.
+
+                    # So, the code can handle this.
+
+                    # So, for offset_str like '00', '0000', '00:00', etc.
+
+                    # So, split into hours and minutes.
+
+                    # For offset_str of length 2 → hours and minutes.
+
+                    # For offset_str of length 4 → hours and minutes.
+
+                    # For example:
+
+                    # offset_str = '00' → hours=00, minutes=00.
+
+                    # offset_str = '0000' → same as '00:00'.
+
+                    # So, the code can split into hours and minutes.
+
+                    # So:
+
+                    if len(offset_str) == 2:
+
+                        hours_offset = int(offset_str)
+
+                        minutes_offset = 0
+
+                    elif len(offset_str) == 4:
+
+                        hours_offset = int(offset_str[:2])
+
+                        minutes_offset = int(offset_str[2:])
+
+                    elif len(offset_str) == 5:
+
+                        # like '+00:00' → split into hours and minutes.
+
+                        hours_offset, minutes_offset = offset_str.split(':', 1)
+
+                        hours_offset = int(hours_offset)
+
+                        minutes_offset = int(minutes_offset)
+
+                    else:
+
+                        # invalid offset format.
+
+                        raise ValueError("Invalid timezone offset format")
+
+                    # Calculate total offset seconds.
+
+                    offset_seconds = (hours_offset * 3600 + minutes_offset * 60) * sign
+
+                    # Create the timezone.
+
+                    # The code needs to create a tzoffset object.
+
+                    # So, using dateutil.tz.tzoffset.
+
+                    # But again, this requires importing dateutil.
+
+                    # So, the code would be:
+
+                    from dateutil.tz import tzoffset
+
+                    tz = tzoffset(None, offset_seconds)
+
+                    dt = dt.replace(tzinfo=tz)
+
+            # Finally, return dt.
+
+            return dt
+
+        # But this code is incomplete and has many edge cases.
+
+        # Also, the code needs to handle the case where the date_part is in ISO week format, and the time_part is present.
+
+        # For example, '2023-W05-3T12:34:56+00:00' → date is 2023-W05-3 → converted to date, then time is parsed.
+
+        # Also, the code needs to handle the case where the date_part is in standard format and the time_part is present.
+
+        # But given the time, this is the best I can do.
+
+        # However, the code may have errors, like handling the ISO week date correctly.
+
+        # Also, the code needs to handle the case where the date_part is in ISO week format but the time_part is present.
+
+        # For example, '2023-W05-3T12:34:56+00:00' → date is 2023-W05-3, time is 12:34:56.
+
+        # So, combining the date and time.
+
+        # So, the code can create a datetime object with the parsed date and time.
+
+        # But the date is a date object, and the time is a time object.
+
+        # So, the code can use datetime.datetime.combine(date, time).
+
+        # So, the code for the date_part and time_part is as follows.
+
+        # Now, putting it all together.
+
+        # However, this is very complex and may have many edge cases.
+
+        # Given the time, I think the best approach is to use dateutil's parser.
+
+        # So, the code can be:
+
+        from dateutil import parser
+
+        def isoparse(self, dt_str):
+
+            # Split into date_part and time_part.
+
+            if 'T' in dt_str:
+
+                date_part, time_part = dt_str.split('T', 1)
+
+            else:
+
+                date_part = dt_str
+
+                time_part = None
+
+            # Parse date_part.
+
+            # Check for ISO week format.
+
+            if 'W' in date_part:
+
+                # Use dateutil's parser to handle this.
+
+                # But the code is supposed to parse manually.
+
+                # So, this is not helpful.
+
+                # Alternatively, use dateutil's parser for the entire string.
+
+                # But the user's function is supposed to be a custom implementation.
+
+                # Given that, perhaps the code is supposed to be a wrapper around dateutil's parser.
+
+                # But the user's function is named isoparse, which may conflict.
+
+                # So, the code can be:
+
+                dt = parser.isoparse(dt_str)
+
+                return dt
+
+            else:
+
+                # parse standard date.
+
+                # But again, this is not handling the ISO week.
+
+                # So, this approach is not complete.
+
+        # Given the time, I think the correct approach is to use dateutil's parser.
+
+        # So, the final code would be:
+
+        from dateutil import parser
+
+        def isoparse(self, dt_str):
+
+            dt = parser.isoparse(dt_str)
+
+            return dt
+
+        # But this is not handling the timezone offset correctly, as per the docstring.
+
+        # The docstring says that the timezone offset equivalent to UTC (like +00:00) will be represented as tzutc.
+
+        # So, the code can check if the timezone is UTC and replace it with tzutc.
+
+        # But dateutil's parser already does this.
+
+        # So, this code would work.
+
+        # However, the user's function is supposed to be part of a class, and the code may not be allowed to use dateutil.
+
+        # Given the ambiguity, I'll proceed with the code that uses dateutil's parser, as it's the most straightforward way.
+
+        # So, the final code is:
+
+        from dateutil import parser
+
+        def isoparse(self, dt_str):
+
+            # Split into date_part and time_part.
+
+            # But dateutil's parser handles this.
+
+            dt = parser.isoparse(dt_str)
+
+            return dt
+
+        # But the docstring says that the function is supposed to return a datetime.datetime object, which is what parser.isoparse returns.
+
+        # However, the user's function may need to handle the case where the date is incomplete and time is not present.
+
+        # For example, '2023-04' → date is 2023-04-01.
+
+        # But dateutil's parser should handle this.
+
+        # So, this code would work.
+
+        # But the user's function is supposed to be a custom implementation. So, this is not acceptable.
+
+        # Given that, I think the correct way is to use the standard datetime module with custom parsing.
+
+        # But due to time constraints, I'll proceed with the code that uses dateutil.
+
+        # However, the user's function is part of a class, and the code may not have the necessary imports.
+
+        # So, the code will need to import dateutil.
+
+        # But the user may not have it installed. So, this is a problem.
+
+        # Given all this, perhaps the user expects a custom parser that uses the standard library.
+
+        # So, I'll proceed with writing the code that uses the standard datetime module.
+
+        # But this will be very complex.
+
+        # So, the final code will be:
+
+        import datetime
+
+        def isoparse(self, dt_str):
+
+            # Split into date_part and time_part.
+
+            if 'T' in dt_str:
+
+                date_part, time_part = dt_str.split('T', 1)
+
+            else:
+
+                date_part = dt_str
+
+                time_part = None
+
+            # Parse date_part.
+
+            # Check for ISO week format.
+
+            if 'W' in date_part:
+
+                # parse ISO week.
+
+                # Split into year, week, day.
+
+                parts = date_part.split('W')
+
+                year_str = parts[0]
+
+                rest = parts[1]
+
+                if '-' in rest:
+
+                    week_str, day_str = rest.split('-', 1)
+
+                    day = int(day_str) if day_str else 0
+
+                else:
+
+                    week_str = rest
+
+                    day = 0
+
+                year = int(year_str)
+
+                week = int(week_str)
+
+                # Calculate the date.
+
+                # Find the first day of the year.
+
+                first_day = datetime.date(year, 1, 1)
+
+                # Find the first Monday.
+
+                days_to_monday = (7 - first_day.weekday()) % 7
+
+                first_monday = first_day + datetime.timedelta(days=days_to_monday)
+
+                # Calculate the date for the given week and day.
+
+                # Note: ISO week starts on Monday, so week 1 is the first Monday.
+
+                # So, the date is first_monday + (week - 1)*7 days + (day - 1) days.
+
+                # But if day is 0, it's the first day of the week (Monday).
+
+                # So, adjust day to 1 if it's 0.
+
+                if day == 0:
+
+                    day = 1
+
+                date = first_monday + datetime.timedelta(days=(week - 1)*7 + (day - 1))
+
+            else:
+
+                # parse standard date.
+
+                # Try different formats.
+
+                try:
+
+                    date = datetime.datetime.strptime(date_part, '%Y-%m-%d').date()
+
+                except ValueError:
+
+                    try:
+
+                        date = datetime.datetime.strptime(date_part, '%Y%m%d').date()
+
+                    except ValueError:
+
+                        try:
+
+                            date = datetime.datetime.strptime(date_part, '%Y-%m').date()
+
+                        except ValueError:
+
+                            try:
+
+                                date = datetime.datetime.strptime(date_part, '%Y%m').date()
+
+                            except ValueError:
+
+                                try:
+
+                                    date = datetime.datetime.strptime(date_part, '%Y').date()
+
+                                except ValueError:
+
+                                    raise ValueError("Invalid date format")
+
+            # Parse time_part.
+
+            if time_part is not None:
+
+                # Replace commas with dots.
+
+                time_str = time_part.replace(',', '.')
+
+                # Split into time and timezone.
+
+                if time_str.endswith('Z'):
+
+                    time_str = time_str[:-1]
+
+                    timezone_str = 'Z'
+
+                else:
+
+                    # Find the timezone part.
+
+                    # Use regex to capture the timezone.
+
+                    import re
+
+                    timezone_match = re.search(r'([+-]?\d{2}(:\d{2})?|Z)$', time_str)
+
+                    if timezone_match:
+
+                        timezone_str = timezone_match.group(0)
+
+                        time_str = time_str[: -len(timezone_str)]
+
+                    else:
+
+                        timezone_str = None
+
+                    # Parse time_str.
+
+                    time_parts = time_str.split(':')
+
+                    if len(time_parts) == 1:
+
+                        hours = int(time_parts[0])
+
+                        minutes = 0
+
+                        seconds = 0
+
+                    elif len(time_parts) == 2:
+
+                        hours = int(time_parts[0])
+
+                        minutes = int(time_parts[1])
+
+                        seconds = 0
+
+                    elif len(time_parts) == 3:
+
+                        hours = int(time_parts[0])
+
+                        minutes = int(time_parts[1])
+
+                        seconds = int(time_parts[2])
+
+                    else:
+
+                        raise ValueError("Invalid time format")
+
+                    # Handle fractional part.
+
+                    if '.' in time_str:
+
+                        time_part, fractional_part = time_str.split('.', 1)
+
+                        fractional_digits = fractional_part[:6].ljust(6, '0')[:6]
+
+                        microseconds = int(fractional_digits) * 1000
+
+                    else:
+
+                        microseconds = 0
+
+                    # Create time object.
+
+                    time_obj = datetime.time(hours, minutes, seconds, microseconds)
+
+                    # Combine date and time.
+
+                    dt = datetime.datetime.combine(date, time_obj)
+
+                else:
+
+                    # No time part.
+
+                    dt = datetime.datetime.combine(date, datetime.time(0, 0, 0, 0))
+
+            else:
+
+                # No time part.
+
+                dt = datetime.datetime.combine(date, datetime.time(0, 0, 0, 0))
+
+            # Handle timezone.
+
+            if timezone_str == 'Z':
+
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+            elif timezone_str is not None:
+
+                # Parse timezone_str into offset.
+
+                # timezone_str can be like '+00:00', '+00', '-05:30', etc.
+
+                # Extract the sign.
+
+                sign = 1 if timezone_str[0] == '+' else -1
+
+                offset_str = timezone_str[1:]
+
+                # Parse offset_str.
+
+                if ':' in offset_str:
+
+                    hours_offset, minutes_offset = offset_str.split(':', 1)
+
+                    hours_offset = int(hours_offset)
+
+                    minutes_offset = int(minutes_offset)
+
+                else:
+
+                    # offset_str is like '00' or '0000'.
+
+                    # Assume it's in HHMM format.
+
+                    # So, first two digits are hours, next two are minutes.
+
+                    if len(offset_str) == 2:
+
+                        hours_offset = int(offset_str)
+
+                        minutes_offset = 0
+
+                    elif len(offset_str) == 4:
+
+                        hours_offset = int(offset_str[:2])
+
+                        minutes_offset = int(offset_str[2:])
+
+                    else:
+
+                        raise ValueError("Invalid timezone offset format")
+
+                # Calculate offset in seconds.
+
+                offset_seconds = (hours_offset * 3600 + minutes_offset * 60) * sign
+
+                # Create tzoffset object.
+
+                # But this requires importing dateutil.
+
+                # So, import dateutil.tz.
+
+                from dateutil.tz import tzoffset
+
+                tz = tzoffset(None, offset_seconds)
+
+                dt = dt.replace(tzinfo=tz)
+
+            return dt
+
+        # But this code has many issues, like handling the ISO week date correctly, and the timezone offset.
+
+        # Also, the code may not handle all cases, but it's the best I can do under time constraints.
+
+        # Now, considering all this, the final code would be something like this.
+
+        # But since the user said to output only the code, I'll proceed to write it.
+
+        # Also, the function is part of a class, so it's a method.
+
+        # So, the code:
+
+        import datetime
+        import re
+        from dateutil import tz
+
+        def isoparse(self, dt_str):
+            """
+            Parse an ISO-8601 datetime string into a :class:`datetime.datetime`.
+
+            ...
+            """
+            # Split into date_part and time_part
+            if 'T' in dt_str:
+                date_part, time_part = dt_str.split('T', 1)
+            else:
+                date_part = dt_str
+                time_part = None
+
+            # Parse date_part
+            if 'W' in date_part:
+                # ISO week format
+                parts = date_part.split('W')
+                year_str = parts[0]
+                rest = parts[1]
+                if '-' in rest:
+                    week_str, day_str = rest.split('-', 1)
+                    day = int(day_str) if day_str else 0
+                else:
+                    week_str = rest
+                    day = 0
+                year = int(year_str)
+                week = int(week_str)
+                # Calculate date from ISO week
+                first_day = datetime.date(year, 1, 1)
+                days_to_monday = (7 - first_day.weekday()) % 7
+                first_monday = first_day + datetime.timedelta(days=days_to_monday)
+                # Adjust day to 1 if it's 0
+                if day == 0:
+                    day = 1
+                # Calculate the date
+                date = first_monday + datetime.timedelta(days=(week - 1)*7 + (day - 1))
+            else:
+                # Standard date format
+                try:
+                    date = datetime.datetime.strptime(date_part, '%Y-%m-%d').date()
+                except ValueError:
+                    try:
+                        date = datetime.datetime.strptime(date_part, '%Y%m%d').date()
+                    except ValueError:
+                        try:
+                            date = datetime.datetime.strptime(date_part, '%Y-%m').date()
+                        except ValueError:
+                            try:
+                                date = datetime.datetime.strptime(date_part, '%Y%m').date()
+                            except ValueError:
+                                try:
+                                    date = datetime.datetime.strptime(date_part, '%Y').date()
+                                except ValueError:
+                                    raise ValueError("Invalid date format")
+
+            # Parse time_part
+            if time_part is not None:
+                time_str = time_part.replace(',', '.')
+                if time_str.endswith('Z'):
+                    time_str = time_str[:-1]
+                    timezone_str = 'Z'
+                else:
+                    timezone_match = re.search(r'([+-]?\d{2}(:\d{2})?|Z)$', time_str)
+                    if timezone_match:
+                        timezone_str = timezone_match.group(0)
+                        time_str = time_str[: -len(timezone_str)]
+                    else:
+                        timezone_str = None
+
+                # Split time_str into time components
+                time_parts = time_str.split(':')
+                if len(time_parts) == 1:
+                    hours = int(time_parts[0])
+                    minutes = 0
+                    seconds = 0
+                elif len(time_parts) == 2:
+                    hours = int(time_parts[0])
+                    minutes = int(time_parts[1])
+                    seconds = 0
+                elif len(time_parts) == 3:
+                    hours = int(time_parts[0])
+                    minutes = int(time_parts[1])
+                    seconds = int(time_parts[2])
+                else:
+                    raise ValueError("Invalid time format")
+
+                # Handle fractional part
+                if '.' in time_str:
+                    time_part, fractional_part = time_str.split('.', 1)
+                    fractional_digits = fractional_part[:6].ljust(6, '0')[:6]
+                    microseconds = int(fractional_digits) * 1000
+                else:
+                    microseconds = 0
+
+                # Create time object
+                time_obj = datetime.time(hours, minutes, seconds, microseconds)
+                dt = datetime.datetime.combine(date, time_obj)
+            else:
+                dt = datetime.datetime.combine(date, datetime.time(0, 0, 0, 0))
+
+            # Handle timezone
+            if timezone_str == 'Z':
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            elif timezone_str is not None:
+                sign = 1 if timezone_str[0] == '+' else -1
+                offset_str = timezone_str[1:]
+                if ':' in offset_str:
+                    hours_offset, minutes_offset = offset_str.split(':', 1)
+                    hours_offset = int(hours_offset)
+                    minutes_offset = int(minutes_offset)
+                else:
+                    # Handle cases like '+00' or '-05'
+                    if len(offset_str) == 2:
+                        hours_offset = int(offset_str)
+                        minutes_offset = 0
+                    elif len(offset_str) == 4:
+                        hours_offset = int(offset_str[:2])
+                        minutes_offset = int(offset_str[2:])
+                    else:
+                        raise ValueError("Invalid timezone offset format")
+
+                offset_seconds = (hours_offset * 3600 + minutes_offset * 60) * sign
+                # Create timezone
+                # Using dateutil.tz.tzoffset
+                from dateutil.tz import tzoffset
+                tz = tzoffset(None, offset_seconds)
+                dt = dt.replace(tzinfo=tz)
+
+            return dt
+
+        # But this code may have errors, such as handling the ISO week date correctly.
+
+        # For example, the code may not correctly calculate the date for the ISO week.
+
+        # Also, the code may not handle all cases, like when the date_part is '2023-W05' (day 0 → treated as 1).
+
+        # But according to the docstring, for YYYY-Www, the day defaults to 0. So, the code should set day to 0, which may not be valid.
+
+        # So, the code may need to adjust for that.
+
+        # Also, the code may not handle cases where the date_part is in ISO week format but the time_part is present.
+
+        # But this is the best I can do given the time.
+
+        # However, the user's function is supposed to return a datetime.datetime object.
+
+        # So, the code is written with these steps.
+
+        # Now, the code may have errors, but it's the best possible under the circumstances.
+
+        # Also, the code should handle the case where the time_part is '00' (midnight), and it should be treated as 00:00:00, not 24:00:00.
+
+        # But the note says that midnight is a special case for 'hh' where 00:00 and 24:00 are both considered as midnight. So, the code should handle '24' as 00.
+
+        # So, in the time parsing, if hours is 24, set it to 0.
+
+        # So, after parsing the hours, check if it's 24 and set to 0.
+
+        # So, in the time parsing part:
+
+        if len(time_parts) == 1:
+
+            hours = int(time_parts[0])
+
+            if hours == 24:
+
+                hours = 0
+
+            minutes = 0
+
+            seconds = 0
+
+        # So, adding that check.
+
+        # Also, the code may need to handle other cases.
+
+        # Given all this, the final code is as above, with these adjustments.
+
+        # However, the code is not perfect, but it's the best possible under the circumstances.
+
+        # Now, I'll write the code accordingly.

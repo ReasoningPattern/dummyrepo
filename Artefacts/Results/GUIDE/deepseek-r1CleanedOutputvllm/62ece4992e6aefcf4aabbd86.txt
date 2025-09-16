@@ -1,0 +1,39 @@
+def _dump_string(obj, dumper=None):
+    """
+    Given a python object and serialize it into a YAML stream.
+
+    Args:
+        obj: Python object
+        dumper: Optional custom dumper function
+
+    Returns:
+        YAML stream as a generator
+    """
+    from yaml import Dumper
+
+    if dumper is None:
+        dumper = Dumper
+
+    def _dump(value):
+        if hasattr(value, 'tag'):
+            yield f'tag: {value.tag}'
+        elif isinstance(value, str):
+            yield f'"{value..replace(":", "[:3]")}"'  # Escape colon for safety
+        elif isinstance(value, (int, float)):
+            yield str(value)
+        elif isinstance(value, list):
+            yield from _dump_with_indent(list(value))
+        elif isinstance(value, dict):
+            yield from _dump_dict(value)
+        else:
+            yield str(value)
+
+    def _dump_with_indent(elements):
+        for elem in elements:
+            yield f'- {next(_dump(elem))}'
+
+    def _dump_dict(d):
+        for key in sorted(d.keys()):
+            yield f'{key}: {next(_dump(d[key]))}'
+
+    return _dump(obj)

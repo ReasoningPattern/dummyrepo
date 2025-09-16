@@ -1,0 +1,83 @@
+<think>
+
+</think>
+
+```python
+def verify_relayable_signature(public_key, doc, signature):
+    """
+    Verify the signed XML elements to have confidence that the claimed
+    author did actually generate this message.
+    """
+    from lxml import etree
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.primitives import serialization
+
+    # Parse the XML document
+    parser = etree.XMLParser(remove_blank_text=True)
+    root = etree.fromstring(doc, parser)
+
+    # Find the signature element
+    signature_element = root.find('.//{http://www.w3.org/2000/09/xmldsig#}Signature')
+    if signature_element is None:
+        raise ValueError("No signature element found in the document")
+
+    # Extract the signature value
+    signature_value = signature_element.find('.//{http://www.w3.org/2000/09/xmldsig#}SignatureValue')
+    if signature_value is None:
+        raise ValueError("No signature value found in the signature element")
+
+    # Extract the reference elements
+    references = signature_element.findall('.//{http://www.w3.org/2000/09/xmldsig#}Reference')
+    if not references:
+        raise ValueError("No references found in the signature element")
+
+    # Extract the digest method and digest value for the first reference
+    digest_method = references[0].find('.//{http://www.w3.org/2000/09/xmldsig#}DigestMethod')
+    digest_value = references[0].find('.//{http://www.w3.org/2000/09/xmldsig#}DigestValue')
+    if digest_method is None or digest_value is None:
+        raise ValueError("Digest method or digest value not found in the reference")
+
+    # Get the digest algorithm
+    digest_algorithm = digest_method.get('Algorithm')
+    if digest_algorithm == 'http://www.w3.org/2000/09/xmldsig#sha1':
+        digest_algorithm = hashes.SHA1()
+    elif digest_algorithm == 'http://www.w3.org/2000/09/xmldsig#sha256':
+        digest_algorithm = hashes.SHA256()
+    else:
+        raise ValueError(f"Unsupported digest algorithm: {digest_algorithm}")
+
+    # Compute the digest of the document
+    document_bytes = etree.tostring(root, encoding='utf-8', xml_declaration=True)
+    digest = hashes.Hash(digest_algorithm, backend=default_backend())
+    digest.update(document_bytes)
+    computed_digest = digest.finalize()
+
+    # Compare the computed digest with the provided digest value
+    if computed_digest != bytes.fromhex(digest_value.text):
+        raise ValueError("Digest value does not match the computed digest")
+
+    # Extract the key info and public key
+    key_info = signature_element.find('.//{http://www.w3.org/2000/09/xmldsig#}KeyInfo')
+    if key_info is None:
+        raise ValueError("No key info found in the signature element")
+
+    x509_data = key_info.find('.//{http://www.w3.org/2000/09/xmldsig#}X509Data')
+    if x509_data is None:
+        raise ValueError("No X509 data found in the key info")
+
+    x509_certificate = x509_data.find('.//{http://www.w3.org/2000/09/xmldsig#}X509Certificate')
+    if x509_certificate is None:
+        raise ValueError("No X509 certificate found in the X509 data")
+
+    # Load the public key from the certificate
+    cert_bytes = bytes.fromhex(x509_certificate.text)
+    cert = x509.load_pem_x509_certificate(cert_bytes, default_backend())
+    public_key_obj = cert.public_key()
+
+    # Verify the signature
+    signature_bytes = bytes.fromhex(signature_value.text)
+    public_key_obj.verify(signature_bytes, computed_digest, padding.PKCS1v15())
+
+    return True
+```

@@ -1,0 +1,39 @@
+def validate_version_inventories(self, version_dirs):
+    """
+    Each version SHOULD have an inventory up to that point.
+
+    Also keep a record of any content digests different from those in the root inventory
+    so that we can also check them when validating the content.
+
+    version_dirs is an array of version directory names and is assumed to be in
+    version sequence (1, 2, 3...).
+    """
+    differing_digests = []
+    root_inventory = None
+    previous_inventory = None
+
+    for idx, version_dir in enumerate(version_dirs):
+        current_inventory = self._read_inventory(version_dir)
+        if not current_inventory:
+            raise ValueError(f"Inventory for version {version_dir} not found")
+
+        if idx == 0:
+            # First version is the root inventory
+            root_inventory = current_inventory.copy()
+            previous_inventory = current_inventory
+        else:
+            # Check all entries from previous inventory are present
+            for key in previous_inventory:
+                if key not in current_inventory:
+                    raise ValueError(
+                        f"Inventory for version {version_dir} missing entry '{key}'"
+                    )
+
+            # Check for differing digests from the root inventory
+            for key, digest in current_inventory.items():
+                if key in root_inventory and digest != root_inventory[key]:
+                    differing_digests.append((key, digest))
+
+            previous_inventory = current_inventory.copy()
+
+    return differing_digests

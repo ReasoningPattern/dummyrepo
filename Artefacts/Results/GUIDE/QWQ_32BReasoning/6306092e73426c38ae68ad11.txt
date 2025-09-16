@@ -1,0 +1,168 @@
+Okay, I need to write a Python function called merge_extra_vars that takes a vars_dict and an extra_vars list, and extends the vars_dict with those extra variables. Let me think about how to approach this.
+
+First, the function signature is given. The docstring says to extend vars_dict with extra-vars. The parameters are vars_dict (a dictionary) and extra_vars (a list). Wait, how are the extra_vars formatted? Probably, each item in the list is a string in the form of "key=value", right? Like how Ansible uses extra vars. So the function should parse each item in extra_vars, split them into key and value, and add them to vars_dict. But I need to handle possible errors here. For example, if an item doesn't have an equals sign, maybe we skip it or raise an error? The problem doesn't specify, so perhaps just ignore invalid entries or maybe the function should process them as best as possible.
+
+Hmm, the function's responsibility is to merge, so probably split each string in extra_vars into key-value pairs. So for each var in extra_vars, split on '=', then update vars_dict with that key-value pair. But what if the key already exists? The docstring says "extend", so maybe the extra_vars override the existing entries in vars_dict? Or do they add to it? I think in most cases, when merging, the new variables would take precedence. So the existing vars_dict's keys would be updated with the extra_vars' keys.
+
+So the steps are:
+
+1. Iterate over each item in extra_vars (if it's not None).
+2. For each item, split into key and value using '=' as the delimiter. Maybe split once to handle cases where the value might contain '='.
+3. Add each key-value pair to vars_dict. So vars_dict[key] = value.
+
+But first, need to check if extra_vars is provided. If it's None, then do nothing. So the function would just return the original vars_dict. Wait, the parameters say extra_vars is a list of extra-vars. So if it's None, maybe we treat it as an empty list? Or should the function handle that? The function's parameters specify that extra_vars is a list, but the default is None. So perhaps in the function, if extra_vars is None, we treat it as an empty list, so no changes. Alternatively, maybe the user can pass None, and in that case, we do nothing. That's up to the function's design. Since the function's description says "extend with extra-vars", if extra_vars is None, then there's nothing to add, so the function can return as is.
+
+So first, check if extra_vars is not None and not empty. Then process each item.
+
+Now, for the unit tests. Since the user wants test-driven development, I need to first write the tests before the code. Let's think about possible test cases.
+
+Test case 1: vars_dict is empty, and extra_vars has some entries. The merged dict should have those entries.
+
+Test case 2: vars_dict has some keys, and extra_vars has the same keys. The merged dict should have the values from extra_vars overriding the existing ones.
+
+Test case 3: an item in extra_vars that can't be split into key=value (like "key" without a value). How to handle that? Maybe skip it, or raise an error? The problem doesn't specify, so perhaps we just ignore those invalid entries. So in the test, maybe check that such entries are skipped.
+
+Test case 4: extra_vars is None, so the original vars_dict is unchanged.
+
+Test case 5: extra_vars is an empty list, so no changes.
+
+Test case 6: entries in extra_vars with multiple equals signs. Like "key1=value1=value2". Split on the first '=', so key is "key1", value is "value1=value2".
+
+Also, what if the vars_dict is modified in place? The function should probably modify the original vars_dict, or return a new one? The function's description says "extend vars_dict with...", which implies that it's modifying the input dictionary. So the function doesn't return a new dictionary but updates the existing one. Wait, the function's return is not specified. Looking at the docstring, the function's parameters are vars_dict and extra_vars. The description says "extend vars_dict with...", but the function's return type isn't mentioned. The function may not return anything, but just modify the vars_dict. Or maybe it returns the modified vars_dict? The function's signature doesn't have a return annotation, so perhaps it's None, but modifying the input.
+
+Wait, in Python, dictionaries are mutable, so if the function takes vars_dict as an argument and modifies it, then the original is changed. So the function can proceed by modifying the vars_dict in place, and perhaps return None, or return the modified vars_dict. The docstring's parameters don't mention a return, but the function's purpose is to merge, so maybe the function returns the modified vars_dict? Or maybe it's just a side effect.
+
+Hmm, perhaps the function should return the merged dictionary, but in the signature, there's no return type. Let me check the problem again. The function's docstring says "Extend vars_dict with extra-vars". So the function probably modifies the vars_dict in place and returns nothing, or returns the modified vars_dict. The user's code may need to use the modified vars_dict. Since the function is called merge_extra_vars, perhaps it returns the vars_dict after merging. But that's up to the implementation.
+
+Alternatively, perhaps the function returns the vars_dict for convenience, allowing method chaining. Let me see.
+
+In any case, for the tests, I need to check that after the function is called, the vars_dict has the correct entries.
+
+Now, let's structure the tests. Using pytest, perhaps.
+
+First test: when extra_vars is None, the vars_dict remains the same.
+
+def test_no_extra_vars():
+    vars_dict = {'a': 1}
+    merge_extra_vars(vars_dict, None)
+    assert vars_dict == {'a': 1}
+
+Second test: when extra_vars is an empty list, same as above.
+
+def test_empty_extra_vars():
+    vars_dict = {'a': 1}
+    merge_extra_vars(vars_dict, [])
+    assert vars_dict == {'a': 1}
+
+Third test: adding new keys.
+
+def test_add_new_keys():
+    vars_dict = {}
+    extra_vars = ["b=2", "c=three"]
+    merge_extra_vars(vars_dict, extra_vars)
+    assert vars_dict == {'b': '2', 'c': 'three'}
+
+Fourth test: overriding existing keys.
+
+def test_override_existing():
+    vars_dict = {'a': 1, 'b': 'old'}
+    extra_vars = ["a=new", "b=new"]
+    merge_extra_vars(vars_dict, extra_vars)
+    assert vars_dict == {'a': 'new', 'b': 'new'}
+
+Fifth test: invalid entries (no = sign). Let's see, maybe "d" is in the list. How is that handled? The function should ignore it.
+
+def test_invalid_entry():
+    vars_dict = {}
+    extra_vars = ["d", "e=5"]
+    merge_extra_vars(vars_dict, extra_vars)
+    assert vars_dict == {'e': '5'}
+
+Sixth test: multiple equals signs in a value. For example, "key=val=ue". Split on first '=', so key is 'key', value is 'val=ue'.
+
+def test_multiple_equals():
+    vars_dict = {}
+    extra_vars = ["key=val=ue", "another=with=equals"]
+    merge_extra_vars(vars_dict, extra_vars)
+    assert vars_dict == {'key': 'val=ue', 'another': 'with=equals'}
+
+Now, considering these test cases, how to implement the function.
+
+The function:
+
+def merge_extra_vars(vars_dict, extra_vars=None):
+    if extra_vars is None:
+        return  # Or maybe do nothing? Wait, the function's return is not specified. Wait, in the code, the function's return is not mentioned. So perhaps it's okay to have no return, but in Python, functions without return statements return None. But since the function is supposed to modify the vars_dict, it's okay.
+
+Wait, but in the test, when we call merge_extra_vars(vars_dict, ...), the function needs to modify the vars_dict. So the code would be:
+
+if extra_vars is not None:
+    for var in extra_vars:
+        parts = var.split('=', 1)  # split into two parts at first '='
+        if len(parts) >= 2:
+            key = parts[0]
+            value = parts[1]
+            vars_dict[key] = value
+
+So that's the core logic.
+
+Wait, but what about if the value is an empty string? Like "key=" would split into ['key', ''], which is okay. So that's handled.
+
+So putting it all together:
+
+def merge_extra_vars(vars_dict, extra_vars=None):
+    """
+    Extend ``vars_dict`` with ``extra-vars``
+
+    :param vars_dict: Dictionary to merge extra-vars into
+    :param extra_vars: List of extra-vars
+    """
+    if extra_vars is not None:
+        for var in extra_vars:
+            if '=' in var:
+                key, value = var.split('=', 1)
+                vars_dict[key] = value
+
+Wait, but splitting on '=' with maxsplit 1 ensures that even if there are more equals, we take the first as key and the rest as value. So that's correct.
+
+Alternatively, perhaps using split('=', 1) is better than checking if '=' is present. Because if var has no '=', then split would result in a list of [var, '']? No, if the string is "key" with no '=', then split with maxsplit 1 would be ['key'], so len(parts) would be 1, so we skip it.
+
+So the code can be written as:
+
+for var in extra_vars:
+    parts = var.split('=', 1)
+    if len(parts) == 2:
+        key, value = parts
+        vars_dict[key] = value
+
+That way, even if the var has no '=', parts will be [var], so len is 1, so we skip.
+
+So this code handles all cases.
+
+Now, the function doesn't return anything, but modifies the input vars_dict. So in the tests, when we call the function, the vars_dict is modified.
+
+Now, putting the code together. The user wants the code in Python, in a markdown code block, only the code. So the function is:
+
+def merge_extra_vars(vars_dict, extra_vars=None):
+    """
+    Extend ``vars_dict`` with ``extra-vars``
+
+    :param vars_dict: Dictionary to merge extra-vars into
+    :param extra_vars: List of extra-vars
+    """
+    if extra_vars is not None:
+        for var in extra_vars:
+            parts = var.split('=', 1)
+            if len(parts) == 2:
+                key, value = parts
+                vars_dict[key] = value
+
+That should do it. Let me check the test cases again.
+
+In test_invalid_entry, the first item is 'd', which splits into ['d'], so len 1 → skipped. The second is 'e=5' → split into ['e', '5'] → added. So the vars_dict becomes {'e':'5'}, which is correct.
+
+In test_multiple_equals, the first var is "key=val=ue" → split into ['key', 'val=ue'] → key is 'key', value is 'val=ue'. So that's correct.
+
+Yes, this should work.
+
+Now, the user also mentioned generating the tests first. But the problem says to output only the code generated, so perhaps the tests are not needed here. The user wants the function code. So the code is as above.

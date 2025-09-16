@@ -1,0 +1,42 @@
+def parse_subparser_arguments(unparsed_arguments, subparsers):
+    """
+    Given a sequence of arguments and a dict from subparser name to argparse.ArgumentParser
+    instance, give each requested action's subparser a shot at parsing all arguments. This allows
+    common arguments like "--repository" to be shared across multiple subparsers.
+
+    Return the result as a tuple of (a dict mapping from subparser name to a parsed namespace of
+    arguments, a list of remaining arguments not claimed by any subparser).
+    """
+    from argparse import ArgumentParser
+
+    # Sort subparsers by name to ensure consistent order
+    sorted_subparser_names = sorted(subparsers.keys())
+    
+    parsed_args = {}
+    remaining_args = []
+    
+    for name in sorted_subparser_names:
+        subparser = subparsers[name]
+        namespace = None
+        
+        for arg in unparsed_arguments:
+            if hasattr(arg, 'dest'):
+                # Create a namespace to attempt parsing
+                temp_namespace = {arg.dest: arg}
+                # Set default value for the argument
+                if hasattr(arg, 'default'):
+                    temp_namespace[arg.default] = arg.default
+                # Try to parse the arguments
+                try:
+                    subparser.set_defaults(**temp_namespace)
+                    subparser.parse_args(namespace=namespace)
+                    # Add the parsed arguments to the subparser's entry
+                    parsed_args[name] = namespace
+                except:
+                    # If parsing fails, keep the original namespace
+                    pass
+        
+        # Add any remaining arguments that couldn't be parsed by this subparser
+        remaining_args.extend([arg for arg in unparsed_arguments if arg not in namespace])
+    
+    return parsed_args, remaining_args

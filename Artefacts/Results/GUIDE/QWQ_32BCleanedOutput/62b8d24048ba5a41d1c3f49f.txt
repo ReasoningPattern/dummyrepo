@@ -1,0 +1,54 @@
+import functools
+import time
+from collections import OrderedDict
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    def decorating_function(user_function):
+        cache = OrderedDict()  # Maps keys to (result, expiration_time)
+        
+        def make_key(*args, **kw):
+            key_parts = []
+            # Process positional arguments
+            if typed:
+                for a in args:
+                    key_parts.append((type(a), a))
+            else:
+                key_parts.extend(args)
+            # Process keyword arguments
+            sorted_items = sorted(kw.items())
+            for k, v in sorted_items:
+                if typed:
+                    key_parts.append((k, type(v), v))
+                else:
+                    key_parts.append((k, v))
+            return tuple(key_parts)
+        
+        @functools.wraps(user_function)
+        def wrapper(*args, **kw):
+            key = make_key(*args, **kw)
+            now = timer()
+            # Check if the key exists and is not expired
+            if key in cache:
+                value, expire_time = cache[key]
+                if expire_time > now:
+                    # Move to end to mark as recently used
+                    cache.move_to_end(key)
+                    return value
+                else:
+                    # Expired, remove from cache
+                    del cache[key]
+            # Compute the result and store it
+            result = user_function(*args, **kw)
+            expire_time = now + ttl
+            cache[key] = (result, expire_time)
+            # Enforce maxsize by evicting the oldest item if needed
+            if len(cache) > maxsize:
+                cache.popitem(last=False)
+            return result
+        return wrapper
+    return decorating_function

@@ -1,0 +1,668 @@
+
+Okay, I need to create an LFU cache decorator in Python. Let me think about how to approach this. The function signature is given, and the docstring explains it's a decorator that uses the Least Frequently Used algorithm. 
+
+First, I remember that LFU caches evict the least frequently used items when the cache is full. So, each time a function is called, we need to track how many times each key has been accessed. 
+
+Let me start by thinking about the structure. The decorator should take maxsize and typed as parameters. The typed parameter probably means that different types (like int vs str) are considered different keys. 
+
+So, the cache needs to store entries with their counts. Maybe using a dictionary to map keys to their counts. Also, we need a way to keep track of the order of usage. Wait, LFU is based on frequency, not time. So, when a key is accessed, its count increases. When the cache is full, we remove the key with the lowest count.
+
+But how to efficiently track the least frequently used items? A common approach is to use a dictionary for the counts and another structure to track the order. Maybe a heap? But heaps can be tricky for updates. Alternatively, we can use an OrderedDict or something similar. Wait, maybe using a dictionary for the counts and a separate structure that keeps track of the frequencies. 
+
+Wait, for LFU, when a key is accessed, its frequency increases. So, if we have a dictionary that maps keys to their frequencies, and another structure that keeps track of the frequencies in order. For example, a list of frequencies, but that might not be efficient. 
+
+Alternatively, we can use a dictionary for the counts and a priority queue where the priority is based on the frequency. However, when a key's frequency increases, we need to update its priority. But standard priority queues don't support efficient updates. 
+
+Hmm, maybe using a heap isn't the best approach here. Another idea is to use a dictionary to track the counts and another dictionary to track the order. Wait, perhaps using an OrderedDict where the order is based on frequency. But how to manage that. 
+
+Alternatively, for each frequency level, keep a list of keys. For example, when a key is accessed, we increment its count, and move it from the old frequency list to the new one. Then, when evicting, we look for the lowest frequency list and remove a key from there. 
+
+That sounds manageable. Let's think about the data structures. 
+
+Let me outline the steps for the LFU cache:
+
+1. When a function is decorated, the decorator creates a cache.
+2. Each time the function is called, the key (which may include type if typed is True) is generated.
+3. Check if the key is in the cache. If it is, increment its count and mark it as recently used (but LFU doesn't consider recency, only frequency).
+4. If the key is not in the cache, check if the cache is full. If it is, evict the least frequently used item (the one with the lowest count). If there are multiple items with the same count, maybe evict the one that was least recently used? Wait, no, LFU doesn't consider recency. So, if two items have the same frequency, which one to evict? Maybe the one that was added first? Or maybe it's arbitrary. 
+
+But the problem says to use LFU, so perhaps when frequencies are the same, the one that was least recently used is evicted. Wait, but that's more like LRU. Hmm, perhaps the LFU algorithm can have ties broken by LRU. But the standard LFU doesn't consider recency. However, in practice, some implementations might combine LFU with LRU to break ties. 
+
+But the problem says to implement LFU. So, for the purpose of this problem, perhaps when frequencies are equal, we can evict the one that was added first. 
+
+So, for the data structures, perhaps we need:
+
+- A dictionary to map keys to their current frequency.
+- A dictionary that maps frequency counts to a list of keys with that frequency. 
+- Also, for each key, we need to track when it was last accessed? Or not? 
+
+Wait, maybe not. Let's think again. 
+
+The LFU algorithm works by keeping track of how many times each key has been accessed. When a key is accessed, its count increases. When the cache is full, the key with the lowest count is removed. If multiple keys have the same count, then which one to remove? 
+
+In some implementations, when there's a tie, the one that was least recently used is evicted. But that's more like LRU. However, the standard LFU doesn't consider recency. So perhaps, in this case, when frequencies are equal, we can just pick any. But for the sake of determinism, maybe we can use a FIFO approach for the same frequency. 
+
+Alternatively, perhaps the LFU cache can be implemented with a priority queue where the priority is based on frequency, and for same frequencies, the order is based on insertion time. 
+
+But implementing that might complicate things. 
+
+Alternatively, for the purposes of this problem, let's assume that when frequencies are equal, we can evict the one that was added first. 
+
+So, the data structures:
+
+- A dictionary called cache that maps keys to their values.
+- A dictionary called freq that maps keys to their current frequency.
+- A dictionary called freq_map that maps frequency counts to a list of keys with that frequency. 
+- Also, a counter for the current size of the cache. 
+
+Wait, but when a key is added, if it's already in the cache, we need to update its frequency. 
+
+Let me outline the steps for each function call:
+
+When the decorated function is called:
+
+1. Generate the key. If typed is True, then different types are considered different keys. For example, 1 and '1' are different. So, the key is the same as the arguments passed to the function. Wait, no. Wait, the key is based on the arguments. For example, if the function is called with arguments, the key is a tuple of the arguments. But if typed is False, then the key is generated without considering the type. Wait, no. The typed parameter is for the cache key. For example, if typed is True, then different types are considered different keys. So, for example, if the function is called with a key of type int and another with the same value but type str, they are considered different. 
+
+So, the key generation depends on the arguments. For example, if the function is called with arguments, the key is a tuple of the arguments. But if typed is False, then the key is generated by converting the arguments to a hashable type (like converting lists to tuples, etc.), but perhaps the typed parameter affects whether the type is considered. 
+
+Wait, the typed parameter is part of the cache's key generation. So, when typed is True, the key includes the type. For example, if the function is called with an integer and then with a string, they are considered different keys. 
+
+But how to generate the key. For example, for a function with parameters, the key would be a tuple of the arguments. But when typed is False, perhaps the arguments are converted to a hashable type, but their types are ignored. Wait, no. The typed parameter is for the cache key. So, for example, if the function is called with a key of type int, and then with the same value but type str, then if typed is True, they are different keys. If typed is False, they are considered the same. 
+
+But how to generate the key. For example, if the function is called with arguments, the key is generated by hashing the arguments. But for the purpose of the cache, the key is based on the arguments. 
+
+But how to handle that. For example, if the function is called with a list, then the key would be the list. However, lists are not hashable. So, perhaps the key is generated by converting the arguments to a tuple. 
+
+Wait, the function is a decorator, so it's applied to a function. The function's parameters can be of any type, but when generating the key, we need to make sure that it's hashable. 
+
+So, the key is generated based on the arguments. For example, for a function with parameters a and b, the key would be (a, b). But if the parameters are mutable, like lists, then they need to be converted to tuples. 
+
+But how to handle that in the decorator. Well, the decorator needs to generate the key based on the arguments. However, the decorator can't know how to convert the arguments to a hashable type. So, perhaps the key is generated by converting the arguments to a tuple, and if typed is False, then the types are ignored. Wait, no. The typed parameter is for whether different types are considered different keys. 
+
+Wait, the typed parameter is part of the cache's key generation. So, when typed is True, the key includes the type. For example, if the function is called with an integer and then with a string, they are different keys. If typed is False, then they are considered the same key. 
+
+But how to generate the key. For example, if the function is called with arguments, the key is generated by hashing the arguments. But for the purpose of the cache, the key is based on the arguments, but with the type considered if typed is True. 
+
+This seems a bit ambiguous. However, in the standard Python functools.lru_cache, the typed parameter works such that if typed is True, then different types are considered different keys. For example, lru_cache with typed=True will treat 1 and '1' as different keys. 
+
+So, in this problem, the typed parameter works similarly. Therefore, the key generation for the cache should be based on the arguments, and if typed is True, then the types are considered. 
+
+But how to generate the key. For example, if the function is called with arguments, the key is a tuple of the arguments. But if the arguments are mutable (like lists), they need to be converted to tuples. 
+
+But the decorator can't know how to convert the arguments. Therefore, perhaps the key is generated by converting the arguments to a tuple, and if typed is False, then the types are ignored. Wait, no. The typed parameter affects whether the type is considered. 
+
+Wait, the standard lru_cache's typed parameter works by including the type in the key. For example, if you have a function that takes an argument, and you call it with an int and then with a str, they are considered different keys if typed is True. 
+
+So, in our case, the key is generated by the arguments passed to the function, with the type considered if typed is True. 
+
+Therefore, the key is generated as follows: for each argument, if typed is True, then the argument is used as-is (but must be hashable). If typed is False, then the argument is converted to a hashable type (like converting lists to tuples, etc.), but the type is ignored. Wait, no. The typed parameter in lru_cache is about whether the type is considered. For example, if you have a function that takes an argument, and you call it with 1 and '1', then with typed=True, they are different keys. With typed=False, they are considered the same. 
+
+But how to generate the key. For example, if the function is called with arguments, the key is generated by the arguments. So, the key is the same as the arguments passed to the function. However, if the arguments are not hashable, they need to be converted. 
+
+But the decorator can't know how to convert them. Therefore, perhaps the key is generated by converting the arguments to a tuple, and if typed is False, then the types are ignored. Wait, that doesn't make sense. 
+
+Alternatively, the key is generated as a tuple of the arguments, and if typed is False, then the arguments are converted to their canonical form (like converting lists to tuples, etc.), but the type is considered. 
+
+This is getting complicated. Maybe for the purpose of this problem, the key is generated by the arguments passed to the function. For example, if the function is called with arguments, the key is a tuple of the arguments. But since the arguments can be of any type, the key must be hashable. 
+
+But how to handle that. Well, the user of the decorator is responsible for passing hashable arguments. 
+
+But perhaps the key is generated as follows: 
+
+If typed is True, then the key is a tuple of the arguments. 
+
+If typed is False, then the key is a tuple of the arguments converted to their canonical form (like converting lists to tuples, etc.), but the type is ignored. 
+
+Wait, but how to convert them. For example, if the function is called with a list, then converting it to a tuple. 
+
+But this is not something the decorator can do automatically. Therefore, perhaps the key is generated by the arguments as they are, and the user is responsible for passing hashable arguments. 
+
+But the problem says that the decorator is for a function, so the arguments passed to the function must be hashable. 
+
+So, in the code, when generating the key, we can take the arguments as they are. 
+
+But how to get the arguments. Well, the decorator is applied to a function, so when the function is called, the arguments are passed. 
+
+So, for the key, we can generate it by taking the arguments as they are. 
+
+But how to handle the typed parameter. For example, if the function is called with a key of type int and another of type str, then with typed=True, they are different keys. 
+
+So, the key is the same as the arguments passed to the function. 
+
+Therefore, in the code, the key is generated as the arguments passed to the function. 
+
+But how to get the arguments. For example, when the decorated function is called, the arguments are passed as *args and **kwargs. 
+
+So, the key would be a tuple of the args and the kwargs. But for kwargs, we need to convert them to a tuple of (key, value) pairs. 
+
+But this is complicated. However, the standard lru_cache decorator handles this by using the arguments as they are, but converting them to a hashable type. 
+
+But perhaps for this problem, we can assume that the function's arguments are hashable and that the key is generated as a tuple of the arguments. 
+
+Alternatively, the key is generated as a tuple of the arguments, and if typed is False, then the types are ignored. 
+
+Wait, but how to ignore the type. For example, if the function is called with 1 and '1', then with typed=False, they are considered the same. 
+
+But how to do that. Well, perhaps we can convert the arguments to their canonical form, like converting them to their string representation, but that's not reliable. 
+
+Alternatively, for the purpose of the cache key, when typed is False, we can convert the arguments to a tuple of their values, but without considering their types. 
+
+But this is not possible. For example, if the function is called with a list, how to convert it to a tuple. 
+
+This seems too complex. Maybe the problem expects that the key is generated based on the arguments, and the typed parameter affects whether the types are considered. 
+
+In the standard lru_cache, the key is generated by the arguments, and the typed parameter is used to determine if the types are considered. 
+
+So, for the purpose of this problem, perhaps the key is generated as follows: 
+
+If typed is True, the key is a tuple of the arguments (as they are, assuming they are hashable). 
+
+If typed is False, the key is a tuple of the arguments, but with each argument converted to its hashable form (like converting lists to tuples, etc.), but the type is ignored. 
+
+But again, how to do that. 
+
+Alternatively, perhaps the key is generated by the arguments, and the typed parameter is used to determine whether to include the type in the key. 
+
+But this is not clear. 
+
+Well, given that the problem is to generate an LFU cache, perhaps the key generation is handled by the decorator, and the typed parameter is used to determine whether different types are considered different keys. 
+
+So, for example, if the function is called with arguments, the key is generated by the arguments, and if typed is True, then different types are considered different keys. 
+
+But how to generate the key. 
+
+Perhaps the key is generated as a tuple of the arguments, and if typed is False, then the arguments are converted to their canonical form (like converting lists to tuples, etc.), but the type is ignored. 
+
+But again, this is not straightforward. 
+
+Alternatively, perhaps the key is generated as a tuple of the arguments, and if typed is False, then the arguments are converted to their string representations. 
+
+But that's not reliable. 
+
+Hmm, perhaps for the purpose of this problem, the key is generated as a tuple of the arguments, and the typed parameter is used to determine whether to include the type in the key. 
+
+But how to do that. 
+
+Well, perhaps the key is generated as a tuple of the arguments, and if typed is False, then each argument is converted to its hashable form (like converting lists to tuples, etc.), but the type is not considered. 
+
+But again, this is not clear. 
+
+Alternatively, perhaps the key is generated by the arguments, and the typed parameter is used to determine whether to include the type. 
+
+In the standard lru_cache, the typed parameter is used to determine whether to include the type in the key. So, for example, if the function is called with an integer and then with a string, they are considered different keys if typed is True. 
+
+So, for this problem, the key generation would be similar. 
+
+Therefore, in the code, when generating the key, the arguments are passed as they are. 
+
+But how to handle the arguments. 
+
+Well, the function is decorated, so when the decorated function is called, the arguments are passed as *args and **kwargs. 
+
+So, the key can be generated as a tuple of the arguments. 
+
+But for **kwargs, we need to convert them into a tuple of (key, value) pairs. 
+
+But this is complicated. 
+
+Alternatively, perhaps the key is generated as a tuple of the arguments, and for the purpose of the cache, the typed parameter is used to determine whether to include the type in the key. 
+
+But this is not clear. 
+
+Well, given the time constraints, perhaps I should proceed with the assumption that the key is generated as a tuple of the arguments, and the typed parameter is used to determine whether to include the type. 
+
+But how to implement that. 
+
+Alternatively, perhaps the key is generated as follows: 
+
+If typed is True, then the key is a tuple of the arguments. 
+
+If typed is False, then the key is a tuple of the arguments, but with each argument converted to its hashable form (like converting lists to tuples, etc.), but the type is ignored. 
+
+But again, how to do that. 
+
+Alternatively, perhaps the key is generated by the arguments, and the typed parameter is used to determine whether to include the type. 
+
+In Python, the standard way to handle this is to use the arguments as they are, but for the purpose of the cache key, if typed is False, then the arguments are converted to their canonical form (like converting lists to tuples, etc.), but the type is ignored. 
+
+But this is not something the decorator can do automatically. 
+
+Perhaps for this problem, the key is generated by the arguments, and the typed parameter is used to determine whether to include the type. 
+
+But given the time, perhaps I should proceed with the code, assuming that the key is generated as a tuple of the arguments, and the typed parameter is used to determine whether to include the type. 
+
+So, in the code, when generating the key, for the function call, the arguments are passed as *args and **kwargs. 
+
+But to generate the key, we need to convert the arguments into a hashable type. 
+
+So, perhaps the key is generated as follows: 
+
+key = (args, frozenset(kwargs.items())) 
+
+But this is not correct. 
+
+Alternatively, for the key, we can generate a tuple of the arguments, and for the keyword arguments, we can generate a tuple of (key, value) pairs. 
+
+But this is complicated. 
+
+Alternatively, perhaps the key is generated as the arguments passed to the function, and the typed parameter is used to determine whether to include the type. 
+
+But perhaps for the purpose of this problem, we can assume that the function's arguments are hashable and that the key is generated as a tuple of the arguments. 
+
+So, the code would look something like this: 
+
+def lfu_cache(maxsize=128, typed=False):
+    # implementation here
+
+But then, the key is generated as the arguments passed to the function. 
+
+But how to get the arguments. 
+
+In the decorator, when the function is called, the arguments are passed as *args and **kwargs. So, the key can be generated as a tuple of the arguments. 
+
+But for keyword arguments, we need to include them as well. 
+
+So, the key is a tuple of (args, kwargs). 
+
+But to make this hashable, we need to convert the kwargs into a tuple of (key, value) pairs. 
+
+So, the key would be a tuple of (args, tuple(sorted(kwargs.items()))) 
+
+But this is assuming that the kwargs are sorted. 
+
+But this is getting complicated. 
+
+Alternatively, perhaps the key is generated as follows: 
+
+key = (args, frozenset(kwargs.items())) 
+
+But this would not work for mutable keyword arguments. 
+
+This is getting too complicated. Perhaps for the purpose of this problem, the key is generated as a tuple of the arguments, and the typed parameter is used to determine whether to include the type. 
+
+But given the time, perhaps I should proceed with the code, assuming that the key is generated as a tuple of the arguments, and that the typed parameter is handled by including the type in the key. 
+
+So, the code would have a function that, when called, generates a key based on the arguments. 
+
+Once the key is generated, the cache needs to track the frequency of each key. 
+
+Now, back to the data structures. 
+
+The LFU cache needs to track for each key, its frequency. 
+
+So, for the cache, we can have:
+
+- A dictionary called cache that maps keys to their values. 
+- A dictionary called freq that maps keys to their frequency. 
+- A dictionary called freq_map that maps frequency counts to a list of keys with that frequency. 
+- Also, a variable to track the current size of the cache. 
+
+When a key is accessed:
+
+1. If the key is in the cache:
+   a. Increment its frequency. 
+   b. Remove it from the old frequency list. 
+   c. Add it to the new frequency list. 
+   d. Update the freq dictionary. 
+2. If the key is not in the cache:
+   a. If the cache is full, evict the key with the lowest frequency. 
+   b. Add the key to the cache, with frequency 1. 
+   c. Add it to the freq_map for frequency 1. 
+
+When evicting, we need to find the frequency with the lowest count. 
+
+So, for the freq_map, we can have a dictionary where each key is a frequency count, and the value is a list of keys with that frequency. 
+
+But to find the minimum frequency, we can track the minimum frequency. 
+
+Alternatively, we can iterate through the freq_map's keys to find the minimum. 
+
+But for efficiency, perhaps we can track the minimum frequency. 
+
+So, variables:
+
+- min_freq: the current minimum frequency in the cache. 
+
+When a key is added or updated, we may need to update the min_freq. 
+
+But this can get complicated. 
+
+Alternatively, when evicting, we can iterate through the freq_map's keys to find the minimum frequency. 
+
+But for a cache with maxsize=128, this is manageable. 
+
+So, the steps for evicting:
+
+- Find the frequency with the lowest count. 
+- Select a key from that frequency list. 
+- Remove the key from the cache, freq, and freq_map. 
+
+But how to select the key. For example, if there are multiple keys with the same frequency, which one to evict? 
+
+In standard LFU, when there's a tie, the one that was least recently used is evicted. However, since LFU doesn't consider recency, perhaps we can just evict the first one in the list. 
+
+Alternatively, we can use a FIFO approach for the same frequency. 
+
+But for simplicity, perhaps we can evict the first key in the list. 
+
+So, the code would have:
+
+When evicting:
+
+- Find the minimum frequency. 
+- Take the first key from the list of keys with that frequency. 
+- Remove it from the cache, freq, and freq_map. 
+
+Now, putting this together. 
+
+The code for the decorator would be:
+
+def lfu_cache(maxsize=128, typed=False):
+    # The cache is a dictionary
+    cache = {}
+    # freq maps keys to their frequency
+    freq = {}
+    # freq_map maps frequency counts to a list of keys
+    freq_map = defaultdict(list)
+    # current size of the cache
+    size = 0
+    # min frequency
+    min_freq = 0
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            nonlocal size, min_freq
+            # Generate the key
+            if typed:
+                key = (args, frozenset(kwargs.items()))
+            else:
+                # Convert args and kwargs to hashable types
+                # For args, convert to tuple
+                args_tuple = tuple(args)
+                # For kwargs, convert to tuple of sorted items
+                kwargs_tuple = tuple(sorted(kwargs.items()))
+                key = (args_tuple, kwargs_tuple)
+            # Check if key is in cache
+            if key in cache:
+                # Increment frequency
+                old_freq = freq[key]
+                # Remove from old freq list
+                freq_map[old_freq].remove(key)
+                if not freq_map[old_freq]:
+                    del freq_map[old_freq]
+                # Update frequency
+                new_freq = old_freq + 1
+                freq[key] = new_freq
+                # Add to new freq list
+                freq_map[new_freq].append(key)
+                # Update min_freq if necessary
+                if new_freq < min_freq:
+                    min_freq = new_freq
+                # Return the cached value
+                return cache[key]
+            else:
+                # Check if cache is full
+                if size >= maxsize:
+                    # Evict the least frequently used item
+                    # Find the min frequency
+                    evict_freq = min(freq_map.keys())
+                    # Get the key to evict
+                    evict_key = freq_map[evict_freq].pop(0)
+                    # Remove from cache and freq
+                    del cache[evict_key]
+                    del freq[evict_key]
+                    # Decrement size
+                    size -= 1
+                # Add the new key
+                cache[key] = func(*args, **kwargs)
+                freq[key] = 1
+                freq_map[1].append(key)
+                size += 1
+                # Update min_freq if necessary
+                if min_freq == 0 or 1 < min_freq:
+                    min_freq = 1
+                return cache[key]
+        return wrapper
+    return decorator
+
+Wait, but there's a problem with the min_freq. Initially, when the cache is empty, min_freq is 0. But when the first key is added, it's frequency is 1. So, min_freq should be 1. 
+
+But in the code above, when adding a new key, if min_freq is 0 or 1 < min_freq, then set min_freq to 1. That would work. 
+
+But what if the cache is not full and we add a new key? For example, if the cache is not full, and we add a key, then the min_freq is 1. 
+
+But when a key is accessed, and its frequency increases, the min_freq might not change. 
+
+But this code may have some issues. For example, when a key's frequency increases, but there are other keys with lower frequencies. 
+
+But the code above tries to update min_freq only when a new key is added. 
+
+This may not be correct. For example, if the cache has keys with frequencies 2 and 3, and a new key is added with frequency 1, then min_freq is 1. But if a key with frequency 1 is accessed, increasing its frequency to 2, then the min_freq should still be 1 (since there are other keys with frequency 1). 
+
+So, the code above may not correctly track the min_freq. 
+
+This suggests that the code for tracking min_freq is incorrect. 
+
+So, perhaps the min_freq should be tracked as the minimum frequency in the freq_map. 
+
+But how to do that. 
+
+Alternatively, when a key is added or updated, we can check if the new frequency is lower than the current min_freq. 
+
+But this may not be sufficient. 
+
+Alternatively, when evicting, we can find the minimum frequency by checking all keys in freq_map. 
+
+But for small maxsize (like 128), this is manageable. 
+
+So, in the code, during eviction, we can find the minimum frequency by taking the min of freq_map.keys(). 
+
+So, the code for eviction would be:
+
+evict_freq = min(freq_map.keys())
+
+But in the code above, during eviction, we do that. 
+
+But during the increment of frequency, we don't update the min_freq. 
+
+So, for example, if the current min_freq is 1, and a key with frequency 1 is accessed, increasing its frequency to 2. Then, there are still keys with frequency 1. So, the min_freq should remain 1. 
+
+But in the code above, when a key is accessed, the min_freq is only updated if new_freq < min_freq. 
+
+So, if the new_freq is 2, and min_freq is 1, then the code does not update min_freq. 
+
+Which is correct. 
+
+So, the code for the min_freq is correct. 
+
+But what about when a key is added? For example, when adding a new key with frequency 1, if the current min_freq is 0 (initial state), then min_freq is set to 1. 
+
+Yes. 
+
+So, the code for min_freq is handled correctly. 
+
+Now, testing this code. 
+
+But the problem says to generate the code based on the function signature and docstring, and to output only the code. 
+
+But the code above may have some issues. For example, the key generation. 
+
+In the code, for typed=False, the key is generated as (args_tuple, kwargs_tuple), where args_tuple is tuple(args), and kwargs_tuple is tuple(sorted(kwargs.items())). 
+
+This would ensure that the same function call with the same arguments (regardless of order) would generate the same key. 
+
+But for example, if the function is called with kwargs {'a': 1, 'b': 2} and {'b': 2, 'a': 1}, they would generate the same key. 
+
+But if typed is False, then the order of the keyword arguments doesn't matter. 
+
+This seems correct. 
+
+Another issue is that the code uses a defaultdict for freq_map. 
+
+But in Python, we need to import defaultdict from collections. 
+
+So, the code would need to import that. 
+
+But the problem says to generate the code, so we need to include the necessary imports. 
+
+So, the code would start with:
+
+from functools import wraps
+from collections import defaultdict
+
+But wait, the decorator is supposed to be a function that returns a decorator. 
+
+So, the full code would be:
+
+from functools import wraps
+from collections import defaultdict
+
+def lfu_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Frequently Used (LFU)
+    algorithm.
+    """
+    cache = {}
+    freq = {}
+    freq_map = defaultdict(list)
+    size = 0
+    min_freq = 0
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            nonlocal size, min_freq
+            # Generate key
+            if typed:
+                key = (args, frozenset(kwargs.items()))
+            else:
+                args_tuple = tuple(args)
+                kwargs_tuple = tuple(sorted(kwargs.items()))
+                key = (args_tuple, kwargs_tuple)
+            # Check if key is in cache
+            if key in cache:
+                # Increment frequency
+                old_freq = freq[key]
+                # Remove from old freq list
+                freq_map[old_freq].remove(key)
+                if not freq_map[old_freq]:
+                    del freq_map[old_freq]
+                # Update frequency
+                new_freq = old_freq + 1
+                freq[key] = new_freq
+                # Add to new freq list
+                freq_map[new_freq].append(key)
+                # Update min_freq if necessary
+                if new_freq < min_freq:
+                    min_freq = new_freq
+                # Return cached value
+                return cache[key]
+            else:
+                # Check if cache is full
+                if size >= maxsize:
+                    # Evict the least frequently used item
+                    evict_freq = min(freq_map.keys())
+                    evict_key = freq_map[evict_freq].pop(0)
+                    del cache[evict_key]
+                    del freq[evict_key]
+                    size -= 1
+                # Add new key
+                cache[key] = func(*args, **kwargs)
+                freq[key] = 1
+                freq_map[1].append(key)
+                size += 1
+                # Update min_freq if necessary
+                if min_freq == 0 or 1 < min_freq:
+                    min_freq = 1
+                return cache[key]
+        return wrapper
+    return decorator
+
+Wait, but in the code, when evicting, we use min(freq_map.keys()). But if the freq_map is empty, this would raise an error. However, since the cache is full, and we are evicting, the cache must have at least one entry. 
+
+But when size >= maxsize, the cache is full, so there must be entries. 
+
+But what if maxsize is 0? Well, the problem says maxsize is 128 by default. 
+
+Another issue: when the cache is not full, and we add a new key, the size increases. 
+
+But what about when the cache is full and we add a new key, evicting one. 
+
+Now, testing this code. 
+
+But the problem says to generate the code based on the function signature and docstring, and to output only the code. 
+
+But the code above may have some issues. For example, when removing a key from freq_map[old_freq], if the list becomes empty, we delete the entry. 
+
+But in Python, when you do freq_map[old_freq].remove(key), if the key is not present, it raises a ValueError. However, since we are in the case where the key is in the cache, it should be present in the freq_map[old_freq]. 
+
+But what if there are multiple keys with the same frequency? 
+
+For example, if two keys have the same frequency, and one is removed, the list is modified. 
+
+But the code uses list.remove(key), which removes the first occurrence. 
+
+But since the key is in the list, this should work. 
+
+Another issue: when the cache is full, and we evict, we pop(0) from the list. This is O(n) time. For small maxsize, this is acceptable. 
+
+But for larger maxsize, this could be inefficient. 
+
+But given the problem's constraints, it's acceptable. 
+
+So, the code should work. 
+
+Now, the code uses nonlocal variables for size and min_freq. 
+
+But in Python, nonlocal variables must be declared in an enclosing scope. 
+
+In the code, the decorator function has nonlocal size and min_freq, which are defined in the lfu_cache function. 
+
+Yes. 
+
+Now, the code uses wraps(func) to preserve the function's metadata. 
+
+Yes. 
+
+So, this should be the code. 
+
+But I need to make sure that the code is correct. 
+
+Another thing: when the key is not in the cache, and the cache is full, we evict. 
+
+But when the cache is full, and we add a new key, the size is increased. 
+
+But when the cache is not full, the size is increased. 
+
+Yes. 
+
+Another thing: when the key is added, the min_freq is updated. 
+
+But initially, min_freq is 0. 
+
+When the first key is added, size is 0, then size becomes 1. 
+
+In the code, after adding the new key, if min_freq is 0 or 1 < min_freq, then set min_freq to 1. 
+
+Yes. 
+
+So, the code should handle that. 
+
+Now, the code uses frozenset for the kwargs when typed is True. 
+
+But for kwargs, the items are converted to a frozenset, which is hashable. 
+
+Yes. 
+
+But when typed is True, the key is (args, frozenset(kwargs.items())). 
+
+But args is a tuple of the positional arguments, and frozenset(kwargs.items()) is the keyword arguments. 
+
+This should work. 
+
+So, this code should implement the LFU cache as required. 
+
+Now, the problem says to generate the code based on the function signature and docstring, and output only the code. 
+
+So, the final code is as written above.

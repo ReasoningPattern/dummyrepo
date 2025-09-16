@@ -1,0 +1,52 @@
+
+
+```python
+import collections
+from functools import wraps
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    def decorating_function(user_function):
+        cache = collections.OrderedDict()
+
+        def _make_key(args, kwds):
+            items = []
+            items.extend(args)
+            if kwds:
+                items.extend(sorted(kwds.items()))
+            if typed:
+                types = []
+                for arg in args:
+                    types.append(type(arg))
+                if kwds:
+                    for k, v in sorted(kwds.items()):
+                        types.append(type(v))
+                items.append(tuple(types))
+            return tuple(items)
+
+        @wraps(user_function)
+        def wrapper(*args, **kwds):
+            key = _make_key(args, kwds)
+            now = timer()
+            if key in cache:
+                value, expires = cache[key]
+                if now < expires:
+                    del cache[key]
+                    cache[key] = (value, expires)
+                    return value
+                else:
+                    del cache[key]
+            result = user_function(*args, **kwds)
+            expires = now + ttl
+            cache[key] = (result, expires)
+            while len(cache) > maxsize:
+                oldest_key = next(iter(cache))
+                del cache[oldest_key]
+            return result
+        return wrapper
+    return decorating_function
+```

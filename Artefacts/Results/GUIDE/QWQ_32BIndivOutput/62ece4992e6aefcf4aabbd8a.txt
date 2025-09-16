@@ -1,0 +1,240 @@
+
+
+```python
+import logging
+from logging import LogRecord
+import json
+from typing import Dict, Sequence, Optional
+
+def load_configurations(
+    config_filenames: Sequence[str],
+    overrides: Optional[Dict] = None,
+    resolve_env: bool = True
+) -> tuple[Dict[str, dict], list[LogRecord]]:
+    configs = {}
+    errors = []
+
+    def substitute_env_vars(config: dict) -> dict:
+        from os import environ
+        import re
+
+        def replace_env(match):
+            var_name = match.group(1)
+            return environ.get(var_name, match.group(0))
+
+        def process_value(value):
+            if isinstance(value, str):
+                return re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', replace_env, value)
+            elif isinstance(value, dict):
+                return {k: process_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [process_value(item) for item in value]
+            else:
+                return value
+
+        return process_value(config)
+
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                config_str = f.read()
+        except (PermissionError, FileNotFoundError) as e:
+            record = logging.makeLogRecord({
+                'msg': f"Failed to read {filename}: {str(e)}",
+                'levelno': logging.ERROR,
+                'name': 'config_loader',
+            })
+            errors.append(record)
+            continue
+
+        try:
+            config = json.loads(config_str)
+        except json.JSONDecodeError as e:
+            record = logging.makeLogRecord({
+                'msg': f"Failed to parse {filename}: {str(e)}",
+                'levelno': logging.ERROR,
+                'name': 'config_loader',
+            })
+            errors.append(record)
+            continue
+
+        if overrides:
+            config.update(overrides)
+
+        if resolve_env:
+            config = substitute_env_vars(config)
+
+        configs[-filename] = config  # This line has an error: key is negative filename?
+
+    return configs, errors
+```
+
+Wait, I noticed a mistake in the code I just wrote. In the line where I add to `configs`, I have `configs[-filename] = config`. That's a typo; it should be `configs[filename] = config`. Let me correct that:
+
+```python
+import logging
+from logging import LogRecord
+import json
+from typing import Dict, Sequence, Optional
+
+def load_configurations(
+    config_filenames: Sequence[str],
+    overrides: Optional[Dict] = None,
+    resolve_env: bool = True
+) -> tuple[Dict[str, dict], list[LogRecord]]:
+    configs = {}
+    errors = []
+
+    def substitute_env_vars(config: dict) -> dict:
+        from os import environ
+        import re
+
+        def replace_env(match):
+            var_name = match.group(1)
+            return environ.get(var_name, match.group(0))
+
+        def process_value(value):
+            if isinstance(value, str):
+                return re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', replace_env, value)
+            elif isinstance(value, dict):
+                return {k: process_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [process_value(item) for item in value]
+            else:
+                return value
+
+            return process_value(config)
+
+        return process_value(config)
+
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                config_str = f.read()
+        except (PermissionError, FileNotFoundError) as e:
+            record = logging.makeLogRecord({
+                'msg': f"Failed to read {filename}: {str(e)}",
+                'levelno': logging.ERROR,
+                'name': 'config_loader',
+            })
+            errors.append(record)
+            continue
+
+        try:
+            config = json.loads(config_str)
+        except json.JSONDecodeError as e:
+            record = logging.makeLogRecord({
+                'msg': f"Failed to parse {filename}: {str(e)}",
+                'levelno': logging.ERROR,
+                'name': 'config_loader',
+            })
+            errors.append(record)
+            continue
+
+        if overrides:
+            config.update(overrides)
+
+        if resolve_env:
+            config = substitute_env_vars(config)
+
+        configs[filename] = config  # Corrected line here
+
+    return configs, errors
+```
+
+Wait, there's another issue in the `substitute_env_vars` function. The inner `process_value` function is defined inside the `replace_env` function, which is incorrect. Let me restructure that properly.
+
+Corrected substitute_env_vars:
+
+```python
+def substitute_env_vars(config: dict) -> dict:
+    from os import environ
+    import re
+
+    def replace_env(match):
+        var_name = match.group(1)
+        return environ.get(var_name, match.group(0))
+
+    def process_value(value):
+        if isinstance(value, str):
+            return re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', replace_env, value)
+        elif isinstance(value, dict):
+            return {k: process_value(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [process_value(item) for item in value]
+        else:
+            return value
+
+    return process_value(config)
+```
+
+Putting it all together, the final corrected code is:
+
+```python
+import logging
+from logging import LogRecord
+import json
+from typing import Dict, Sequence, Optional
+
+def load_configurations(
+    config_filenames: Sequence[str],
+    overrides: Optional[Dict] = None,
+    resolve_env: bool = True
+) -> tuple[Dict[str, dict], list[LogRecord]]:
+    configs = {}
+    errors = []
+
+    def substitute_env_vars(config: dict) -> dict:
+        from os import environ
+        import re
+
+        def replace_env(match):
+            var_name = match.group(1)
+            return environ.get(var_name, match.group(0))
+
+        def process_value(value):
+            if isinstance(value, str):
+                return re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', replace_env, value)
+            elif isinstance(value, dict):
+                return {k: process_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [process_value(item) for item in value]
+            else:
+                return value
+
+        return process_value(config)
+
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                config_str = f.read()
+        except (PermissionError, FileNotFoundError) as e:
+            record = logging.makeLogRecord({
+                'msg': f"Failed to read {filename}: {str(e)}",
+                'levelno': logging.ERROR,
+                'name': 'config_loader',
+            })
+            errors.append(record)
+            continue
+
+        try:
+            config = json.loads(config_str)
+        except json.JSONDecodeError as e:
+            record = logging.makeLogRecord({
+                'msg': f"Failed to parse {filename}: {str(e)}",
+                'levelno': logging.ERROR,
+                'name': 'config_loader',
+            })
+            errors.append(record)
+            continue
+
+        if overrides:
+            config.update(overrides)
+
+        if resolve_env:
+            config = substitute_env_vars(config)
+
+        configs[filename] = config
+
+    return configs, errors
+```

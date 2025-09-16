@@ -1,0 +1,125 @@
+Okay, I need to write a Python function called deep_merge_nodes that takes a list of nodes and merges them, handling duplicate keys. The docstring says that if there are colliding keys with non-MappingNode values, the last one should stay. Hmm, right, so the key here is to merge nodes deeply, especially when the nodes are MappingNodes. 
+
+First, I should figure out what a MappingNode is. Since it's not defined here, maybe it's a custom class that has a 'value' or something, but perhaps in this context, a MappingNode is a dictionary-like structure where the values can be other nodes. So the deep merge would mean that for each key present in the nodes, if the value is a MappingNode, we recursively merge those. But if the value is not a MappingNode (like a leaf node), then the last occurrence in the list takes precedence.
+
+Wait, the problem says "if there are colliding keys with non-MappingNode values, the last of the values remains." So the merging only happens when all the colliding keys have MappingNode values. Otherwise, the last one wins. 
+
+So the approach would be:
+
+1. Iterate through each node in the nodes list from last to first? Or maybe process them in order, with later nodes overriding earlier ones, but for keys that have MappingNode values in both, merge them.
+
+Wait, the order matters. The function should process the nodes in the given order, but when merging, the later nodes can override earlier ones. But for keys that have a MappingNode in both, the values should be merged deeply.
+
+So the steps might be:
+
+- Start with an empty result dictionary.
+
+- For each node in nodes in reverse order? Or in the given order, but each subsequent node can override the existing entries?
+
+Wait, since the last occurrence should take precedence when there's a non-MappingNode, but when they are both MappingNodes, we merge them.
+
+Wait, the problem says "Merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains."
+
+So for a key that exists in multiple nodes:
+
+- If all the values (for that key across all nodes) are MappingNodes, then we need to deep merge them.
+
+- If any of the values is not a MappingNode, then the last one (since the last occurrence in the list would take precedence) is kept.
+
+Wait, the wording says "colliding keys with non-MappingNode values" — so if any of the colliding keys has a non-MappingNode value, then the last one is kept. So in that case, we don't merge, just take the last value. But if all the colliding keys have MappingNode values, then we merge them recursively.
+
+So the algorithm would be:
+
+Initialize the merged result as an empty dict.
+
+Then, iterate through each node in the nodes list in order. For each key in the current node:
+
+- Check if the key is already in the merged result.
+
+   - If not, add it with its value.
+
+   - If it is present:
+
+      - Check if the existing value in the merged result is a MappingNode and the current node's value is also a MappingNode.
+
+         - If both are MappingNodes, then perform a deep merge of these two.
+
+         - Else, replace the existing value with the current node's value (since there's a non-MappingNode involved, so the last one wins).
+
+Wait, but how do I check if something is a MappingNode? Since the problem mentions "non-MappingNode values", perhaps a MappingNode is a type that can be checked via an isinstance() call. But since the problem doesn't define it, maybe in the code, we can assume that a MappingNode is a dictionary (or a subclass of a dict-like structure). Alternatively, perhaps the nodes are all dictionaries, and a MappingNode is a node that can be further merged (i.e., is a dict). So perhaps in the code, we can check if the value is a dict (or has a certain attribute). Since the problem doesn't specify, maybe the code can assume that a value is a MappingNode if it's a dictionary. So, in the code, we can check if the value is a dict instance.
+
+So the steps in code would be:
+
+def deep_merge_nodes(nodes):
+    result = {}
+    for node in nodes:
+        for key, value in node.items():
+            if key in result:
+                existing = result[key]
+                if isinstance(existing, dict) and isinstance(value, dict):
+                    # both are MappingNodes, so deep merge
+                    result[key] = deep_merge_nodes([existing, value])
+                else:
+                    # at least one is not a dict, so take the current value (since the last one will override)
+                    result[key] = value
+            else:
+                result[key] = value
+    return result
+
+Wait, but wait, the nodes are a list of nodes. Each node is a dictionary-like structure. The function processes each node in the list in order, and for each key in the current node, it checks if the key is already in the result. If so, and both existing and new value are dicts, then merge them by recursively calling deep_merge_nodes with those two as the nodes list. Otherwise, just take the new value (since the current node is processed after previous ones, so if this is the last occurrence, it will replace the existing value).
+
+Hmm, but in the code above, the order of merging is that for existing and new value being dicts, we merge existing and value. But since existing is the accumulated result so far, and the current node is the next in the list, perhaps the order in the recursive call should be [existing, value], so that existing comes first and value (the current node's value) comes second, so that the later one (value) takes precedence when there are non-dict values in the recursive merge.
+
+Wait, in the recursive call, the nodes list would be [existing, value]. So when merging those two, the value (from the current node) comes second, so in the recursive call, if there is a key in both, the second (value) would take precedence if they are not dicts. That makes sense.
+
+Wait, let's think of an example. Suppose existing is {'a': 1}, and value is {'a': 2}. Then, in the recursive call, the two nodes are existing and value. The merge would first process existing, then value, so the result would take value's 'a' as 2, because in the recursive call, the second node (value) comes after the first (existing). So the existing is first, and the current value (the second node) would override in case of non-dicts. So that works.
+
+Yes, that's correct.
+
+So the code seems okay. But let's test a few cases.
+
+Test case 1: two nodes with the same key and both are dicts.
+
+nodes = [ {'a': {'b': 1}}, {'a': {'c': 2}} ]
+
+The merged result should be {'a': {'b':1, 'c':2}}.
+
+In the code, processing first node adds 'a' as {'b':1}. Then processing the second node's 'a' is a dict. So existing is the first's value, and value is the second's. So the recursive call merges those two, resulting in the combined dict.
+
+Another case where one is a dict and the other is not.
+
+nodes = [ {'a': {'b': 1}}, {'a': 3} ]
+
+The key 'a' in the second node has a non-dict value. So since one of them is not a dict, the second's value (3) will replace the existing. So the result is {'a':3}.
+
+Another case where two non-dicts. The last one wins.
+
+nodes = [ {'a': 1}, {'a': 2} ] → {'a':2}.
+
+Another case where the first is a dict and the second is a dict, but then a third is a non-dict.
+
+nodes = [ {'a': {'b':1}}, {'a': {'c':2}}, {'a': 3} ]
+
+The first two merge into {'a': {'b', 'c'}}, then the third's 'a' is 3 (non-dict), so the third's value replaces it. So final is {'a':3}.
+
+Another test where three nodes with the same key, all dicts.
+
+nodes = [ {'a': {'x':1}}, {'a': {'y':2}}, {'a': {'z':3}} ]
+
+The merged 'a' would be {'x':1, 'y':2, 'z':3}.
+
+So the code should handle that.
+
+Wait, in the code, when processing each node in the list in order, the first node's 'a' is added. Then the second node's 'a' is a dict, so the existing (from first) is merged with the second's value. Then the third node's 'a' is a dict again, so merged with the existing (from first two) and the third's. So yes.
+
+Another edge case: a node that is not a dict? Wait, the nodes are passed as a list of nodes. But the function's parameters say "nodes", so each node is a dictionary? Or perhaps the nodes can be other types? The problem's description mentions "node values corresponding to duplicate keys", so probably each node is a dictionary-like structure with key-value pairs.
+
+Assuming that all nodes in the input list are dictionaries. The code's for key, value in node.items() would work.
+
+What about if a node is not a dict? The code would fail. But the problem probably expects that each node is a MappingNode (i.e., a dict-like structure).
+
+So the code should be okay.
+
+Wait, but in the code, the first loop is for node in nodes: so each node is expected to have items. So the code may assume that each node is a dict. The problem's input is a list of nodes, which are presumably all MappingNodes or similar.
+
+Therefore, the code should work as intended.

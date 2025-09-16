@@ -1,0 +1,76 @@
+import logging
+import os
+import yaml
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    """
+    Given a sequence of configuration filenames, load and validate each configuration file. If the configuration file
+    cannot be read due to insufficient permissions or error parsing configuration file, the error log will
+    be recorded. Otherwise, return the results as a tuple of: dict of configuration filename to corresponding parsed configuration,
+    and sequence of logging.LogRecord instances containing any parse errors.
+    """
+    configurations = {}
+    error_logs = []
+
+    if overrides is None:
+        overrides = {}
+
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as file:
+                config = yaml.safe_load(file)
+            if resolve_env:
+                config = resolve_environment_variables(config)
+            config = apply_overrides(config, overrides)
+            configurations[filename] = config
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            log_record = logging.LogRecord(
+                name=__name__,
+                level=logging.ERROR,
+                pathname=filename,
+                lineno=0,
+                msg=str(e),
+                args=None,
+                exc_info=(type(e), e, e.__traceback__)
+            )
+            error_logs.append(log_record)
+            logger.handle(log_record)
+
+    return configurations, error_logs
+
+
+def resolve_environment_variables(config):
+    import os
+    if isinstance(config, dict):
+        for key, value in config.items():
+            if isinstance(value, str) and value.startswith('${') and value.endswith('}'):
+                env_var = value[2:-1]
+                config[key] = os.environ.get(env_var, value)
+            elif isinstance(value, (list, dict)):
+                config[key] = resolve_environment_variables(value)
+    elif isinstance(config, list):
+        for i, item in enumerate(config):
+            if isinstance(item, str) and item.startswith('${') and item.endswith('}'):
+                env_var = item[2:-1]
+                config[i] = os.environ.get(env_var, item)
+            elif isinstance(item, (list, dict)):
+                config[i] = resolve_environment_variables(item)
+    return config
+
+
+def apply_overrides(config, overrides):
+    if isinstance(config, dict):
+        for key, value in overrides.items():
+            if key in config:
+                config[key] = value
+            else:
+                config[key] = value
+        for key, value in config.items():
+            if isinstance(value, (list, dict)):
+                config[key] = apply_overrides(value, overrides)
+    elif isinstance(config, list):
+        for item in config:
+            if isinstance(item, (list, dict)):
+                item = apply_overrides(item, overrides)
+    return config

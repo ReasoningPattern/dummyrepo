@@ -1,0 +1,111 @@
+
+Okay, let's see. I need to write a Python function called find_roots that takes a graph, a property, and an optional set of roots. The goal is to find all the root nodes in a transitive hierarchy based on that property. The example given is using RDFS.subClassOf, which would return all root classes.
+
+First, I should understand what a root is in this context. A root would be a node that has no parents in the hierarchy. So for each node in the graph, if there's no triple where it's the child (subject) of the property, then it's a root. But wait, the property direction is (child, prop, parent), so to find roots, I need to find nodes that are not the subject of any such triple.
+
+But maybe there's a transitive closure aspect here. Wait, the function's name suggests it's looking for roots in a transitive hierarchy. However, the example given uses RDFS.subClassOf, which is transitive. But the function might not need to consider transitivity directly because the graph could already contain all the inferred triples, or maybe it's supposed to find direct parents only. The docstring says "Assumes triple of the form (child, prop, parent)", so perhaps it's considering direct parent relationships, not the transitive ones. But the example says that using RDFS.subClassOf would return all roots of the sub-class hierarchy. Hmm, maybe the function is intended to find nodes that have no parents, even considering transitive relationships. Wait, no. If the graph has direct triples, then the roots would be those nodes that are not the subject of any triple with the given property. Because if a node is a subclass of another, but that other is also a subclass of another, then the root would be the topmost one. But if the graph doesn't have the transitive closure, then this function would only find nodes that have no direct parents. However, the example says that using RDFS.subClassOf would return all roots, which in RDF typically are classes that are not subclasses of any other. So maybe the function is supposed to find all nodes that are not the subject of any (child, prop, parent) triple.
+
+But then, how do we handle the case where the graph has multiple levels? For example, if A is a subclass of B, and B is a subclass of C, then the roots would be C if there's no higher class. But if the graph only contains A->B and B->C, then the function would return C as a root because there's no triple where C is the subject. However, if the graph has the transitive closure, then maybe there's a triple A->C, but the function would still check for direct parents. Wait, the function's docstring says it's for "some sort of transitive hierarchy," but the code might not be handling transitivity itself. It's possible that the graph already includes all inferred triples, so the roots are those nodes with no incoming edges via the given property.
+
+So the approach is: find all nodes that are not the subject of any triple with the given property. Because if a node is a root, it shouldn't have any parents. But how do I get all the nodes in the graph? Well, the graph is an rdflib Graph, so I can iterate through all the subjects. Then, for each subject, check if there's any triple where it's the subject and the predicate is the given prop. If not, then it's a root.
+
+Wait, but the function has an optional 'roots' parameter. Oh, maybe that's for passing in existing roots to avoid recomputation? Or perhaps it's a way to allow the user to pre-specify roots. But the default is None, so if not provided, we need to compute them.
+
+So the steps would be:
+
+1. If roots is None, initialize it as an empty set.
+2. Iterate over all nodes in the graph.
+3. For each node, check if there are any triples where the node is the subject and the predicate is prop. If not, add it to roots.
+4. Return the roots set.
+
+But how to get all nodes in the graph? In rdflib, the graph's subjects can be obtained via graph.subjects(). However, that returns all subjects in the graph. But maybe the nodes could be subjects or objects in any triple. Wait, the problem says that the triples are of the form (child, prop, parent). So the child is the subject, and the parent is the object. Therefore, the roots are nodes that are never subjects in any triple with the given property. So, to find all roots, we can collect all nodes that are not present as subjects in any triple with predicate 'prop'.
+
+But how to get all nodes in the graph? Well, perhaps the graph has a list of all nodes, but in rdflib, you can get all nodes via graph.all_nodes(). Alternatively, maybe we need to collect all nodes that are either subjects or objects in any triple. But the function's example uses RDFS.subClassOf, which would have classes as subjects and objects. So maybe the roots are all nodes that are not subjects in any triple with the given property.
+
+So the code would be something like:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    # Get all nodes in the graph
+    all_nodes = graph.all_nodes()
+    # For each node, check if it's a subject in any triple with the given prop
+    for node in all_nodes:
+        if not graph.predicate_objects(node, prop):
+            roots.add(node)
+    return roots
+
+Wait, but graph.predicate_objects(node, prop) returns all objects where the triple is (node, prop, object). So if there are no such triples, then the node is a root. That makes sense.
+
+But wait, in rdflib, the Graph class has a method called subjects() which can be used with a predicate. Wait, no, the method is predicate_objects. So, for a given subject and predicate, you can get the objects. But to check if a node is a subject in any triple with the given predicate, we can check if graph.predicate_objects(node, prop) is empty.
+
+But perhaps the graph is large, and iterating all nodes could be inefficient. However, the function's parameters don't mention any optimizations, so we proceed as per the straightforward approach.
+
+Another thing: the 'roots' parameter is optional and of type Set[Node]. So if the user provides it, we should use that. But the default is None, so in that case, we create a new set. However, the code as written would add all nodes not having the prop as their predicate. But wait, the initial code may have a problem. For example, if the graph has a triple (A, prop, B), then A is a child, and B is a parent. So, the roots are nodes that are not children. So, the roots are nodes that are not present as subjects in any triple with the given predicate.
+
+So, the code would collect all nodes that are not subjects in any triple with the given prop. But how to get all nodes in the graph? The 'all_nodes()' method returns all nodes in the graph. So that's the way to go.
+
+Wait, but in rdflib, the Graph class's all_nodes() method returns a set of all nodes in the graph. So that's correct.
+
+So, the function would:
+
+- Start with roots as an empty set if not provided.
+- Iterate through all nodes in the graph.
+- For each node, check if there are any triples where the node is the subject and the predicate is 'prop'. If there are none, then it's a root.
+- Add such nodes to the roots set.
+
+But wait, the parameters are typed as Graph, URIRef, and Optional[Set[Node]]. So, the code should be using those types. Also, the function returns a set of nodes.
+
+But in rdflib, the nodes can be of different types, like URIRef, BNode, etc. The function's parameters are using "Node" as a type, which in rdflib is a base class for all node types. So the code should work with that.
+
+So the code would be:
+
+def find_roots(graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None) -> Set["Node"]:
+    if roots is None:
+        roots = set()
+    for node in graph.all_nodes():
+        if not list(graph.predicate_objects(node, prop)):
+            roots.add(node)
+    return roots
+
+Wait, but graph.predicate_objects(node, prop) returns an iterator. If we check if it's empty, perhaps converting it to a list and checking if it's empty. Alternatively, we can check if the iterator is empty. But in Python, if you just check if the iterator is empty, you can do so by checking if it's truthy. However, in rdflib, the predicate_objects method returns a generator, so converting it to a list might be necessary to check if it's empty. Or perhaps using len()?
+
+Wait, for example, if there are no objects, then graph.predicate_objects(node, prop) would be an empty generator. So, in that case, list(graph.predicate_objects(...)) would be an empty list. So checking if not list(...) would be True.
+
+But converting to a list each time could be inefficient. However, for the sake of correctness, perhaps it's better to check if there are any objects. Alternatively, perhaps using the 'any' function.
+
+Wait, maybe:
+
+if not any(graph.predicate_objects(node, prop)):
+
+But that would check if there are any objects. If there are none, then it's a root.
+
+But how does the 'any' function work with generators? It will consume the generator until it finds a True value. If there are no elements, it returns False. So, for checking if there are any objects, using any() would be more efficient, as it stops at the first occurrence.
+
+So modifying the code:
+
+for node in graph.all_nodes():
+    if not any(graph.predicate_objects(node, prop)):
+        roots.add(node)
+
+That would be better.
+
+But then, what about nodes that are objects but not subjects? For example, if a node is only a parent (object) in some triples but not a child (subject) in any. Those would be considered roots because they are not subjects in any triple with the given property. Which is correct, because if a node is not a child, then it's a root.
+
+So this code should work. However, I need to make sure that the 'all_nodes()' method is available. In rdflib, the Graph class has an all_nodes() method that returns all nodes in the graph. So that's correct.
+
+But wait, in some versions of rdflib, the all_nodes() method may not be present. Let me check. Oh right, in rdflib, the Graph has a method called all_nodes(), which returns a set of all nodes in the graph. So that's acceptable.
+
+Another thing: the 'roots' parameter is optional. If the user passes in a set, the function should add to it. But the current code initializes roots as a new set if None, and then adds nodes to it. However, if the user passes in a set, perhaps they want to accumulate roots. But the function's docstring says "Assumes triple of the form (child, prop, parent)", so maybe the roots parameter is intended to be a set of nodes that are already known roots, and the function adds more? Or maybe the roots parameter is for the user to provide a set to be populated, but the default is None, which is handled by creating a new set. However, the function's return is the roots set. So if the user passes in a set, they might expect it to be modified and returned. But in Python, when you pass a set to a function and modify it, the changes are reflected outside the function. However, the function's current code would add to the roots set if provided. But the initial code may have a problem if the user passes in a set, because the code is adding to it. However, the function's return is that same set. So that's acceptable.
+
+But perhaps the function should create a new set regardless. For example, if the user passes in a set, maybe they want to avoid modifying it. But the docstring doesn't mention that. The current code as written would modify the passed-in set. However, the example given in the docstring uses find_roots(graph, ...) which returns a new set. So maybe the roots parameter is intended to be used for some other purpose, like pre-populating roots. But the default is None, so when not provided, the function creates a new set. However, if the user provides a set, they might want to add to it. But the function's return is that set. So the code is okay.
+
+Another thing: the function's parameters have 'prop' as a URIRef. So in the code, when checking for triples, the predicate is 'prop'.
+
+So the code seems correct. Let me test with an example.
+
+Suppose the graph has triples (A, prop, B), (B, prop, C). Then, the roots would be nodes that are not subjects in any triple with prop. So, C is not a subject in any such triple, so it's a root. Also, any other nodes not in the subject position. So if the graph has nodes A, B, C, D, then D would be a root if there's no triple with D as subject and prop as predicate.
+
+So the code would collect all nodes not appearing as subjects in any (node, prop, ...) triple.
+
+Yes, that seems right. Therefore, the code should be as follows.

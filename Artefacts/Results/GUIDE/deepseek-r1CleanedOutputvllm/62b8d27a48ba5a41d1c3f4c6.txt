@@ -1,0 +1,100 @@
+import functools
+import threading
+
+class Cache:
+    def __init__(self, maxsize=None, lock=None):
+        self.maxsize = maxsize
+        self.lock = threading.Lock(lock) if lock is not None else None
+        self.cache = {}
+
+    def get(self, key):
+        if self.lock is not None:
+            with self.lock:
+                return self.cache.get(key)
+        return self.cache.get(key)
+
+    def set(self, key, value):
+        if self.lock is not None:
+            with self.lock:
+                self.cache[key] = value
+        else:
+            self.cache[key] = value
+
+    def has(self, key):
+        if self.lock is not None:
+            with self.lock:
+                return key in self.cache
+        return key in self.cache
+
+    def delete(self, key):
+        if self.lock is not None:
+            with self.lock:
+                if key in self.cache:
+                    del self.cache[key]
+        else:
+            if key in self.cache:
+                del self.cache[key]
+
+def hashkey(args):
+    return hash(args)
+
+def cached(cache, key=hashkey, lock=None):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = key(*args, **kwargs)
+            if cache is None:
+                return func(*args, **kwargs)
+            result = cache.get(key)
+            if result is not None:
+                return result
+            try:
+                value = func(*args, **kwargs)
+                if cache is not None:
+                    cache.set(key, value)
+                return value
+            except Exception as e:
+                if cache is not None:
+                    cache.delete(key)
+                raise e
+        return wrapper
+    return decorator
+
+@pytest.mark.parametrize("key, expected", [
+    ("sum([1,2,3])", 6),
+    ("sum([4,5,6])", 15),
+    ("sum([7,8,9])", 24),
+])
+def test_cache_sum(p, key, expected):
+    def sum_list(lst):
+        return sum(lst)
+    
+    cache = Cache(maxsize=1)
+    cached(cache, key)(sum_list)("1,2,3")  # Using string representation for key
+    assert cache.get(key) == expected
+
+@pytest.mark.parametrize("key, expected", [
+    ("len([1,2,3])", 3),
+    ("len([4,5,6])", 3),
+    ("len([7,8,9])", 3),
+])
+def test_cache_len(p, key, expected):
+    def get_length(lst):
+        return len(lst)
+    
+    cache = Cache(maxsize=1)
+    cached(cache, key)(get_length)("1,2,3")
+    assert cache.get(key) == expected
+
+def test_lock():
+    cache = Cache(maxsize=1, lock=threading.Lock())
+    key = "test"
+    result1 = None
+    result2 = None
+    def func():
+        nonlocal result1, result2
+        result1 = cached(cache, key)(lambda x: x)(key)
+        result2 = cached(cache, key)(lambda x: x)(key)
+    func()
+    assert result1 == result2
+    assert result1 is not None

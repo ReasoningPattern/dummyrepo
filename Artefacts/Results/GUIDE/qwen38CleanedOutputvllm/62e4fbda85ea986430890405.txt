@@ -1,0 +1,56 @@
+def xargs(
+        cmd: tuple[str, ...],
+        varargs: Sequence[str],
+        *,
+        color: bool = False,
+        target_concurrency: int = 1,
+        _max_length: int = _get_platform_max_length(),
+        **kwargs
+):
+    """
+    Simplified Implementation of Xargs in Linux
+    """
+    import concurrent.futures
+    import subprocess
+    
+    # Calculate the base length of the command parts joined with spaces
+    cmd_length = sum(len(part) for part in cmd) + len(cmd) - 1
+    
+    # Split varargs into batches
+    batches = []
+    current_batch = []
+    for arg in varargs:
+        if current_batch:
+            batch_length = sum(len(a) for a in current_batch) + len(current_batch) - 1
+        else:
+            batch_length = 0
+        new_batch_length = batch_length + len(arg) + 1 if current_batch else len(arg)
+        total_length = cmd_length + new_batch_length
+        if total_length > _max_length:
+            batches.append(current_batch)
+            current_batch = [arg]
+        else:
+            current_batch.append(arg)
+    if current_batch:
+        batches.append(current_batch)
+    
+    # Execute each batch in parallel
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=target_concurrency) as executor:
+        futures = []
+        for batch in batches:
+            # Construct the command line
+            command = list(cmd) + batch
+            # Add kwargs as arguments
+            command += list(kwargs.items())
+            # Add color argument if needed
+            if color:
+                command.append('--color=auto')
+            # Execute the command
+            future = executor.submit(subprocess.run, command, capture_output=True, text=True)
+            futures.append(future)
+        # Wait for all futures to complete
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            results.append(result.returncode)
+    return results

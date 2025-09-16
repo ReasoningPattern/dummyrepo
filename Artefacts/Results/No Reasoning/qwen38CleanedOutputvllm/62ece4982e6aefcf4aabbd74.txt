@@ -1,0 +1,40 @@
+import os
+import tarfile
+import zipfile
+from typing import Optional, Union
+from pathlib import PosixPath
+
+def prepare_repository_from_archive(
+    archive_path: str,
+    filename: Optional[str] = None,
+    tmp_path: Union[PosixPath, str] = "/tmp"
+) -> str:
+    """
+    Given an existing archive_path, uncompress it.
+    Returns a file repo url which can be used as origin url.
+
+    This does not deal with the case where the archive passed along does not exist.
+    @param archive_path : archive file path
+    @param filename: File name
+    @param tmp_path: Temporary file path
+    @return Repo URL
+    """
+    tmp_path = PosixPath(tmp_path)
+    tmp_dir = tmp_path / "repo"
+    tmp_dir.mkdir(exist_ok=True)
+
+    if not filename:
+        filename = os.path.basename(archive_path)
+
+    with open(archive_path, 'rb') as f:
+        if filename.endswith('.tar.gz') or filename.endswith('.tgz'):
+            with tarfile.open(fileobj=f) as tar:
+                tar.extractall(path=tmp_dir)
+        elif filename.endswith('.zip'):
+            with zipfile.ZipFile(f) as zip_ref:
+                zip_ref.extractall(tmp_dir)
+        else:
+            raise ValueError(f"Unsupported archive format: {filename}")
+
+    repo_url = f"file://{tmp_dir.resolve()}"
+    return repo_url

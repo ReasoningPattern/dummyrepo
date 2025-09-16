@@ -1,0 +1,121 @@
+Okay, I need to write a Python function called normalize_cmd that takes a tuple of strings representing a command and returns a tuple with the full path to the executable. The docstring says to complement the full path and return it in its original form. Hmm, so the first element of the tuple is the command, and I have to find its full path, probably using something like which or the os module. Wait, in Python, maybe using shutil.which? That function returns the path of the executable. 
+
+So the steps are: Take the cmd tuple. The first element is the executable name. Find its full path using shutil.which. Then, replace the first element with this full path. The rest of the elements stay the same. But what if the executable isn't found? The docstring doesn't mention handling that, so maybe we assume it's present. Or perhaps return it as is if not found? The problem says "complement the full path", so maybe if it's not found, leave it as the original? Or perhaps the function just proceeds and returns the original if the path isn't found. The doc isn't clear, but I'll proceed under the assumption that the executable is in the PATH.
+
+So the code would be something like:
+
+import shutil
+
+def normalize_cmd(cmd):
+    exe = cmd[0]
+    full_path = shutil.which(exe)
+    if full_path:
+        return (full_path,) + cmd[1:]
+    else:
+        return cmd  # or raise an error? But the problem doesn't specify.
+
+Wait, but the function's return type is a tuple of strings. So in the case where shutil.which returns None, perhaps we just return the original tuple. Because the doc says "complement the full path to exe and return it in its original form". Wait, the wording is a bit confusing. "Return it in its original form"—maybe the original form refers to the rest of the command. Or perhaps the function is supposed to return the full path as the first element, and the rest as is. So if the executable's path is found, replace it, else leave it as the original. 
+
+So the code would be:
+
+import shutil
+
+def normalize_cmd(cmd: tuple[str, ...]) -> tuple[str, ...]:
+    """Complement the full path to exe and return it in its original form"""
+    if not cmd:
+        return cmd  # maybe handle empty tuple?
+    exe = cmd[0]
+    full_path = shutil.which(exe)
+    if full_path:
+        new_cmd = (full_path,) + cmd[1:]
+    else:
+        new_cmd = cmd  # or maybe raise an error?
+    return new_cmd
+
+But I need to think about possible edge cases. Like if the command is empty, but the problem probably assumes that the cmd is non-empty. Also, what if the first element is already an absolute path? Like if the command is ("/usr/bin/python", "script.py"), then shutil.which might return the same path, so it's okay. Because shutil.which will check if the given exe is already an absolute path? Or does it always search PATH? Let me check: if the exe is an absolute path and executable, then which should return that path. So that case is handled.
+
+Now, for the tests. Since the user wants test-driven development, I should first write the unit tests. Let's think about test cases.
+
+Test 1: The command is a simple executable in PATH, like "python". The normalized cmd should have the full path, e.g., "/usr/bin/python" followed by the rest.
+
+Test 2: The command already has an absolute path. The function should return the same tuple, as which would find that path.
+
+Test 3: The command's executable is not found. Then the function returns the original tuple.
+
+But how to write these tests? For example, in test 1, but the actual path may vary by system. Hmm, that's a problem. Maybe mock shutil.which?
+
+Yes, using unittest.mock to patch shutil.which. Because the actual path can differ, so the test can't rely on the real path.
+
+So the tests would be something like:
+
+import unittest
+from unittest.mock import patch
+from your_module import normalize_cmd  # assuming the function is in this module
+
+class TestNormalizeCmd(unittest.TestCase):
+
+    @patch('shutil.which')
+    def test_normalize_found(self, mock_which):
+        mock_which.return_value = '/usr/bin/python3'
+        cmd = ('python3', 'script.py', '--arg')
+        expected = ('/usr/bin/python3', 'script.py', '--arg')
+        self.assertEqual(normalize_cmd(cmd), expected)
+
+    @patch('shutil.which')
+    def test_already_absolute(self, mock_which):
+        mock_which.return_value = '/usr/local/bin/node'
+        cmd = ('/usr/local/bin/node', 'app.js')
+        expected = ('/usr/local/bin/node', 'app.js')
+        self.assertEqual(normalize_cmd(cmd), expected)
+        # Also, check that shutil.which was called with the first element
+        mock_which.assert_called_with('/usr/local/bin/node')
+
+    @patch('shutil.which')
+    def test_not_found(self, mock_which):
+        mock_which.return_value = None
+        cmd = ('nonexistent', 'arg1')
+        self.assertEqual(normalize_cmd(cmd), cmd)
+        # Check that it's called with 'nonexistent'
+
+    def test_empty_command(self):
+        # Edge case: empty tuple. Should return empty?
+        self.assertEqual(normalize_cmd(()), ())
+        # But the function might crash if cmd[0] is accessed. So need to handle that.
+        # Wait, in the code above, if cmd is empty, the code returns cmd. So this test passes.
+
+    def test_single_element(self):
+        cmd = ('echo', )
+        with patch('shutil.which') as mock_which:
+            mock_which.return_value = '/bin/echo'
+            self.assertEqual(normalize_cmd(cmd), ('/bin/echo',))
+
+So these tests cover different scenarios. The actual code will use shutil.which and replace the first element if found.
+
+Now, the code needs to import shutil. Also, in the code, if the cmd is empty, it returns it. So that's covered.
+
+Wait, in the code I wrote earlier, the first line checks if not cmd: return cmd. That's important to avoid index error. So that's handled.
+
+So putting it all together, the code would be as I outlined, with the import of shutil. Also, the function's docstring needs to be as given. 
+
+Wait, the function's docstring says "Complement the full path to exe and return it in its original form". The wording is a bit unclear. "Complement" might mean "complete" or "supplement". So the first element is replaced with the full path, and the rest are as original. That's what the code does.
+
+So the final code is:
+
+import shutil
+
+def normalize_cmd(cmd: tuple[str, ...]) -> tuple[str, ...]:
+    """
+    Complement the full path to exe and return it in its original form
+    """
+    if not cmd:
+        return cmd
+    exe = cmd[0]
+    full_path = shutil.which(exe)
+    if full_path:
+        return (full_path,) + cmd[1:]
+    else:
+        return cmd
+
+But I should make sure that even if the cmd is a tuple with only one element, it works. Like in the test_single_element case. That's okay because cmd[1:] would be an empty tuple, so (full_path,) + () is just (full_path,).
+
+Yes, that should work. So this should be the code.

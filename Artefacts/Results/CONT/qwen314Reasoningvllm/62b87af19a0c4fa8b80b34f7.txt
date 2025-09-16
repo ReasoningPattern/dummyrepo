@@ -1,0 +1,264 @@
+
+Okay, let's see. I need to write a Python function called difference that takes two dictionaries, d1 and d2, and returns a new dictionary with items from d1 that are not in d2. The function also has an optional level parameter with a default of -1. Hmm.
+
+First, the docstring says it returns a dictionary with items from d1 not in d2. So, it's like a set difference but for dictionaries. But how to handle nested dictionaries? The level parameter probably determines how deep to check for differences. If level is -1, maybe it goes all the way down recursively.
+
+Wait, looking at the context, there are other functions like update_recursively, get_recursively, etc. So maybe this function is part of a module that handles nested dictionaries. The level parameter might control the recursion depth. For example, level=0 could mean only the top level, level=1 includes one level deep, and -1 means all levels.
+
+So the approach would be to recursively compare each key in d1 against d2. For each key in d1, if it's not present in d2, include it in the result. If it is present, check if the values are different. But how to handle nested dicts? Maybe for each key, if the value is a dict, we need to call difference recursively with level-1, but only if level is not 0.
+
+Wait, the level parameter's default is -1, which might mean unlimited recursion. So, if level is -1, we go as deep as possible. Otherwise, we stop at the given level.
+
+Let me think about the steps:
+
+1. Create a copy of d1 to avoid modifying the original. But the function returns a new dictionary, so maybe we need to build it step by step.
+
+2. Iterate through each key in d1. For each key, check if it exists in d2. If not, add it to the result.
+
+3. If the key exists in both, check if the values are different. But if the value is a dictionary, we need to check recursively. However, this depends on the level. For example, if level is 0, we don't check deeper. If level is -1, we check all levels.
+
+Wait, but the function's name is difference, so maybe it's not just about keys but also about values. For example, if a key exists in both, but the value is different, then we should include it in the result. However, if the value is a nested dict, we need to check if the nested dicts are different.
+
+But how to handle that? For example, if d1 has a key 'a' with a value that's a dict, and d2 has the same key 'a' with a different dict. Then, the difference would include 'a' with the difference of the nested dicts.
+
+So the function needs to compare each value in d1 and d2. If the value is a dict, we need to call difference recursively. But again, considering the level parameter.
+
+So here's an outline:
+
+def difference(d1, d2, level=-1):
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            val1 = d1[key]
+            val2 = d2[key]
+            if isinstance(val1, dict) and isinstance(val2, dict):
+                if level != 0:
+                    # recurse with level -1
+                    nested_diff = difference(val1, val2, level -1)
+                    if nested_diff:
+                        result[key] = nested_diff
+            else:
+                if val1 != val2:
+                    result[key] = val1
+    return result
+
+Wait, but what if level is 0? Then, we don't go deeper. So, for level 0, even if the value is a dict, we just check if the keys are present and the values are different. But that might not be correct. Maybe the level parameter controls how deep the comparison goes. For example, level=0 means only compare the top level, not going into any nested dicts. So, if level is 0, we don't check the values of the dicts, just the presence of keys. But that's not clear.
+
+Alternatively, the level could be the maximum depth to check. So, for level=-1, check all levels. For level=0, check only the top level. For level=1, check top level and one level deep, etc.
+
+But the original function's docstring says "items from d1 not contained in d2". So maybe "contained" refers to the keys. But that's ambiguous. For example, if a key exists in both, but the value is different, is it considered "contained"? Probably not. So the function should return keys present in d1 but not in d2, and for those keys, their values. But if the key is present in both, but the values are different, then the key should be included in the result with the value from d1.
+
+Wait, but that's not the standard set difference. The standard set difference would be keys present in d1 but not in d2. But maybe the function is intended to compare values as well. For example, if a key exists in both, but the value is different, then it's considered as not contained. But that's not clear.
+
+Looking back at the context, there are other functions like intersection, which might imply that these functions are handling nested dictionaries in a way that compares values recursively.
+
+So, perhaps the difference function is supposed to return a dictionary where each key is present in d1 but not in d2, or if present in both, but the values are different (recursively). So, similar to a deep difference.
+
+In that case, the function needs to compare each key and value recursively.
+
+But how to handle the level parameter. Let's think of level as the maximum recursion depth. So, if level is -1, it's unlimited. If level is 0, then only the top level is considered. For example, if level is 0, then even if the value is a dict, we don't check deeper. So, for level 0, the function would compare keys and their values (as is), not checking if the values are dicts.
+
+But how to implement that. Let me think of the function:
+
+def difference(d1, d2, level=-1):
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            val1 = d1[key]
+            val2 = d2[key]
+            if level == 0:
+                # don't recurse, check if values are different
+                if val1 != val2:
+                    result[key] = val1
+            else:
+                # check if values are dicts and recurse
+                if isinstance(val1, dict) and isinstance(val2, dict):
+                    nested_diff = difference(val1, val2, level -1)
+                    if nested_diff:
+                        result[key] = nested_diff
+                else:
+                    if val1 != val2:
+                        result[key] = val1
+    return result
+
+Wait, but if level is not 0, then for non-dict values, we check if they are different. For dict values, we recurse. But what if level is 1? Then, after recursing once, level becomes 0, and in the next call, we don't recurse further.
+
+But this logic may not be correct. For example, if level is 1, then we check the first level of dicts, but not deeper. So, in that case, the function would check if the keys are present, and for dict values, check their difference up to level 1.
+
+But the initial code may have some issues. For example, when level is not 0, and the value is a dict, we recurse with level -1. So, if the initial level is -1, then level-1 is -2, which would continue to recurse indefinitely. Wait, no, because if level is -1, then in the next call, level is -2. But in the code above, when level is not 0, we check if the values are dicts and recurse. But if level is -1, then level != 0, so we proceed. But then, in the next call, level is -2, which is still not 0, so again we check if the values are dicts and recurse. This would go on forever unless the recursion depth is limited by the level parameter.
+
+Wait, that's a problem. Because if level is -1, then the code would keep decrementing level each time, but since it's negative, it would never reach 0, so the recursion would go on infinitely. That's not correct.
+
+So, perhaps the level parameter is intended to be a non-negative integer. But the default is -1, which may mean unlimited depth. So, perhaps the code should check if level is not -1, and decrement it, but if it's -1, then pass it as is. Wait, but how to handle that.
+
+Alternatively, the level parameter is the maximum depth to check. So, for example, level=0 means only the top level. level=1 means top level and one level deep. level=-1 means unlimited.
+
+In that case, when level is -1, we don't decrement it. Wait, but how to manage that. Let's think of the initial call with level=-1. For each recursive call, if the current level is not -1, then we decrement it. If it's -1, we leave it as -1.
+
+So, modifying the code:
+
+def difference(d1, d2, level=-1):
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            val1 = d1[key]
+            val2 = d2[key]
+            if level == 0:
+                if val1 != val2:
+                    result[key] = val1
+            else:
+                if isinstance(val1, dict) and isinstance(val2, dict):
+                    # if level is -1, we don't decrement, else decrement
+                    new_level = level -1 if level != -1 else -1
+                    nested_diff = difference(val1, val2, new_level)
+                    if nested_diff:
+                        result[key] = nested_diff
+                else:
+                    if val1 != val2:
+                        result[key] = val1
+    return result
+
+But this may not handle the case where level is -1 correctly. For example, if level is -1, then new_level is -1, so in the next recursive call, level is still -1. So, it would keep recursing infinitely. That's a problem.
+
+Wait, but how to prevent infinite recursion. The level parameter must be a way to limit the depth. So, perhaps the level is the maximum depth allowed. So, for example, if level is -1, then it's unlimited. If level is 0, then only the top level. If level is 1, then top and one level deep, etc.
+
+So, when level is not -1, we decrement it by 1 each time. If it's -1, we leave it as -1. So, in the code:
+
+def difference(d1, d2, level=-1):
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            val1 = d1[key]
+            val2 = d2[key]
+            if level == 0:
+                if val1 != val2:
+                    result[key] = val1
+            else:
+                if isinstance(val1, dict) and isinstance(val2, dict):
+                    new_level = level - 1 if level != -1 else -1
+                    nested_diff = difference(val1, val2, new_level)
+                    if nested_diff:
+                        result[key] = nested_diff
+                else:
+                    if val1 != val2:
+                        result[key] = val1
+    return result
+
+But this still has the problem that if level is -1, then new_level is -1, and the recursion continues indefinitely. So, how to avoid that? Well, perhaps the level is intended to be a non-negative integer, but the default is -1 meaning unlimited. However, in practice, the recursion would stop when the values are not dicts. So, for example, if a value is a dict, and level is -1, then the function would recurse into it, and check if the values are dicts again. But if the value is not a dict, then the recursion stops.
+
+But in that case, for a dict with multiple levels, the recursion would go as deep as possible. However, for the case where level is -1, the code would not hit the level == 0 condition, so it would keep recursing. But that's okay, because the level is -1, which is supposed to mean unlimited depth.
+
+Wait, but in the code above, when level is -1, the new_level is -1, so in the next recursive call, level is still -1. So, for each level of recursion, the level remains -1. Thus, the code would continue to check for dicts and recurse as long as the values are dicts. Which is correct for unlimited depth.
+
+So, in that case, the code should work.
+
+Another thing to consider: when the key is present in both d1 and d2, but the value is different. For example, if the value is not a dict, then it's added to the result. If it's a dict, then we check the nested difference. If the nested difference is non-empty, then we add it to the result.
+
+But what if the nested difference is empty? Then, we don't add the key. So, the key is only added if there's a difference in the value.
+
+So, this logic should work.
+
+Testing some examples:
+
+Case 1: d1 = {'a': 1}, d2 = {'a': 2}. Then, difference would return {'a': 1}.
+
+Case 2: d1 = {'a': {'b': 1}}, d2 = {'a': {'b': 2}}, level=-1. The difference would be {'a': {'b': 1}}.
+
+Case 3: d1 = {'a': {'b': 1}}, d2 = {'a': {'b': 1}}, level=-1. The difference is empty.
+
+Case 4: d1 = {'a': {'b': 1}}, d2 = {'a': {'b': 2}}, level=0. Then, since level is 0, we check if the values are different. The values are dicts, but level is 0, so we don't recurse. So, since the values are different (they are dicts, but not compared), the key 'a' is added to the result with the value {'b': 1}?
+
+Wait, no. Because in the code, if level is 0, then we check if val1 != val2. But val1 and val2 are dicts. So, comparing dicts in Python checks for equality of their contents. So, if the dicts are different, then val1 != val2 would be True, and the key is added. But in this case, the dicts are different (since their values are different), so the key 'a' would be added with the value {'b': 1}.
+
+But if level is 0, then we are not checking the nested dicts. So, this seems contradictory. Because if level is 0, we are not going deeper, but comparing the dicts as values. But comparing two dicts for equality would check their contents, which is what we want.
+
+Wait, but in the code, when level is 0, and the values are dicts, then the code would check if val1 != val2. For example, if d1 has {'a': {'b': 1}} and d2 has {'a': {'b': 2}}, then val1 and val2 are dicts. Since they are different, the code adds 'a' to the result with val1.
+
+But if level is 0, then we are not recursing into the dicts. However, comparing the dicts directly would check their contents. So, this seems correct.
+
+But perhaps the level parameter is intended to control how deep the comparison goes. For example, level=0 means only compare the top-level keys, not their values. But that's not what the code does. The code, for level=0, compares the values (even if they are dicts) directly. So, if the values are dicts, and their contents are different, the key is included.
+
+But maybe the level parameter is meant to control the depth of the comparison. For example, level=0 means compare only the top-level keys (i.e., check if the key exists in d2, regardless of the value). But that's not what the code does. The code, for level=0, compares the values (even if they are dicts) and includes the key if they are different.
+
+Hmm. This is a bit ambiguous. The original docstring says "items from d1 not contained in d2". So, perhaps "contained" refers to the presence of the key. But that would mean that the function returns keys present in d1 but not in d2. However, that would ignore the values. But the example with the same key but different values would not be considered as "contained".
+
+So, perhaps the original function is intended to return keys present in d1 but not in d2, regardless of their values. In that case, the code would be simpler: just check if the key is in d2. If not, include it. But then, the level parameter is not used. But the context includes other functions that handle nested dicts, so maybe the level is for nested structures.
+
+Alternatively, maybe the function is intended to return a dictionary where each key is present in d1 but not in d2, or if present in both, but the values are different (recursively). This would make the level parameter relevant for nested dicts.
+
+In that case, the code I wrote earlier would be correct. But the level parameter's handling needs to be correct.
+
+Another possible issue: the function returns a new dictionary, but if the values are dicts, it replaces them with their difference. So, for example, if d1 has a key 'a' with a dict, and d2 has the same key with a different dict, then the result would have 'a' as the difference of those two dicts.
+
+But what if the difference of the nested dicts is empty? Then, the key 'a' would not be included in the result.
+
+So, the code seems to handle that.
+
+Now, considering the initial code, perhaps the level parameter is not used in the way I thought. For example, maybe level is the depth to check, and if level is -1, it checks all levels. But how to handle that.
+
+Another approach: the level parameter is the maximum depth to check. So, for level=-1, it's unlimited. For level=0, it's only the top level. For level=1, it's top level and one level deep, etc.
+
+In that case, during recursion, the level is decremented, and when it reaches 0, we stop recursing.
+
+But how to handle level=-1. For example, if level is -1, then in the first call, we can treat it as unlimited, and in the recursive calls, we pass level-1, which would be -2, but that's still considered unlimited. Wait, but that would not work. So, perhaps the level is passed as level-1 only if it's not -1. For example, if the current level is -1, then the new level is also -1, so the recursion continues.
+
+So, the code for new_level would be:
+
+new_level = level - 1 if level != -1 else -1
+
+But that's what I had before.
+
+Another thing: when the level is not -1, and it reaches 0, then we stop recursing. For example, if level is 1, then in the first call, we check if the values are dicts and recurse with level 0. In the next call, since level is 0, we compare the values directly.
+
+So, this seems correct.
+
+Now, considering that the code may need to handle the case where the values are not dicts. For example, if a value is a list, then the code would compare them directly. But the function's name is difference, so perhaps it's intended to handle nested dicts only. However, the code as written would compare any values that are not dicts directly.
+
+But the context includes functions like get_recursively, which suggests that the code may be handling nested dicts. So, perhaps the code is intended to handle nested dicts only. However, the current code would compare any non-dict values directly.
+
+In any case, based on the given information, I think the code I wrote earlier is the best approach. Now, I need to write it in Python, using the given function signature and docstring.
+
+Also, the user mentioned that imported packages include 'copy' and 'lena'. But I don't see how 'lena' is relevant here. Maybe it's a typo. But the code doesn't need to use those packages unless necessary.
+
+The code should not include any explanation, just the code in Python markdown format.
+
+So, the final code would be:
+
+```python
+def difference(d1, d2, level=-1):
+    """
+    Return a dictionary with items from d1 not contained in d2.
+    """
+    result = {}
+    for key in d1:
+        if key not in d2:
+            result[key] = d1[key]
+        else:
+            val1 = d1[key]
+            val2 = d2[key]
+            if level == 0:
+                if val1 != val2:
+                    result[key] = val1
+            else:
+                if isinstance(val1, dict) and isinstance(val2, dict):
+                    new_level = level - 1 if level != -1 else -1
+                    nested_diff = difference(val1, val2, new_level)
+                    if nested_diff:
+                        result[key] = nested_diff
+                else:
+                    if val1 != val2:
+                        result[key] = val1
+    return result
+```
+
+Wait, but what about the case where the key is present in d1 and d2, but the value is a dict, and the nested difference is empty? Then, the key would not be added to the result. Which is correct.
+
+This should handle the cases as discussed.

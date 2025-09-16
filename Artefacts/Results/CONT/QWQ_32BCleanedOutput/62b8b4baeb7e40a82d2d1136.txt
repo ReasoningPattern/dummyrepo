@@ -1,0 +1,38 @@
+import inspect
+from zope.interface import Invalid
+from zope.interface.interface import Method, Attribute
+
+def _verify(iface, candidate, tentative=False, vtype=None):
+    errors = []
+    if not tentative:
+        if not iface.providedBy(candidate):
+            errors.append("Candidate does not provide the interface")
+    method_names = []
+    for name in iface.names():
+        attr = iface[name]
+        if isinstance(attr, Method):
+            method_names.append(name)
+    for method_name in method_names:
+        candidate_method = getattr(candidate, method_name, None)
+        if candidate_method is None:
+            errors.append(f"Method {method_name} is missing")
+            continue
+        interface_method = iface[method_name]
+        interface_sig = inspect.signature(interface_method)
+        candidate_sig = inspect.signature(candidate_method)
+        if candidate_sig != interface_sig:
+            errors.append(f"Method {method_name} has incorrect signature")
+    attribute_names = []
+    for name in iface.names():
+        attr = iface[name]
+        if isinstance(attr, Attribute):
+            attribute_names.append(name)
+    for attr_name in attribute_names:
+        if not hasattr(candidate, attr_name):
+            errors.append(f"Attribute {attr_name} is missing")
+    if errors:
+        if len(errors) == 1:
+            raise Invalid(errors[0])
+        else:
+            raise Invalid('\n'.join(errors))
+    return True

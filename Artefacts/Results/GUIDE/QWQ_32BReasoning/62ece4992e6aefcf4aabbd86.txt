@@ -1,0 +1,142 @@
+Okay, I need to write the _dump_string function based on the given docstring. Let's see. The function takes an object and a dumper (optional) and returns a YAML stream. Wait, the parameters are obj and dumper, but in the Args section, only obj is mentioned. Oh right, the dumper parameter is part of the function signature but maybe optional. 
+
+Hmm, the goal is to serialize the object into YAML. So I should use PyYAML's dump function. But the function's return is a YAML stream, which I think means a string. So the function probably uses yaml.dump, but maybe with some parameters. 
+
+Wait, the dumper is an optional argument. The standard yaml.dump function has a Dumper keyword argument. So maybe the dumper parameter here is to allow the user to specify a custom Dumper class. So in the function, we can pass dumper as the Dumper argument. But if dumper is None, we can use the default Dumper.
+
+So the basic structure would be:
+
+import yaml
+
+def _dump_string(obj, dumper=None):
+    return yaml.dump(obj, Dumper=dumper)
+
+Wait, but wait, the default Dumper in PyYAML is yaml.Dumper. So if dumper is None, then we should set Dumper to yaml.Dumper? Or maybe let the function's default handle it. Let me check the yaml.dump signature. The yaml.dump function's Dumper parameter defaults to None, but in that case, it uses the default Dumper, right? Or does it raise an error if not provided? Let me think. Oh, the yaml.dump function's Dumper parameter is optional, and if not provided, it uses the default. So in our function, if dumper is provided, we pass it as Dumper=dumper, else, let it use the default.
+
+So the code would be as simple as that. But maybe there are other considerations. Like, should we control the output format? For example, to get a string, yaml.dump returns a string, so that's good. But maybe the function expects a stream object? Wait the return says "YAML stream", but in Python, the dump function returns a string (if stream is not specified). Oh right, the yaml.dump function when called without a stream argument returns the YAML as a string. So yes, this should work.
+
+Now, the user mentioned test-driven development. So first write unit tests. Let me think of some test cases. For example, a simple object like a dictionary, a list, a custom class (if possible), maybe something that requires a custom Dumper. But since the function allows passing a dumper, perhaps the tests should check that.
+
+Wait, but in the function signature, the dumper is an argument. So in the tests, we can test both cases: with and without the dumper.
+
+Test case 1: serializing a simple data structure, like a dict. The output should be the YAML string.
+
+Test case 2: using a custom Dumper. For instance, if we use yaml.CSafeDumper (if available) or another dumper that might format differently. But maybe for testing, just check that passing a dumper works.
+
+Another test: check that the function raises a proper error if the object can't be serialized. Wait, but that's up to PyYAML's implementation. The function itself might not need to handle that, just pass through the error.
+
+Wait the function's docstring says it returns a YAML stream, so it's supposed to handle any object that can be serialized via the dumper. So the tests should focus on correct serialization.
+
+Let me outline the tests. Using pytest:
+
+First, a test for a simple dictionary. The expected YAML would be something like "key: value\n".
+
+Second, a test with a list. Like [1, 2, 3] should become "- 1\n- 2\n- 3\n".
+
+Third, maybe a nested structure. Like a dict containing a list.
+
+Fourth, test the dumper parameter. Suppose we use yaml.SafeDumper, then pass that as the dumper. The output should be the same as using yaml.dump with SafeDumper.
+
+Wait, but how would the test check that? Maybe by comparing to the expected output from yaml.dump with that dumper.
+
+Alternatively, test that passing a dumper doesn't break, by using a dumper that's the same as default, and the output is as expected.
+
+Another edge case: None. The YAML should be 'null'.
+
+Also, test a string with special characters that need escaping, to see if the dumper handles it.
+
+But for the initial tests, maybe start with the basic cases.
+
+So, the code for the tests would look like:
+
+import pytest
+import yaml
+from my_module import _dump_string  # assuming the function is in my_module
+
+def test_dict_serialization():
+    data = {'name': 'Alice', 'age': 30}
+    expected_yaml = 'age: 30\nname: Alice\n'  # order might vary for dicts in older Python versions, but maybe the test should use a list or ordered structure?
+    # Alternatively, maybe the order isn't important, but for the test to pass, perhaps the expected should match the actual output.
+    # Alternatively, use a list to avoid order issues.
+    # Maybe better to use a list for the test case.
+
+Wait, in Python 3.7+, dicts preserve insertion order, so the test can check the exact string. But to be safe, perhaps the test should split the lines and check the content regardless of order, but that complicates things. Alternatively, use a list.
+
+Let me think of a better test case. Let's use a list:
+
+def test_list_serialization():
+    data = [1, 2, "three"]
+    expected = "- 1\n- 2\n- three\n"
+    assert _dump_string(data) == expected
+
+Another test with a simple object. Suppose a user-defined class that has __dict__ or is serializable via a custom representer. But for the basic test, maybe just use standard types.
+
+Testing the dumper parameter:
+
+def test_custom_dumper():
+    class CustomDumper(yaml.Dumper):
+        # maybe a dummy that does nothing different, but just to test passing it
+        pass
+    data = {'test': 'value'}
+    result = _dump_string(data, dumper=CustomDumper)
+    # The result would be the same as using CustomDumper, but how to verify?
+    # Maybe compare to yaml.dump(data, Dumper=CustomDumper)
+    expected = yaml.dump(data, Dumper=CustomDumper)
+    assert result == expected
+
+That's a valid test.
+
+Another edge case: empty data.
+
+def test_empty_dict():
+    data = {}
+    expected = "{}\n"
+    assert _dump_string(data) == expected
+
+Test for a string with spaces:
+
+def test_string_with_space():
+    data = "Hello World"
+    expected = "Hello World\n"
+    assert _dump_string(data) == expected
+
+Test for a None value:
+
+def test_none_value():
+    data = None
+    expected = "null\n"
+    assert _dump_string(data) == expected
+
+These tests should cover the basic functionality. Now, writing the actual code.
+
+Wait, the function's parameters are obj and dumper, with dumper being optional. So in the code, the function would be:
+
+import yaml
+
+def _dump_string(obj, dumper=None):
+    return yaml.dump(obj, Dumper=dumper)
+
+Wait, but what if dumper is None? The yaml.dump function's Dumper parameter defaults to None, but in that case, it uses the default Dumper. So that's okay.
+
+Wait, the default Dumper for yaml.dump is yaml.Dumper. So when dumper is None, we are effectively using the default. So this should work.
+
+But let me check: in PyYAML, if you call yaml.dump with Dumper=None, does it use the default? Let me recall, the Dumper parameter's default is None, but the function checks if it's None and uses the default Dumper. So yes.
+
+Therefore, the code should work.
+
+Wait, but in the function signature, the dumper is an argument. So the code correctly passes it as the Dumper keyword.
+
+Yes. So that's the code.
+
+Now, the user wants the code in Python markdown format, only the code. So the final code is:
+
+```python
+import yaml
+
+def _dump_string(obj, dumper=None):
+    return yaml.dump(obj, Dumper=dumper)
+```
+
+But wait, the function's docstring says it returns a YAML stream. The yaml.dump returns a string, which is the YAML content. So that's correct.
+
+I think that's all. The tests would be written first, but the code is straightforward.

@@ -1,0 +1,39 @@
+
+
+```python
+import logging
+import json
+import os
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    """
+    Given a sequence of configuration filenames, load and validate each configuration file. If the configuration file
+    cannot be read due to insufficient permissions or error parsing configuration file, the error log will
+    be recorded. Otherwise, return the results as a tuple of: dict of configuration filename to corresponding parsed configuration,
+    and sequence of logging.LogRecord instances containing any parse errors.
+    """
+    result = {}
+    errors = []
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                content = f.read()
+            config = json.loads(content)
+            if resolve_env:
+                for key in config:
+                    if isinstance(config[key], str):
+                        config[key] = config[key].format(**os.environ)
+            if overrides:
+                config.update(overrides)
+            result[filename] = config
+        except (IOError, PermissionError) as e:
+            log_record = logging.makeRecord('config_loader', logging.ERROR, None, None, str(e), None, None, {})
+            errors.append(log_record)
+        except json.JSONDecodeError as e:
+            log_record = logging.makeRecord('config_loader', logging.ERROR, None, None, f"JSON decode error in {filename}: {e}", None, None, {})
+            errors.append(log_record)
+        except Exception as e:
+            log_record = logging.makeRecord('config_loader', logging.ERROR, None, None, f"Unexpected error loading {filename}: {e}", None, None, {})
+            errors.append(log_record)
+    return result, errors
+```

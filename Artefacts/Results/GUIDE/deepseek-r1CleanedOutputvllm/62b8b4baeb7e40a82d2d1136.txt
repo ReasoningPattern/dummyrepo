@@ -1,0 +1,113 @@
+from zope.interface import Invalid
+import inspect
+
+
+def _verify(iface, candidate, tentative=False, vtype=None):
+    """
+    Verify that *candidate* might correctly provide *iface*.
+
+    This involves:
+
+    - Making sure the candidate claims that it provides the
+      interface using ``iface.providedBy`` (unless *tentative* is `True`,
+      in which case this step is skipped). This means that the candidate's class
+      declares that it `implements <zope.interface.implementer>` the interface,
+      or the candidate itself declares that it `provides <zope.interface.provider>`
+      the interface.
+
+    - Making sure the candidate defines all the necessary methods
+
+    - Making sure the methods have the correct signature (to the
+      extent possible)
+
+    - Making sure the candidate defines all the necessary attributes
+
+    :return bool: Returns a true value if everything that could be
+                  checked passed.
+                  Raises zope.interface.Invalid: If any of the previous
+                  conditions does not hold.
+    """
+    # Check if tentative is True to skip certain checks
+    if tentative:
+        # Still perform the initial 'provides' check
+        if not hasattr(candidate, 'providedBy') and not hasattr(candidate, 'implements'):
+            raise Invalid('The candidate does not claim to provide the interface.')
+
+    # Check if the candidate claims to provide the interface
+    if not hasattr(candidate, 'providedBy') and not hasattr(candidate, 'implements'):
+        raise Invalid('The candidate does not claim to provide the interface.')
+
+    # Get the interfaces that the candidate claims to provide
+    candidate_provided = set()
+    if hasattr(candidate, 'providedBy'):
+        candidate_provided.update(iface for iface in getattr(candidate, 'providedBy', []))
+    elif hasattr(candidate, 'implements'):
+        candidate_provided.update(getattr(candidate, 'implements', []))
+
+    # Check that all required interfaces are provided
+    for iface_name in iface:
+        if iface_name not in candidate_provided:
+            raise Invalid(f'The candidate does not provide interface {iface_name}')
+
+    # Get all the required methods
+    required_methods = set()
+    for iface_name in iface:
+        methods = getattr(getattr(candidate, 'implements', []), iface_name, [])
+        required_methods.update(methods)
+
+    # Check that all required methods are present in the candidate
+    for method_name in required_methods:
+        if not hasattr(candidate, method_name):
+            raise Invalid(f'The candidate does not have method {method_name}')
+
+    # Get all the method signatures for required methods
+    required_method_signatures = {}
+    for iface_name in iface:
+        for method_name in getattr(getattr(candidate, 'implements', []), iface_name, []):
+            sig = inspect.signature(method_name)
+            required_method_signatures[( iface_name, method_name )] = sig
+
+    # Check that all required methods have the correct signature
+    for method_name in required_methods:
+        method = getattr(candidate, method_name)
+        sig = inspect.signature(method_name)
+        if sig.parameters != sig.parameters:
+            raise Invalid(f'Method {method_name} does not have the correct signature.')
+
+    # Get all the attributes for the interfaces
+    required_attributes = set()
+    for iface_name in iface:
+        attributes = getattr(getattr(candidate, 'implements', []), iface_name, [])
+        required_attributes.update(attributes)
+
+    # Check that all required attributes are present in the candidate
+    for attr_name in required_attributes:
+        if not hasattr(candidate, attr_name):
+            raise Invalid(f'The candidate does not have attribute {attr_name}')
+
+    return True
+
+
+def test_verify interfcae, candidate, tentative=False, vtype=None):
+    """
+    Test function for _verify function.
+
+    :param interfcae: The interface to verify
+    :param candidate: The candidate object to verify
+    :param tentative: Whether to skip the 'provides' check
+    :param vtype: The type of verification (for advanced testing)
+    """
+    try:
+        result = _verify(interface, candidate, tentative, vtype)
+        assert result, f'Interface {interface} is not provided by candidate {candidate}'
+
+        if tentative:
+            assert not hasattr(candidate, 'providedBy'), 'Candidate should not claim to provide interface'
+            assert not hasattr(candidate, 'implements'), 'Candidate should not implement interface'
+        else:
+            assert hasattr(candidate, 'providedBy'), 'Candidate should provide interface'
+            assert hasattr(candidate, 'implements'), 'Candidate should implement interface'
+
+        print(f'Test passed for interface {interface} and candidate {candidate}')
+    except Invalid as e:
+        print(f'Test failed for interface {interface} and candidate {candidate}: {e}')

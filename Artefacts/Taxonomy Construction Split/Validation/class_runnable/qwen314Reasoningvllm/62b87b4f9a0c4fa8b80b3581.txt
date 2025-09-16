@@ -1,0 +1,177 @@
+
+Okay, I need to generate Python code for the scale method based on the given function signature and docstring. Let me think about what this method does.
+
+The docstring says that if other is None, the method returns the scale of the histogram. If the scale hasn't been computed yet, it computes and stores it, unless recompute is True. Wait, no—if other is None and recompute is False, then it computes and stores it for future use. But if recompute is True, maybe it forces recomputation even if it's already stored?
+
+Then, if a float is provided as other, the method rescales the histogram to that value. But there's a check: if the current scale is zero, rescaling isn't allowed and raises a LenaValueError.
+
+So first, I need to handle the case where other is None. In that case, check if the scale is already computed. If not, compute it. But how is the scale stored? Probably as an attribute of the histogram object. Let's assume the histogram has a _scale attribute, maybe computed via some method like _compute_scale().
+
+Wait, the docstring mentions that after modifying the histogram (like filling it), one must recompute the scale explicitly. So the scale is computed once and stored, but if the histogram changes, the stored scale might be invalid. Therefore, when other is None, and recompute is False, we check if _scale is already computed. If not, compute it. If recompute is True, compute it regardless.
+
+But how do I know if the scale was computed before? Maybe there's a flag like _scale_computed. Or maybe the _scale attribute is None until computed. Let's assume that the scale is stored in self._scale, and initially it's None. So when other is None, if self._scale is None, compute it and store, unless recompute is True. Wait, no—if recompute is True, even if it's already computed, we recompute it. But the docstring says that if the scale was not computed before, it is computed and stored unless recompute is True. Wait, the wording is: "if its scale was not computed before, it is computed and stored for subsequent use (unless explicitly asked to recompute)." Hmm, maybe the recomputation is only done if the scale was already computed and recompute is True. Or maybe the recomputation is triggered when other is None and recompute is True, regardless of previous state.
+
+Let me parse the docstring again. The first part: if other is None, return the scale. If it wasn't computed before, compute and store it (unless recompute is True). Wait, that wording is a bit confusing. If recompute is False, then compute and store. If recompute is True, maybe it recomputes even if it was already stored? Or maybe the recomputation is only done when necessary. Maybe the logic is: when other is None, if the scale hasn't been computed yet or recompute is True, then compute it. But the docstring says that if the scale wasn't computed before, compute and store it unless recompute is True. Wait, that seems contradictory. Let me re-read:
+
+"If *other* is ``None``, return scale of this histogram. If its scale was not computed before, it is computed and stored for subsequent use (unless explicitly asked to *recompute*)."
+
+Ah, so when other is None, and scale hasn't been computed, compute it and store it, but if recompute is True, then maybe we don't store it again? Or maybe the recomputation is done when other is None and recompute is True. Wait, the wording is a bit ambiguous. Let me think: the note says that after changing the histogram, you must explicitly recompute the scale if it was computed before. So, if the scale was computed before, but the histogram has changed, then the stored scale is invalid. Therefore, when other is None, and recompute is False, we check if the scale is already computed. If not, compute it and store. If recompute is True, then regardless of whether it's computed before, we compute it again and store.
+
+But the docstring says that when other is None, and the scale wasn't computed before, compute and store it unless recompute is True. Wait, that seems like if recompute is True, then we don't store it? That doesn't make sense. Maybe the correct logic is: if other is None, and recompute is False, then compute the scale if it hasn't been computed yet. If recompute is True, compute it regardless of previous state. But the docstring says "computed and stored for subsequent use (unless explicitly asked to recompute)". So maybe when recompute is True, we compute it but don't store it? That seems odd. Alternatively, maybe the recomputation is done when the user wants to force a recalculation, even if it was already stored. So, if other is None and recompute is False, check if scale is already computed. If not, compute and store. If recompute is True, compute it again (possibly overwriting the stored value).
+
+But how is the scale stored? Let's assume that the histogram has an attribute called _scale, which holds the computed scale. Also, maybe there's a flag _scale_computed to indicate whether it's been computed. But perhaps the code uses a property to manage this.
+
+So, for the case where other is None:
+
+if not self._scale_computed or recompute:
+    compute the scale and store it
+return self._scale
+
+But the docstring says that if the scale wasn't computed before, it is computed and stored unless recompute is True. Wait, that's conflicting. Let me read again:
+
+"If its scale was not computed before, it is computed and stored for subsequent use (unless explicitly asked to recompute)."
+
+So, if the scale wasn't computed before, compute and store it, but if recompute is True, then don't store it? That doesn't seem right. Maybe the correct interpretation is that when other is None, and the scale hasn't been computed, compute it and store it. However, if recompute is True, then even if it was computed before, we recompute it (and possibly overwrite the stored value). So the recomputation is done when recompute is True, regardless of whether it was computed before.
+
+So the logic for the first part (other is None) would be:
+
+if recompute is True:
+    compute the scale and store it
+else:
+    if scale hasn't been computed yet:
+        compute and store
+    return the stored scale
+
+Wait, but the docstring says that when other is None, if the scale wasn't computed before, compute and store it unless recompute is True. So maybe when recompute is True, we don't store it? That seems counterintuitive. Maybe the wording is that if recompute is True, then we recompute it even if it was already stored. So the stored value is updated.
+
+Alternatively, perhaps the recomputation is only done if the user wants to force it. So the code would be:
+
+if other is None:
+    if not self._scale_computed or recompute:
+        self._scale = self._compute_scale()
+        self._scale_computed = True
+    return self._scale
+
+But the docstring says that if the scale wasn't computed before, it is computed and stored unless recompute is True. Wait, that phrasing is a bit confusing. Maybe the "unless explicitly asked to recompute" applies to the storing part. So if the scale wasn't computed before, compute it and store it, but if recompute is True, then maybe don't store it? That doesn't make sense. Maybe the correct logic is that when other is None, and recompute is False, we compute it once and store. If recompute is True, we compute it again (possibly overwriting the stored value). But the note says that after changing the histogram, you must recompute if it was computed before. So the stored scale is only valid if the histogram hasn't changed since it was computed.
+
+But perhaps the code is designed such that when you call scale() with other=None and recompute=False, it computes the scale if it hasn't been computed yet. If recompute is True, then it recomputes regardless, possibly overwriting the stored value. So the code would check if recompute is True, then compute the scale again. Otherwise, compute it only if it hasn't been computed before.
+
+Now, for the case where other is a float. Then, we need to rescale the histogram. But first, check if the current scale is zero. If it is, raise LenaValueError. Otherwise, rescale.
+
+But how to rescale? The histogram's data (like counts) would need to be multiplied by (other / current_scale). But the exact implementation depends on the histogram's structure. Let's assume that the histogram has a data attribute, maybe a numpy array or a list, and that the scale is the integral of the histogram. So, to rescale, we'd adjust the data accordingly.
+
+But the problem is that the user hasn't provided the actual implementation details of the histogram. So I need to make assumptions here. For example, the histogram might have a 'data' attribute which is a 1D or 2D array, and the scale is the sum of the data multiplied by the bin widths. But without knowing the exact structure, I can't write the code for _compute_scale. However, the user probably expects that the code uses some existing methods or attributes.
+
+Alternatively, maybe the scale is stored as a separate attribute, and when rescaling, we adjust the data by multiplying by the factor (other / current_scale). But again, without knowing the actual data structure, I can't be precise.
+
+But the user wants the code based on the function signature and docstring. So perhaps the code is part of a Histogram class, and the scale is stored in self._scale. The _compute_scale() method would calculate the integral.
+
+So, the code would look something like this:
+
+def scale(self, other=None, recompute=False):
+    if other is None:
+        if not hasattr(self, '_scale') or recompute:
+            self._scale = self._compute_scale()
+        return self._scale
+    else:
+        if self._scale == 0:
+            raise LenaValueError("Cannot rescale a histogram with scale zero.")
+        # Rescale the histogram
+        scale_factor = other / self._scale
+        self.data *= scale_factor
+        self._scale = other
+
+But wait, the _compute_scale() method would need to be defined elsewhere. Also, the initial check for whether the scale is computed. Maybe the _scale is initialized to None, and if it's None, then compute it. So:
+
+if other is None:
+    if self._scale is None or recompute:
+        self._scale = self._compute_scale()
+    return self._scale
+
+But then, what about the note that after changing the histogram, you must recompute the scale if it was computed before? That suggests that modifying the histogram (like filling it) would invalidate the stored scale. So, perhaps whenever the histogram is modified, the _scale is set to None, forcing a recomputation next time.
+
+But in the code for the scale method, when other is None, and recompute is False, we check if _scale is None. If so, compute it. Otherwise, return it. If recompute is True, then compute it again regardless of previous state.
+
+Then, when other is a float, we need to rescale. So, the code would calculate the factor and adjust the data. But again, the exact way depends on the histogram's structure. For example, if the histogram is a 1D histogram with counts, the scale might be the sum of counts multiplied by bin width. Rescaling would involve multiplying the counts by (other / current_scale). But without knowing the exact data structure, I can't implement that. However, the user probably expects that the code uses some existing methods or attributes.
+
+Assuming that the histogram has a data attribute which is a numpy array, and that the scale is the integral, then rescaling would be done by multiplying the data by the factor. Also, the _compute_scale() method would return the integral.
+
+But the problem is that the user hasn't provided the actual code for the histogram, so I need to make assumptions. Let me proceed with the code structure, using placeholders where necessary.
+
+Another thing: the exception is LenaValueError. So the code must import or have that exception defined. But the user might have a custom exception, so perhaps the code raises it when trying to rescale a histogram with zero scale.
+
+Putting it all together, the code would be:
+
+def scale(self, other=None, recompute=False):
+    if other is None:
+        if self._scale is None or recompute:
+            self._scale = self._compute_scale()
+        return self._scale
+    else:
+        if self._scale == 0:
+            raise LenaValueError("Cannot rescale a histogram with scale zero.")
+        scale_factor = other / self._scale
+        self.data *= scale_factor
+        self._scale = other
+
+But I need to make sure that the _compute_scale() method exists. Also, the initial value of self._scale is probably None, and when computed, it's set to a float.
+
+But perhaps the _scale is computed as the sum of the data multiplied by the bin width. For example, if the histogram has a bin_width attribute, then:
+
+def _compute_scale(self):
+    return np.sum(self.data) * self.bin_width
+
+But again, without knowing the actual implementation, this is speculative. However, the user's task is to generate code based on the given function signature and docstring, so maybe the code is part of a class that already has these attributes and methods.
+
+So the code would handle the two cases: returning the scale or rescaling. The rescaling part would need to adjust the data and update the scale. Also, the check for zero scale.
+
+Another point: the docstring says that if other is a float, rescale self to other. So, the current scale is multiplied by a factor to reach the new value. So, the factor is other / current_scale. But if current_scale is zero, that's invalid.
+
+So, the code for the else part would be:
+
+if self._scale == 0:
+    raise LenaValueError(...)
+self.data *= other / self._scale
+self._scale = other
+
+But again, the exact way to modify the data depends on the histogram's structure. However, the user's code may have a data attribute that can be multiplied by a scalar.
+
+Also, the method is part of a class, so self refers to the instance. The code needs to be in Python, and the exception is LenaValueError, which is presumably defined in the same module.
+
+So, putting all that together, the code would be:
+
+def scale(self, other=None, recompute=False):
+    """
+    Compute or set scale (integral of the histogram).
+
+    If *other* is ``None``, return scale of this histogram.
+    If its scale was not computed before,
+    it is computed and stored for subsequent use
+    (unless explicitly asked to *recompute*).
+    Note that after changing (filling) the histogram
+    one must explicitly recompute the scale
+    if it was computed before.
+
+    If a float *other* is provided, rescale self to *other*.
+
+    Histograms with scale equal to zero can't be rescaled.
+    :exc:`.LenaValueError` is raised if one tries to do that.
+    """
+    if other is None:
+        if self._scale is None or recompute:
+            self._scale = self._compute_scale()
+        return self._scale
+    else:
+        if self._scale == 0:
+            raise LenaValueError("Cannot rescale a histogram with scale zero.")
+        scale_factor = other / self._scale
+        self.data *= scale_factor
+        self._scale = other
+
+But I need to make sure that self._scale is initialized properly. Also, the _compute_scale() method must exist. However, the user hasn't provided that, so maybe that's part of the class.
+
+But the user's code is only the scale method. So the code above is correct given those assumptions. Also, the LenaValueError is raised when trying to rescale a zero-scale histogram.
+
+Wait, but in the code, when other is a float, it's possible that the current scale is zero. So, the check is done before rescaling. That makes sense.
+
+So, this should be the code. But the user said to output only the code in Python markdown format. Also, the code must not include any explanations. So the final code would be as written, with the method and the docstring.

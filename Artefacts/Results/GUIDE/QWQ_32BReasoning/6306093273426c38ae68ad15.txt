@@ -1,0 +1,174 @@
+Okay, I need to generate Python code for the function _run_playbook based on the provided signature and docstring. Let's start by understanding what the function is supposed to do. The docstring says it runs the Ansible CLI with vars_dict passed as extra vars. The parameters include cli_args (a list of command-line arguments), vars_dict (the variables for Ansible), and two objects related to Infrared's workspace and plugin. The return is the Ansible results.
+
+First, I should think about how to structure the function. Since it's using Ansible, I might need to execute a subprocess or use Ansible's API. But the presence of cli_args suggests it's invoking the CLI directly. So probably, the function will construct a command line from cli_args and the vars_dict, then run it.
+
+Wait, but how do the ir_workspace and ir_plugin come into play here? Maybe the workspace provides the path to the playbook or some environment variables. The plugin might have some specific configurations or hooks. Hmm, but the exact details aren't clear. The function's return is Ansible results, which might be the exit code or the output.
+
+Let me think about the steps. The function needs to take the cli_args, which is a list, and the vars_dict, which should be converted into command-line options. For Ansible, extra vars are usually passed with --extra-vars or -e. But when using a dictionary, the standard way is to convert it into a JSON string or a key=value pairs. However, Ansible can take a JSON string as an argument.
+
+Alternatively, maybe using the @click.pass_context or similar, but since this is a function, perhaps the vars_dict is converted into a string like "key1=value1 key2=value2..." but that might not be reliable for complex data. Wait, Ansible's cli expects the extra vars to be in a format that can be parsed. So perhaps the correct way is to use --extra-vars with the vars_dict as a JSON string. So the function would need to convert vars_dict into a JSON string and add it to the command line.
+
+The cli_args are the list of command-line arguments provided, so the function should probably prepend the playbook command, like ansible-playbook, then the cli_args, then the extra-vars.
+
+Wait, but the cli_args might already include the playbook path. So the cli_args are the arguments passed to the ansible-playbook command, and the vars_dict is added as extra vars. So the function would need to construct the command line by taking cli_args, then adding the extra-vars part.
+
+Putting it all together, the steps would be:
+
+1. Convert vars_dict into a JSON string or a key=value string for the -e option.
+2. Build the full command line by combining the Ansible command (like ansible-playbook), the cli_args, and the extra vars.
+3. Execute this command using subprocess or similar, capturing the output and return code.
+4. Return the results (maybe as a tuple of stdout, stderr, return code, or some structured data).
+
+But how does ir_workspace and ir_plugin factor in here? Maybe the workspace provides the current directory or some environment variables. The plugin might have some additional parameters or validation. But since the function's docstring doesn't mention their use, perhaps they are just passed along but not used in the current function. Maybe they are for future use or part of a larger system. Since the problem says to follow the signature exactly, I should include them as parameters but not use them in the code unless necessary.
+
+Alternatively, perhaps the ir_workspace has a method to get the playbook path. But since the cli_args are already provided, maybe the cli_args include the playbook path, so the workspace isn't needed here. Hmm, maybe the workspace is just part of the context but not used in this function. So proceed without using them unless required.
+
+Now, for the code structure. The function needs to return the Ansible results. Let's think about using subprocess. The function would run the command and return the output. Let's outline the code:
+
+def _run_playbook(cli_args, vars_dict, ir_workspace, ir_plugin):
+    # construct the command line
+    # first, the base command: ansible-playbook
+    command = ['ansible-playbook']
+    command.extend(cli_args)
+    # add the extra vars
+    # convert vars_dict to a JSON string
+    extra_vars_str = json.dumps(vars_dict)
+    command.extend(['-e', extra_vars_str])
+    # execute the command
+    result = subprocess.run(command, capture_output=True, text=True)
+    # return the results, maybe as a tuple or a dict
+    return {
+        'stdout': result.stdout,
+        'stderr': result.stderr,
+        'returncode': result.returncode
+    }
+
+Wait, but the function's return is specified as "ansible results". The user might expect the return code or the output. The example here returns a dictionary. Alternatively, maybe just return the return code, but the docstring isn't specific. The code needs to return something, so this approach is plausible.
+
+However, there are potential issues. For example, the order of the cli_args and the extra vars. The cli_args could have their own -e options, but the function is adding another one. But according to the function's description, the vars_dict is supposed to be passed as extra-vars, so it's correct to append them.
+
+Also, using json.dumps might be better than using key=value pairs because it handles complex data structures. But Ansible's -e can take either a JSON string or a YAML, so this should work.
+
+Another thing: the cli_args are a list, so when we extend the command with them, each element is a separate argument, which is correct. For example, if cli_args is ['playbook.yml', '-v'], then the command becomes ['ansible-playbook', 'playbook.yml', '-v', '-e', '{"key":"value"}'].
+
+Now, about the other parameters: ir_workspace and ir_plugin. Since they are not used in the code, but are part of the function signature, perhaps they are for future use or part of a larger system. The function must include them as parameters but can ignore them in the code.
+
+Wait, but maybe the ir_workspace provides the current working directory. So when running the command, we should change the directory to the workspace's path. For example, maybe:
+
+current_dir = os.getcwd()
+os.chdir(ir_workspace.path)
+# run the command
+os.chdir(current_dir)
+
+But the problem's docstring doesn't mention that. Since the user hasn't specified, perhaps it's better to leave them unused unless there's an indication. Alternatively, perhaps the cli_args are relative to the workspace's directory, but without more info, I'll proceed without using them.
+
+Now, the tests. Since the user wants a test-driven approach, first write the unit tests before the code. Let's think about what the tests would look like.
+
+First, the test would need to mock the subprocess.run call. Because in a unit test, you don't want to actually run Ansible.
+
+The test could check that the command is built correctly, that the vars_dict is converted to JSON, and that the cli_args are included properly.
+
+For example:
+
+import unittest
+from unittest.mock import patch, MagicMock
+from your_module import _run_playbook
+
+class TestRunPlaybook(unittest.TestCase):
+
+    @patch('subprocess.run')
+    def test_run_playbook(self, mock_run):
+        cli_args = ['playbook.yml', '-v']
+        vars_dict = {'env': 'test', 'count': 3}
+        ir_workspace = MagicMock()  # Just a placeholder, not used
+        ir_plugin = MagicMock()
+        
+        result = _run_playbook(cli_args, vars_dict, ir_workspace, ir_plugin)
+        
+        expected_command = ['ansible-playbook', 'playbook.yml', '-v', '-e', json.dumps(vars_dict)]
+        mock_run.assert_called_once_with(expected_command, capture_output=True, text=True)
+        self.assertEqual(result, mock_run.return_value)  # Or check the structure as returned.
+
+Wait, but in the code, the return is a dict with stdout, stderr, etc. But in the code I wrote earlier, the return is a dictionary built from the subprocess result. However, in the mock, mock_run.return_value would have those attributes. So when the code does return the constructed dict, the test needs to check that the function's return is correctly built from the subprocess result's attributes.
+
+Alternatively, maybe the code returns the result of subprocess.run(), but in the code I had, it constructs a dictionary. Hmm, perhaps I should adjust that. Wait, in the code I wrote earlier, the code returns a dictionary with the three items. So the test should check that the returned value is that constructed dict.
+
+Alternatively, maybe the function just returns the subprocess.CompletedProcess instance, but the code example I had built a dict. The docstring says to return "ansible results", which is vague. But the user's code example may have to return the results as per the subprocess run's return.
+
+Alternatively, maybe the user expects the function to return the return code, but that's unclear. Since the code example I thought of constructs a dict, perhaps proceed with that.
+
+In the test, after the mock_run is called, the expected return value of the function is the constructed dict. So the test should check that.
+
+Alternatively, maybe the function returns the return code. But the code example I have returns a dict. Let me proceed with the initial approach.
+
+Another test case: check that the vars_dict is correctly converted to JSON. For example, if vars_dict has nested structures, the JSON should be properly formatted.
+
+Another test: cli_args can be empty? Like, if cli_args is an empty list, then the command would be ['ansible-playbook', '-e', ...], but that would require the playbook to be specified elsewhere, which might be an error. But the function's responsibility is to construct the command as per the parameters, so that's okay.
+
+Also, edge cases: vars_dict is empty. Then the -e option is still added with an empty dict? Or maybe omitted? The function's code adds the -e regardless. But the docstring says "Will be passed as Ansible extra-vars", so even if empty, maybe it's okay. But perhaps the user expects that if vars_dict is empty, the -e is not added. However, that's an implementation detail. The code as written adds it regardless, so the test should reflect that.
+
+Now, putting this into unit tests. The user wants comprehensive tests, so maybe multiple test cases, including different cli_args and vars_dict scenarios.
+
+But the code is to be written after the tests, but since I'm generating the code, I need to first outline the tests and then the code.
+
+Wait, the user says to generate the code based on the signature and docstring, and to output only the code in Python markdown. But they mentioned to first generate comprehensive unit tests before writing the code. However, the user wants the code generated here, so maybe I should just write the code, assuming that the tests are done first. But the problem requires me to generate the code, so perhaps proceed to code.
+
+Wait, but the user's instructions say "Generate Python code based on the following function signature and docstring. Output ONLY the code generated, in python markdown format." So the code is the only output here, not the tests. But the tips mention to follow TDD by first writing tests, but the user wants the code, not the tests. So perhaps I can ignore the test part and just write the code.
+
+Hmm, but the problem says to generate the code following the function signature and docstring, so proceed.
+
+Now, going back to the code. The function uses subprocess.run. Need to import subprocess and json.
+
+Wait, in the code, I need to import those modules. So at the top, we'll have:
+
+import subprocess
+import json
+
+But the function is part of a module, so the code should include those imports.
+
+Wait, but in the function's parameters, ir_workspace and ir_plugin are not used, but the function must include them. So the code will have those parameters but not use them.
+
+Putting it all together, the code would look like this:
+
+import subprocess
+import json
+
+def _run_playbook(cli_args, vars_dict, ir_workspace, ir_plugin):
+    """
+    Runs ansible cli with vars dict
+
+    :param vars_dict: dict, Will be passed as Ansible extra-vars
+    :param cli_args: the list  of command line arguments
+    :param ir_workspace: An Infrared Workspace object represents the active
+                         workspace
+    :param ir_plugin: An InfraredPlugin object of the current plugin
+    :return: ansible results
+    """
+    # Construct the command
+    command = ['ansible-playbook']
+    command.extend(cli_args)
+    # Add extra vars
+    extra_vars_str = json.dumps(vars_dict)
+    command.extend(['-e', extra_vars_str])
+    # Execute the command
+    result = subprocess.run(command, capture_output=True, text=True)
+    # Return the results as a dictionary
+    return {
+        'stdout': result.stdout,
+        'stderr': result.stderr,
+        'returncode': result.returncode
+    }
+
+Wait, but what about error handling? For example, if the command fails, should the function raise an exception or just return the result? The docstring says to return the results, so it's okay to return the result regardless.
+
+Another consideration: the order of the arguments. The cli_args are added before the -e, so any options in cli_args will come before the extra vars. That's correct because the order matters in CLI arguments.
+
+Another point: the cli_args is a list, so each element is a separate argument. So if cli_args is ['playbook.yml', '-e', 'existing_var=value'], then the final command would have both the existing -e and the added one. That's okay, as the function is passing all the vars_dict as an extra var, which might override or append to existing ones, depending on Ansible's behavior. The function's responsibility is to add the vars_dict as an extra var, regardless of existing options.
+
+Now, possible edge cases: if vars_dict is None? But the parameter says it's a dict, so presumably it's provided. The function doesn't check for that.
+
+Another thing: the ir_workspace and ir_plugin are not used. But the function's signature includes them, so they must be present. The code can ignore them.
+
+Now, the code uses subprocess.run with capture_output and text=True. That's correct for Python 3.7+, which is the standard now. The return is a dictionary with the captured output.
+
+I think this should work. Let me check again for any mistakes. The command is built correctly, the extra_vars are added properly, and the result is returned as specified.

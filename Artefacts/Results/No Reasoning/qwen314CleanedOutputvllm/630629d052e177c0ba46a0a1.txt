@@ -1,0 +1,49 @@
+def verify_relayable_signature(public_key, doc, signature):
+    """
+    Verify the signed XML elements to have confidence that the claimed
+    author did actually generate this message.
+    """
+    from lxml import etree
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+    # Parse the XML document
+    xml_parser = etree.XMLParser(recover=True)
+    root = etree.fromstring(doc, parser=xml_parser)
+
+    # Find the signed element (example assumes a specific structure)
+    signed_element = root.find(".//{http://www.w3.org/2000/09/xmldsig#}Signature")
+
+    # Extract the signature value
+    sig_value = signed_element.find(".//{http://www.w3.org/2000/09/xmldsig#}SignatureValue")
+    if sig_value is None:
+        raise ValueError("SignatureValue element not found in the XML document")
+    signature_bytes = sig_value.text.encode('utf-8')
+
+    # Extract the reference digest value
+    reference = signed_element.find(".//{http://www.w3.org/2000/09/xmldsig#}Reference")
+    if reference is None:
+        raise ValueError("Reference element not found in the XML document")
+    digest_value = reference.find(".//{http://www.w3.org/2000/09/xmldsig#}DigestValue")
+    if digest_value is None:
+        raise ValueError("DigestValue element not found in the XML document")
+    digest_value_bytes = digest_value.text.encode('utf-8')
+
+    # Compute the digest of the document
+    digest = hashes.Hash(hashes.SHA256())
+    digest.update(doc.encode('utf-8'))
+    computed_digest = digest.finalize()
+
+    # Verify the signature
+    public_key_obj = load_pem_public_key(public_key.encode('utf-8'))
+    try:
+        public_key_obj.verify(
+            signature_bytes,
+            computed_digest,
+            padding.PKCS1v15(),
+            hashes.SHA256()
+        )
+        return True
+    except Exception as e:
+        return False

@@ -1,0 +1,226 @@
+Okay, I need to write a Python function called is_ipv4 that checks if a given target is a valid IPv4 address. Hmm, how do I do that? Let's think. IPv4 addresses are in the format of four numbers separated by dots, right? Each number should be between 0 and 255. So first, I should split the target string by dots. If there aren't exactly four parts after splitting, then it's not a valid IPv4.
+
+Wait, right. So the first step is to split the target on '.' and check the length. If it's not 4, return False. Then for each part, I need to make sure they are all valid integers. But also, each part must be between 0 and 255. Oh, and there's some edge cases like leading zeros. Wait, does IPv4 allow leading zeros? Like 192.168.01.01? I think according to the standards, each octet is treated as a number, so leading zeros might not be allowed. Because, for example, 012 is 12 in decimal, but the octets should be 0-255 as numbers. So the string representation shouldn't have leading zeros unless the number is exactly 0. Like "0.0.0.0" is okay, but "123.45.67.89" has parts like 45 which is okay, but "01.02.03.04" would have 01 which is 1, but the leading zero might be considered invalid in the address format. Wait, actually, I'm a bit confused here. Let me recall: the official rules for IPv4 addresses state that each octet must be a decimal number from 0 to 255, and leading zeros in the octets are not allowed. Because, for instance, 192.168.0.1 is okay, but 192.168.01.1 would have the third octet as "01" which is invalid because it's not a number between 0-255 when parsed as an integer, but actually it is 1. Wait no, the problem is that the string must not have leading zeros unless the number is zero. So like "0.0.0.0" is okay, but "01.0.0.0" is invalid because of the leading zero in "01".
+
+So the steps are:
+
+1. Split the target into parts by '.'.
+2. Check that there are exactly four parts.
+3. For each part:
+   a. Check that it's a string that can be converted to an integer.
+   b. The part must not be empty.
+   c. If the part has more than one character, it can't start with '0' (like "012" is invalid, but "0" is okay).
+   d. The integer value must be between 0 and 255 inclusive.
+
+Wait, but how do I handle cases where a part is something like "256" or "abc"? Let's see. Let's think of possible invalid cases:
+
+Examples:
+
+"192.168.1.1" → valid
+"192.168.1.256" → invalid because 256 >255
+"192.168.1.00" → invalid because leading zero in "00"
+"123.45.67.8.9" → invalid because more than four parts
+"123.45..67" → invalid because two parts (the empty string between the dots)
+"2001:0db8:85a3:0000:0000:8a2e:0370:7344" → an IPv6 address, so returns False
+"123.0.0.a" → the last part is not a number → invalid.
+
+So the plan is:
+
+First, split the target into parts. If len(parts) !=4, return False.
+
+Then for each part in parts:
+
+- Check if it's a string of digits. So, part must consist only of numbers. So, if part is empty, or has non-digit characters, that's invalid.
+
+- Convert the part to an integer. If it's not between 0-255, return False.
+
+- Also, check for leading zeros. So, if the part's length is greater than 1, and the first character is '0', then it's invalid. Because "0" is okay, but "00" or "01" would be considered as leading zeros. Wait, but what about "0" itself? That's allowed. So the condition is: if the part starts with '0' and has length more than 1 → invalid.
+
+So, putting this all together.
+
+The function steps:
+
+def is_ipv4(target):
+    parts = target.split('.')
+    if len(parts) !=4:
+        return False
+    for part in parts:
+        # Check if part is all digits
+        if not part.isdigit():
+            return False
+        num = int(part)
+        if num <0 or num>255:
+            return False
+        # Check leading zeros
+        if len(part) >1 and part[0] == '0':
+            return False
+    return True
+
+Wait, but wait, the first condition (split into four parts) is necessary, but also, each part must be non-empty. Because, for example, if the target is "192..168.1.1" then splitting would result in parts like "", "168", etc. So in that case, the length would be more than four? Wait, no. Let me see: "192..168.1.1" would split into ["192", "", "168", "1", "1"], which has 5 elements, so that would fail the first check. But what about "...." → four parts, each is empty string. Then in the loop, part would be empty, so part.isdigit() would return False, so the second condition would catch that. So that's okay.
+
+Wait, but part.isdigit() returns True for "0" but what about an empty string? Let me check. The empty string's isdigit() is False, so in the case where a part is empty, the code would return False correctly.
+
+Another case: "123.45.67.8" → valid? Let's see, the parts are "123", "45", "67", "8". Each is a number between 0-255, and no leading zeros. So that's okay, returns True.
+
+What about "0.0.0.0" → valid, yes.
+
+"01.02.03.04" → each part starts with 0 but length is 2, so the third condition would catch those, so return False.
+
+Another case: "255.255.255.255" → valid. "256.255.255.255" → first part is 256 which is over 255 → invalid.
+
+So this code seems to handle those cases. Wait, but what about "1.2.3.4.5" → split into 5 parts, so first check fails.
+
+Wait, but in the code above, after splitting into parts, the first check is for exactly four parts, so that's okay.
+
+Wait, but what about "123.0.0.256"? The first three parts are okay, but the fourth part is 256 which is over 255 → returns false.
+
+So this should work. But let me think of some edge cases:
+
+What about "200.100.0.0" → okay. "0.255.255.255" → okay.
+
+What about "192.168.1.0" → valid.
+
+Now, what about "192.168.1.255" → valid, yes.
+
+What about "123.0.0.00" → the last part is "00" which has leading zero → so the third condition would trigger, so it returns False.
+
+Another case: "127.0.0.1" → valid.
+
+What about "0.0.0.0" → valid.
+
+What about "192.168.1.1234" → split into four parts, but the last part is 1234 which is >255 → returns False.
+
+What about "1.2.3.4a" → split into four parts? No, because the last part is "4a", which would split into five parts if there's an extra dot? Wait, no. Let's see, "1.2.3.4a" → split on '.' gives ["1", "2", "3", "4a"], which is four parts. Then, "4a" is not a digit, so returns False.
+
+So that's correct.
+
+Wait, but the code above checks for part.isdigit() first. So if part is "4a", it's not all digits, so returns False. So that's okay.
+
+Another case: "  192.168.1.1 " (with leading or trailing whitespace). The target may have leading or trailing spaces, but the function should probably not consider that as valid. Because the input is supposed to be the actual address. So, maybe we should first strip any whitespace from the target before splitting?
+
+Hmm, the function's doc says "Test if IPv4 address or not". So perhaps leading or trailing whitespace would make it invalid. Because the actual address can't have that. So maybe first, target = target.strip() before splitting?
+
+Wait, that's a good point. For example, if the target is " 192.168.1.1 ", then stripping whitespace gives "192.168.1.1" which is okay. But if there's any whitespace within the address, like "192.168 .1.1", then splitting on '.' would result in parts with "168 " which has a space, so isdigit() returns false.
+
+So the code should first process the target to remove any leading or trailing whitespace, but any whitespace in the middle would make it invalid. So adding a strip is important.
+
+So I should start the function by stripping the target:
+
+def is_ipv4(target):
+    target = target.strip()
+    parts = target.split('.')
+    if len(parts)!=4:
+        return False
+    for part in parts:
+        if not part.isdigit():
+            return False
+        num = int(part)
+        if num <0 or num>255:
+            return False
+        if len(part)>1 and part[0] == '0':
+            return False
+    return True
+
+Wait, but the check for leading zeros. Let me see:
+
+Suppose part is "0", that's okay. But part is "00", then len(part) is 2, first character is 0 → invalid.
+
+Yes. So that check is correct.
+
+Another case: part is "0123" → length 4, starts with '0' → invalid.
+
+But what about "123" → okay.
+
+Wait, what about part "255" → that's okay, since it's three digits, no leading zero. So that's allowed.
+
+Another possible case is "123.0.0.0" → okay.
+
+Wait, but what about "123.040.0.0" → the second part is "040" → starts with 0, but length is 3. So len(part) is 3>1, so first character is '0' → returns false. So that's correct.
+
+So this code should handle those cases.
+
+Wait, but there's a problem. Let's see:
+
+The check for leading zeros is if the length of the part is more than 1 and the first character is '0'. But for "0", it's okay. For "00", it's invalid. But what about "0" which is okay. So that's correct.
+
+But another edge case: part is "000" → that's three zeros, but the first character is '0', but since the length is more than 1, but the number is 0. So the code would return False here? But 000 is 0 as a number, so the leading zeros are not allowed in the string representation. So according to the standard, "000" is not a valid octet string, even though the value is 0. So the code correctly returns false here.
+
+Yes, because the standard requires that each octet is written as a decimal number without leading zeros unless the number is zero. So that check is correct.
+
+Another possible issue: the part could be an empty string. Like if the target is "....", then split into 4 parts, each is an empty string. The first part is empty, so part.isdigit() returns false, so the function returns False. That's correct.
+
+Wait, but what about something like "192.168.03.1" → the third part is "03", which is leading zero. So the code would check len(part) is 2, part[0] is '0', so returns False. Correct.
+
+Hmm, I think this code should work. Let me test some examples in my mind:
+
+Test case 1: "192.168.1.1" → split into four parts. All digits. Each part is 192 (okay), 168 (okay), 1 (okay), 1 (okay). No leading zeros. So returns True.
+
+Test case 2: "192.168.1.256" → the last part is 256 → which is over 255 → returns False.
+
+Test case 3: "0.0.0.0" → returns True.
+
+Test case 4: "01.02.03.04" → first part starts with 0, length 2 → returns False.
+
+Test case 5: "123.45.67.8" → all okay. Each part is a number between 0-255. The last part is 8, so okay. The first three parts are okay. So returns True.
+
+Test case 6: "192.168.1.1a" → split into four parts. The last part is "1a", which is not digits → returns False.
+
+Test case 7: "255.255.255.255" → returns True.
+
+Test case 8: "256.255.255.255" → first part is 256 → returns False.
+
+Test case 9: "192.168.1.00" → third part is "1" (wait no, the parts would be "192", "168", "1", "00". The last part is "00" → len is 2, first char is '0', so invalid → returns False.
+
+Test case 10: "1.2.3.4a" → split into four parts, the last is "4a" → not digits → returns False.
+
+Test case 11: "123.0.0.0a" → same as above.
+
+Test case 12: " 192.168.1.1 " → after stripping becomes "192.168.1.1", so okay.
+
+Test case 13: "192..168.1" → split into ["192", "", "168", "1"], so length is 4? No, wait, split on '.' would split into 192, empty, 168, 1 → four parts? Let's see, the string "192..168.1" has three dots. Split by '.' would be 4 elements. So parts would be 192, "", 168, 1 → the second part is empty, so in the loop, part is "" → isdigit returns false, so returns False.
+
+Yes, that's handled.
+
+Another possible case: "127.0.0.1" → valid.
+
+What about "0.255.255.255" → valid.
+
+Hmm, so I think this code should work. But wait, in the code, the check for leading zeros is written as:
+
+if len(part) >1 and part[0] == '0':
+
+Yes, that's correct. So each part that starts with 0 and has length more than 1 is invalid.
+
+Wait, but what if part is "0" → len 1, so okay.
+
+So all the conditions are covered here.
+
+Wait, but let me think about the order of the checks. For example, in the loop:
+
+First, check if it's a digit. If not, return False.
+
+Then, check if the number is between 0-255. Wait, but since it's a digit, converting to int(part) would be correct. So even if part is "02", converting to 2, but the check for leading zero would catch it.
+
+Wait, but the code first checks if part is all digits. So that handles letters and other characters. Then, the number check would handle numbers out of range. The leading zero check is for the string's leading zeros. So the order is okay.
+
+Another thing: the code converts to int, but in Python, if part is "02", that's 2, but the leading zero is still in the string, so the check on the string length and first character would catch it.
+
+Yes. So the code is correct.
+
+Wait, but what about "255.255.255.255." (with a trailing dot). Splitting would give 5 elements, so first check returns False. Correct.
+
+Another case: "192.168.1" → split into 3 parts → returns False.
+
+So, yes, the code should work.
+
+Wait, but the function's return is a boolean. So in all cases, returns True or False.
+
+I think that's it. So the code should be as written above. Let me see if I missed any cases. Oh, the part could be "0" which is okay, but "00" is not. The code does that.
+
+Wait, another edge case: part is "0000" → len is 4, starts with 0 → so invalid.
+
+Yes, that's caught.
+
+What about "123.0.0.0" → valid.
+
+So I think this code should work. Let me write it now.

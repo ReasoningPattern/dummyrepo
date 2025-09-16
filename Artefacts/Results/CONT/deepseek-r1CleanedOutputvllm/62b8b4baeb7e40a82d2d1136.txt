@@ -1,0 +1,66 @@
+import inspect
+from types import MethodType
+
+def _verify(iface, candidate, tentative=False, vtype=None):
+    """
+    Verify that *candidate* might correctly provide *iface*.
+
+    This involves:
+    
+    - Making sure the candidate claims that it provides the
+      interface using ``iface.providedBy`` (unless *tentative* is `True`,
+      in which case this step is skipped). This means that the candidate's class
+      declares that it `implements <zope.interface.implementer>` the interface,
+      or the candidate itself declares that it `provides <zope.interface.provider>`
+      the interface
+
+    - Making sure the candidate defines all the necessary methods
+
+    - Making sure the methods have the correct signature (to the
+      extent possible)
+
+    - Making sure the candidate defines all the necessary attributes
+
+    :return bool: Returns a true value if everything that could be
+                  checked passed.
+                  Raises zope.interface.Invalid: If any of the previous
+                  conditions does not hold.
+    """
+    errors = []
+    
+    if not tentative:
+        if not (inspect.isprovidedby(candidate, iface) or inspect.isimplemented(candidate, iface)):
+            errors.append(_MSG_TOO_MANY)
+    
+    required_methods = iface.getProvidedNames() if hasattr(iface, 'getProvidedNames') else [method for method in inspect.getmembers(iface, lambda x: isinstance(x, MethodType))]
+    for method_name in required_methods:
+        method = getattr(candidate, method_name, None)
+        if not isinstance(method, (MethodType, type)):
+            errors.append(_MSG_TOO_MANY)
+    
+    for method_name in required_methods:
+        method = getattr(candidate, method_name, None)
+        if method is not None:
+            sig = inspect.signature(method)
+            if not sig.parameters:
+                errors.append(_MSG_TOO_MANY)
+    
+    if vtype is not None:
+        required_attrs = [attr for attr in vars(iface) if isinstance(getattr(iface, attr), MethodType)]
+    else:
+        required_attrs = vars(iface)
+    
+    for attr_name in required_attrs:
+        attr = getattr(iface, attr_name, None)
+        if attr is not None:
+            if not isinstance(attr, (MethodType, type)):
+                errors.append(_MSG_TOO_MANY)
+    
+    if errors:
+        msg = _KNOWN_PYPY2_FALSE_POSITIVES
+        if len(errors) > 1:
+            msg += f" - {', '.join(str(e) for e in errors[1:])}"
+        elif len(errors) == 1:
+            msg += f" - {str(errors[0])}"
+        raise Invalid(msg)
+    return True

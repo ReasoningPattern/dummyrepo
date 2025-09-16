@@ -1,0 +1,307 @@
+Okay, I need to generate Python code for the function _parse_image_ref based on the given signature and docstring. Let's start by understanding what the function is supposed to do.
+
+The function takes an image_href string and returns a tuple with image_id, netloc, and use_ssl. It also can raise a ValueError. The docstring mentions using urllib, so maybe parsing URLs with urlparse?
+
+First, let's think about possible scenarios. The image_href could be a URL like "https://example.com/images/123.jpg", so we need to extract the image ID (123), the netloc (example.com), and whether it's using SSL (True here). Another example might be "http://test.net/pic/456.png" giving (456, test.net, False).
+
+Wait, how do we get the image_id? The path part after the last slash? Like, in the example URL, the path is /images/123.jpg, so splitting that gives 123.jpg. But maybe the image ID is the part before the extension? Hmm, the problem isn't entirely clear. The docstring says "composite parts import urllib" which might be a typo. Maybe it's supposed to parse the URL into parts using urllib.parse.
+
+Alternatively, maybe the image_href is in a specific format. Let's assume the image_href is a URL, and the image_id is the last path component (without the extension?), but perhaps it's just the filename part. Or maybe the image ID is the part after the last slash, but with the extension. Like in the example, "123.jpg" would be the image_id. Or maybe the extension is stripped? The problem isn't clear, so maybe the image_id is the last part of the path, including the extension.
+
+The netloc is straightforward, it's the domain from the URL. Use_ssl is determined by the scheme (http vs https).
+
+So steps for the function:
+
+1. Parse the image_href using urlparse to get the components.
+2. Check if the scheme is http or https. If not, maybe raise ValueError?
+   Wait, the docstring says raises ValueError, but when? Maybe if the URL is missing a scheme, or has an invalid one?
+
+Wait, the function's raises clause is empty. So perhaps the ValueError is raised in some cases, like if the URL is missing a path or something.
+
+Wait, the function's parameters can be any image_href. So maybe the function requires that the URL has a valid scheme (http or https) and a path, otherwise it raises ValueError.
+
+So first, parse the URL. Let's proceed step by step.
+
+First, parse the URL with urlparse.
+
+Then, check if the scheme is either http or https. The use_ssl is True if scheme is https.
+
+The netloc is the parsed.netloc, but maybe stripped of the port? Or just as is? The problem says netloc, which usually includes the port, like 'example.com:8080', but maybe in the expected output, it's just the domain without the port? Hmm, perhaps the problem expects just the domain part. Wait, the netloc is part of the URL's components. So if the URL is 'https://example.com:8080/images/123.jpg', then netloc is 'example.com:8080'? But maybe the function expects the netloc as the domain without the port. Or maybe it's okay to include the port. The problem isn't clear. Let's proceed with netloc as given by urlparse.netloc.
+
+The image_id: The path is parsed.path, which starts with a slash. So, split the path into parts. The last part (after splitting by '/') is the filename. So for '/images/123.jpg', the image_id would be '123.jpg'. But maybe the image ID is the part before the extension? Like, if the path is '/id/456.png', then image_id is '456'? Or perhaps the image_href could be in a different format. Since the problem isn't clear, perhaps the image_id is the last component of the path, including the extension. For example, in 'http://site.com/123', the image_id is '123'? Or if there's no path, like 'http://site.com', then that's an invalid URL and raises an error.
+
+Wait, the function must return the image_id. So the path must have at least one component after the domain. So if the path is empty (like just the domain), that's invalid. So the path must be non-empty. So in the parsing steps:
+
+After parsing, check if the path is empty. If so, raise ValueError.
+
+Also, the scheme must be either http or https. Otherwise, raise ValueError.
+
+So steps:
+
+Parse the URL.
+
+Check scheme in ('http', 'https'). If not, raise ValueError.
+
+Check that the path is not empty. If it is, raise ValueError.
+
+Extract the netloc (as is).
+
+Use_ssl is (scheme == 'https').
+
+For image_id: Take the path, split into parts, last part (split on '/').
+
+But path starts with /, so split on / and get the last element (excluding empty string from leading /).
+
+Wait, for example, '/images/123.jpg' → split gives ['', 'images', '123.jpg'], so the last element is '123.jpg'.
+
+So that's the image_id.
+
+So code steps:
+
+from urllib.parse import urlparse
+
+def _parse_image_ref(image_href):
+
+    parsed = urlparse(image_href)
+
+    if parsed.scheme not in ('http', 'https'):
+
+        raise ValueError("Invalid scheme")
+
+    if not parsed.path:
+
+        raise ValueError("Path is empty")
+
+    netloc = parsed.netloc
+
+    use_ssl = (parsed.scheme == 'https')
+
+    path_parts = parsed.path.split('/')
+
+    image_id = path_parts[-1]
+
+    return (image_id, netloc, use_ssl)
+
+Wait, but what if the path is '/123' → then path_parts is ['', '123'], so image_id is '123'.
+
+But what if the path is '/folder/' → ends with slash? Then path is '/folder/' → split gives ['', 'folder', ''] → last part is empty string. Then that would be invalid. So in that case, the path's last part is empty, so image_id would be empty, leading to an error?
+
+So in such a case, the function would return an empty string as image_id, but perhaps that's invalid. So maybe the function should check that the last part is not empty.
+
+Alternatively, perhaps the path must end with a non-empty component. So perhaps in that case, the function should raise an error.
+
+Hmm, so in the code, after getting image_id = path_parts[-1], if image_id is empty, then raise ValueError.
+
+Wait, that complicates things. Let's see:
+
+In the code, after splitting the path, the path could be something like '/something/' → path_parts[-1] is empty. So in that case, the image_id would be empty, which is invalid. So we need to check that the image_id is non-empty.
+
+So adding a check:
+
+if not image_id:
+
+    raise ValueError("Image ID cannot be empty")
+
+Alternatively, perhaps the path must have at least two parts (since leading slash gives first empty string). For example, if the path is just '/' → then split gives ['', ''] → image_id is empty.
+
+So perhaps the code needs to handle that.
+
+So adding:
+
+if not parsed.path or parsed.path == '/':
+
+    raise ValueError("Invalid path")
+
+Wait, but parsed.path is empty only if there is no path. So the code already checks that parsed.path is not empty. Wait, the first check after parsing is:
+
+if not parsed.path:
+
+    raise ValueError("Path is empty")
+
+So if the path is '/', then parsed.path would be '/', which is not empty, so that check passes. But then, splitting that path (['', '']) gives image_id as the second element, which is empty. So in that case, the image_id is empty, which is invalid. So we need to check that image_id is not empty.
+
+So adding:
+
+if not image_id:
+
+    raise ValueError("Image ID is empty")
+
+So putting it all together.
+
+Now, let's think about test cases.
+
+First, unit tests before writing the code. The user mentioned to use TDD, so first generate comprehensive unit tests.
+
+Possible test cases:
+
+Test case 1: valid https URL with path '/images/123.jpg'
+
+Expected: (123.jpg, 'example.com', True)
+
+Test case 2: http URL, path '/456.png' → image_id is '456.png', netloc 'test.net', use_ssl False.
+
+Test case 3: URL with port, like 'http://sub.example.com:8080/789.jpg' → netloc is 'sub.example.com:8080', image_id '789.jpg', use_ssl false.
+
+Test case 4: path with trailing slash → e.g., 'https://site.com/pic/' → image_id would be empty, so should raise ValueError.
+
+Test case 5: URL without a scheme → like 'www.example.com/image' → parsed.scheme is empty → raises ValueError.
+
+Test case 6: URL with an invalid scheme like 'ftp://...' → raises ValueError.
+
+Test case 7: URL with empty path → like 'http://ex.com/' → parsed.path is '/', so the first check (if not parsed.path) would not trigger, but the image_id would be empty, leading to error.
+
+Wait, parsed.path for 'http://ex.com/' is '/', so the first check (if not parsed.path) would not trigger, but splitting gives ['', ''] → image_id is empty, so the second check (if not image_id) would trigger.
+
+Another test case: a valid URL with a query string. Like 'https://ex.com/123.jpg?size=large' → the path is '/123.jpg' (since urlparse splits query after ?), so image_id is '123.jpg'.
+
+Another case: path with multiple slashes, like '//folder//file.jpg' → parsed.path would be '//folder//file.jpg' → splitting gives ['', '', 'folder', '', 'file.jpg'], so image_id is 'file.jpg', which is okay.
+
+Edge case: image_href is 'http://ex.com/abc' → image_id is 'abc', which is okay.
+
+Now, for the tests, we can write using pytest.
+
+For example:
+
+def test_valid_https():
+
+    image_href = 'https://example.com/images/123.jpg'
+
+    expected = ('123.jpg', 'example.com', True)
+
+    assert _parse_image_ref(image_href) == expected
+
+def test_trailing_slash():
+
+    with pytest.raises(ValueError):
+
+        _parse_image_ref('https://site.com/pic/')
+
+def test_missing_scheme():
+
+    with pytest.raises(ValueError):
+
+        _parse_image_ref('www.example.com/image.jpg')
+
+def test_invalid_scheme():
+
+    with pytest.raises(ValueError):
+
+        _parse_image_ref('ftp://example.com/image.jpg')
+
+def test_empty_path():
+
+    with pytest.raises(ValueError):
+
+        _parse_image_ref('http://ex.com/')
+
+def test_http_with_port():
+
+    image_href = 'http://sub.example.com:8080/789.jpg'
+
+    expected = ('789.jpg', 'sub.example.com:8080', False)
+
+    assert _parse_image_ref(image_href) == expected
+
+These tests should cover the main cases.
+
+Now, writing the code.
+
+First, import necessary modules. The function uses urlparse from urllib.parse. The return type is a tuple of (str, str, bool), so we need to import Tuple from typing.
+
+Wait, the function's return type is specified as Tuple[str, str, bool], so we need to have from typing import Tuple.
+
+The code:
+
+from urllib.parse import urlparse
+from typing import Tuple
+
+def _parse_image_ref(image_href: str) -> Tuple[str, str, bool]:
+    parsed = urlparse(image_href)
+    
+    # Check scheme
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError("Invalid scheme")
+    
+    # Check path is not empty and not just '/'
+    if not parsed.path or parsed.path == '/':
+        raise ValueError("Path is empty or invalid")
+    
+    # Extract netloc and use_ssl
+    netloc = parsed.netloc
+    use_ssl = parsed.scheme == 'https'
+    
+    # Split path to get image_id
+    path_parts = parsed.path.split('/')
+    image_id = path_parts[-1]
+    
+    # Check image_id is not empty
+    if not image_id:
+        raise ValueError("Image ID is empty")
+    
+    return (image_id, netloc, use_ssl)
+
+Wait, but in the case where the path is like '/a/b/c', splitting gives ['', 'a', 'b', 'c'], so image_id is 'c', which is correct. But if the path is '/', then parsed.path is '/', so split gives ['', ''] → image_id is '', so the check would trigger the error.
+
+Wait, in the code, after checking that parsed.path is not empty or not '/', then proceed. Wait, the code first checks:
+
+if not parsed.path or parsed.path == '/':
+
+   raise ValueError("Path is empty or invalid")
+
+So, if the path is '/' (like 'http://ex.com/'), then that condition is true, and the function raises.
+
+So that case is already covered.
+
+Another scenario: the path is '/image' → path_parts[-1] is 'image', which is okay.
+
+Another case: path is '/a/b/c/d' → image_id is 'd', which is okay.
+
+But what if the path is '/a/b/c/d/' (ends with slash), then parsed.path is '/a/b/c/d/' → split would be ['', 'a', 'b', 'c', 'd', ''] → image_id is the last element, which is empty → so the code would raise ValueError("Image ID is empty").
+
+So that's handled.
+
+Another case: the path is '/abc' → image_id is 'abc'.
+
+The code seems okay.
+
+Wait, but the first check already covers the case where parsed.path is empty or '/'. So the image_id check is an extra layer. Let's see:
+
+Suppose the path is '/a/b/c/d', then all checks pass.
+
+But if the path is '/a/b/c/d/e/' → split gives ... and image_id is empty. The first check would not have triggered because the path is not empty or '/', but the image_id is empty, so the final check raises.
+
+So the code is correct.
+
+Now, possible edge cases:
+
+What if the image_href is 'http://ex.com/.' → path is '/.' → split gives ['', '.', ...] → image_id is '.' → which is technically non-empty, so it's allowed, but maybe not intended. But according to the problem statement, maybe that's acceptable.
+
+Another case: path is '/a/b/c/d/e..jpg' → image_id is 'e..jpg' → allowed, as the code doesn't care about the extension's validity.
+
+So the code handles the requirements as per the problem's description.
+
+Now, let's check the exceptions.
+
+If the scheme is 'HTTP' (uppercase), the check would fail because 'http' is lowercase. So urlparse's scheme is case-insensitive? Wait, the urlparse function converts the scheme to lowercase, I think. Let me confirm.
+
+Yes, urlparse converts the scheme to lowercase. So 'HTTPS://...' becomes 'https'.
+
+So the code is okay.
+
+Another test case: URL with query parameters, like 'https://ex.com/123.jpg?size=200' → path is '/123.jpg', so image_id is correct.
+
+So the code should handle that.
+
+Now, the code seems correct. Let me see if any cases are missing.
+
+What if the path is something like '/images/123'? → image_id is '123' (without extension, but that's okay).
+
+Yes.
+
+Another possible error case: the image_href is 'http://ex.com' (no trailing slash, path is empty). So parsed.path would be empty → first check (if not parsed.path) would trigger, raising "Path is empty or invalid".
+
+Yes.
+
+So the code should handle that.
+
+Therefore, the code is as above.

@@ -1,0 +1,145 @@
+import re
+from datetime import datetime
+from dateutil.tz import tzoffset, tzutc
+
+def isoparse(self, dt_str):
+    """
+    Parse an ISO-8601 datetime string into a :class:`datetime.datetime`.
+
+    An ISO-8601 datetime string consists of a date portion, followed
+    optionally by a time portion, which are separated by a single character
+    separator, which is ``T`` in the official standard. In the official
+    standard, the date and time portions are separated by a single character
+    separator, which is ``T``. The date and time portions are separated by a
+    single character separator, which is ``T`` in the official standard. In
+    the official standard, the date and time portions are separated by a
+    single character separator, which is ``T``.
+
+    Supported date formats are:
+
+    Common:
+        - ``YYYY``
+        - ``YYYY-MM``
+        - ``YYYYMM``
+        - ``YYYY-MM-DD``
+        - ``YYYYMMDD``
+
+    Uncommon:
+        - ``YYYY-Www``
+        - ``YYYYWww``
+        - ``YYYY-Www-D``
+        - ``YYYYWwwD``
+
+    Supported time formats are:
+
+    Common:
+        - ``hh``
+        - ``hh:mm``
+        - ``hhmm``
+        - ``hh:mm:ss``
+        - ``hhmmss``
+        - ``hh:mm:ss.ssssss`` (Up to 6 sub-second digits)
+
+    Special cases:
+        - Midnight as 00:00 or 24:00
+        - Decimal separator can be dot or comma.
+
+    Time zone offsets:
+        - ``Z`` (UTC)
+        - ``±HH:MM``
+        - ``±HHMM``
+        - ``±HH``
+
+    :param dt_str:
+        A string or stream containing only an ISO-8601 datetime string
+    :return:
+        A :class:`datetime.datetime` representing the string.
+    """
+    # Split the string into date and time parts
+    parts = dt_str.split('T', 1)
+    if len(parts) != 2:
+        raise ValueError("Invalid ISO-8601 format: must contain 'T' as separator")
+    date_str, time_str = parts[0], parts[1]
+
+    # Parse date_str
+    date_formats = [
+        r'^\d{4}-\d{2}-\d{4}$',  # YYYY-MM-DD
+        r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM
+        r'^\d{4}\d{2}\d{4}$',   # YYYYMMDD
+        r'^\d{4}\d{2}-\d{2}$',  # YYYY-MM
+        r'^\d{4}\d{2}-\d{4}$',  # YYYY-MM-DD
+        r'^\d{4}-\w{2}-\d{3}$',  # YYYY-Www (W is 0-99)
+        r'^\d{4}\w{2}-\d{3}$',  # YYYYWww
+        r'^\d{4}-\w{2}-\d{1}$',  # YYYY-Www-D
+        r'^\d{4}\w{2}-\d{1}$',  # YYYYWwwD
+    ]
+    date_match = None
+    for fmt in date_formats:
+        match = re.match(fmt, date_str)
+        if match:
+            date_match = match
+            break
+    if not date_match:
+        raise ValueError(f"Invalid date format: {date_str}")
+
+    # Parse time_str
+    time_formats = [
+        r'^(\d{2}):(\d{2})$',          # hh:mm
+        r'^(\d{2}):(\d{2}):(\d{2})$',   # hh:mm:ss
+        r'^(\d{2}):(\d{2}):(\d{2}):(\d{2})$',  # hh:mm:ss:ss
+        r'^(\d{2}):(\d{2}):(\d{2}):(\d{2}):(\d{2})$',  # hh:mm:ss:ss:ss
+        r'^(\d{2}):(\d{2}):(\d{2}):(\d{2}):(\d{2}):(\d{2})$',  # hh:mm:ss:ss:ss:ss
+        r'^(\d{2}):(\d{2})$',          # hh
+        r'^(\d{2}):(\d{2}):(\d{2})$',   # hhmm
+        r'^(\d{2}):(\d{2}):(\d{2}):(\d{2})$',  # hhmmss
+        r'^(\d{2}):(\d{2}):(\d{2}):(\d{2}):(\d{2})$',  # hhmmss.sss
+        r'^(\d{2}):(\d{2}):(\d{2}):(\d{2}):(\d{2}):(\d{2})$',  # hhmmssss
+    ]
+    time_match = None
+    for fmt in time_formats:
+        match = re.match(fmt, time_str)
+        if match:
+            time_match = match
+            break
+    if not time_match:
+        raise ValueError(f"Invalid time format: {time_str}")
+
+    # Parse date
+    try:
+        date = datetime.strptime(date_str, date_match.group().format())
+    except ValueError:
+        raise ValueError(f"Failed to parse date: {date_str}")
+
+    # Parse time
+    try:
+        time = datetime.strptime(time_str, time_match.group().format())
+    except ValueError:
+        raise ValueError(f"Failed to parse time: {time_str}")
+
+    # Combine date and time
+    combined = datetime.combine(date, time)
+
+    # Parse time zone offset
+    offset_str = None
+    if time_str.startswith('T'):
+        offset_str = time_str[1:]
+    elif time_str.startswith('-'):
+        offset_str = time_str[1:]
+    else:
+        pass  # No offset
+
+    if offset_str:
+        try:
+            offset = tzoffsetstrptime(offset_str, dateutil.tz.gettz())
+        except ValueError:
+            raise ValueError(f"Invalid time zone offset: {offset_str}")
+    else:
+        offset = tzutc()
+
+    # Apply time zone offset
+    try:
+        combined = combined.replace(tzinfo=offset)
+    except ValueError:
+        raise ValueError("Failed to apply time zone offset")
+
+    return combined

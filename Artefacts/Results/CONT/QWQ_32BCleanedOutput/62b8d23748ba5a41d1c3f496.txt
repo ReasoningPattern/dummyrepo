@@ -1,0 +1,48 @@
+def lfu_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        CACHE = {}
+        class TimestampHolder:
+            def __init__(self):
+                self.value = 0
+        last_timestamp = TimestampHolder()
+
+        def wrapper(*args, **kwds):
+            key_parts = []
+            for a in args:
+                if typed:
+                    key_parts.append((type(a), a))
+                else:
+                    key_parts.append(a)
+            for k, v in sorted(kwds.items()):
+                if typed:
+                    key_parts.append((k, (type(v), v)))
+                else:
+                    key_parts.append((k, v))
+            key = tuple(key_parts)
+
+            current_ts = last_timestamp.value
+            if key in CACHE:
+                val, freq, ts = CACHE[key]
+                new_freq = freq + 1
+                new_ts = current_ts
+                CACHE[key] = (val, new_freq, new_ts)
+                last_timestamp.value += 1
+                return val
+            else:
+                result = user_function(*args, **kwds)
+                if len(CACHE) >= maxsize:
+                    min_freq = float('inf')
+                    min_ts = float('inf')
+                    evict_key = None
+                    for k in CACHE:
+                        val, freq, ts = CACHE[k]
+                        if freq < min_freq or (freq == min_freq and ts < min_ts):
+                            min_freq = freq
+                            min_ts = ts
+                            evict_key = k
+                    del CACHE[evict_key]
+                CACHE[key] = (result, 1, current_ts)
+                last_timestamp.value += 1
+                return result
+        return wrapper
+    return decorating_function

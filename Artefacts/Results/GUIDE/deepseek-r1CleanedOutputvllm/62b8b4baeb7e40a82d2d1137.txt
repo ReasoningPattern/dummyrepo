@@ -1,0 +1,69 @@
+import inspect
+import zope.interface
+
+def verifyObject(iface, candidate, tentative=False):
+    """
+    Verify that *candidate* might correctly provide *iface*.
+
+    This involves:
+
+    - Making sure the candidate claims that it provides the
+      interface using ``iface.providedBy`` (unless *tentative* is `True`,
+      in which case this step is skipped). This means that the candidate's class
+      declares that it `implements <zope.interface.implementer>` the interface,
+      or the candidate itself declares that it `provides <zope.interface.provider>`
+      the interface.
+
+    - Making sure the candidate defines all the necessary methods
+
+    - Making sure the methods have the correct signature (to the
+      extent possible)
+
+    - Making sure the candidate defines all the necessary attributes
+
+    :return bool: Returns a true value if everything that could be
+                   checked passed.
+    :raises zope.interface.Invalid: If any of the previous
+                                  conditions does not hold.
+    """
+    if not tentative:
+        # Check if the candidate's class provides the interface
+        if isinstance(candidate, type):
+            provided = zope.interface.getProvidedNames(candidate)
+        else:
+            provided = zope.interface.getProvidedNames(type(candidate))
+        
+        if not (iface in provided):
+            raise zope.interface.Invalid("Candidate does not provide the required interface.")
+
+    # Check all methods are present
+    interface_methods = zope.interface.getMethods(iface)
+    for method in interface_methods:
+        if not hasattr(getattr(candidate, method), '__code__'):
+            raise zope.interface.Invalid(f"Method {method} not found in candidate.")
+    
+    # Check all methods have correct signature
+    for method in interface_methods:
+        # Get parameters from interface method
+        sig = inspect.signature(method)
+        params = list(sig.parameters.values())
+        # Get actual method in candidate's class
+        actual_method = getattr(type(candidate), method)
+        actual_sig = inspect.signature(actual_method)
+        actual_params = list(actual_sig.parameters.values())
+        
+        if len(params) != len(actual_params):
+            raise zope.interface.Invalid(f"Method {method} has incorrect number of parameters.")
+        for p, a_p in zip(params, actual_params):
+            if p.name != a_p.name:
+                raise zope.interface.Invalid(f"Method {method} has parameter name mismatch: {p.name} vs {a_p.name}")
+            if p.default != a_p.default:
+                raise zope.interface.Invalid(f"Method {method} has mismatched default values.")
+    
+    # Check all attributes are present
+    interface_attrs = zope.interface.getAttributes(iface)
+    for attr in interface_attrs:
+        if not hasattr(type(candidate), attr):
+            raise zope.interface.Invalid(f"Attribute {attr} not found in candidate.")
+    
+    return True

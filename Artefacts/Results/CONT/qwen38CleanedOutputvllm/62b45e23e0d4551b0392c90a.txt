@@ -1,0 +1,31 @@
+def validate_version_inventories(self, version_dirs):
+    """
+    Each version SHOULD have an inventory up to that point.
+
+    Also keep a record of any content digests different from those in the root inventory
+    so that we can also check them when validating the content.
+
+    version_dirs is an array of version directory names and is assumed to be in
+    version sequence (1, 2, 3...).
+    """
+    discrepancies = []
+    root_digest = None
+    for version_dir in version_dirs:
+        inv_file = self.obj_fs.join(version_dir, 'inventory.json')
+        self.validate_inventory(inv_file, where=version_dir, extract_spec_version=self.spec_version)
+        inv_digest_file = self.obj_fs.join(version_dir, 'digest.json')
+        current_digest = self.read_inventory_digest(inv_digest_file)
+        if root_digest is None:
+            root_digest = current_digest
+        else:
+            if current_digest != root_digest:
+                discrepancies.append((version_dir, current_digest))
+        self.validate_inventory_digest_match(inv_file, inv_digest_file)
+    if discrepancies:
+        self.check_additional_digests(
+            filepath=None,
+            known_digests=root_digest,
+            additional_digests=discrepancies,
+            error_code='DIGEST_MISMATCH'
+        )
+    return discrepancies

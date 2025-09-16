@@ -1,0 +1,345 @@
+Okay, I need to generate Python code for the ansible_playbook function based on the given signature and docstring. Let me start by understanding the requirements. The function is supposed to wrap the ansible-playbook CLI, so it should probably execute the playbook using subprocess or some other method, passing the necessary parameters.
+
+First, the parameters: ir_workspace and ir_plugin are objects related to Infrared's workspace and plugin. The playbook_path is the path to the playbook. The other parameters like verbose, extra_vars, and ansible_args are optional and need to be translated into Ansible command-line arguments.
+
+The user mentioned using test-driven development, so I should first think about the unit tests. But the question is to generate the code, so I need to focus on that. Let me outline the steps the function should take.
+
+1. Construct the command line for ansible-playbook. The base command would be "ansible-playbook" followed by the playbook path.
+
+2. Handle the verbose parameter. The verbose level is an integer, which translates to -v, -vv, etc. So if verbose is 2, add -vv.
+
+3. Process extra_vars: these are a dictionary, which needs to be converted into key=value pairs and passed with --extra-vars or -e.
+
+4. ansible_args is a dictionary of additional arguments. Each key-value pair here should be added as command-line options. For example, if ansible_args has 'tags': 'setup', then add --tags setup.
+
+5. Also, considering the workspace and plugin, maybe Infrared's workspace sets up some environment variables or paths that the playbook relies on. So the ir_workspace might need to be activated, perhaps by setting the current directory to the workspace's path or some environment variables.
+
+Wait, the ir_workspace is an object. I might need to call some methods on it, like getting the path or ensuring it's set up. But since I don't have the actual definitions for InfraredWorkspace and InfraredPlugin, I have to make some assumptions here. Probably, the workspace might have a directory where the playbook is located, so changing to that directory or including it in the playbook path?
+
+Alternatively, maybe the ir_workspace provides some configuration that needs to be passed to Ansible, like inventory files or other paths. Hmm, but the function's job is to wrap the CLI, so perhaps the workspace and plugin are used to handle such setup before invoking the playbook.
+
+But for the code, the main thing is to build the command line correctly. Let's structure the code step by step.
+
+Start by building the base command: ["ansible-playbook", playbook_path]
+
+Then add the verbose option. If verbose is not None, append '-v' * verbose. So if verbose is 2, it's '-vv'.
+
+Next, handle extra_vars. The dictionary needs to be converted into a list of key=value strings. For each key-value pair in extra_vars, we add '-e' followed by the string. Alternatively, maybe using the json format? Or just the key=value pairs. The standard way is to pass each as a separate -e option, or combine them into a single string. Wait, actually, the -e option can take a key=value pair. So for each key in the dict, we can do "-e %s=%s" % (key, value). But when building the command list, each part should be a separate element. So for each key-value pair, add ["-e", "key=value"].
+
+Wait, but that would require each key=value pair to be a separate element. Alternatively, maybe it's better to format the entire extra_vars into a single string. But the standard approach is to pass each as separate -e options. So, for example, if extra_vars is {"var1": "val1", "var2": "val2"}, the command would have -e var1=val1 -e var2=val2. So the code would loop through the items and add each as two elements.
+
+Then, the ansible_args parameter is a dictionary of other arguments. For each key (like 'tags', 'limit', etc.), the value is the argument's value. So for each key in ansible_args, we need to convert it into a command line option. For example, if the key is 'tags' and the value is 'setup', then the command would have --tags setup. The keys would be the option names, possibly with underscores converted to hyphens? Or maybe the user provides the exact command-line option names. Since the parameter is called ansible_args, probably the keys are the exact option names. So, for each key in ansible_args, the option is "--" + key, followed by the value. But if the value is a boolean, like maybe 'become: True', then it would be --become. Wait, but the parameter is a dictionary, so the values can be any type. Hmm, perhaps the function expects the user to pass the arguments correctly. For example, if the user wants to enable become, they would set ansible_args={'become': ''}, but that might not be the case. Alternatively, the function might handle boolean values by just including the option without a value. But since the user is responsible for providing the correct structure, maybe we can just process each key-value pair as a command-line argument. For each key in ansible_args:
+
+- The option is -- followed by the key (assuming the key is the option name without the dashes). So, for example, key 'tags' becomes --tags, and the value is the argument. If the value is a list, maybe it needs to be joined, but again, the user is responsible for formatting it correctly.
+
+Wait, perhaps the ansible_args are already in the form of a dictionary where each key is the option name (like 'tags') and the value is the argument. So the code would process each as follows: for each key, value in ansible_args.items():
+
+- option = '--' + key.replace('_', '-')
+Wait, maybe the user uses underscores in the keys, so we should replace them with hyphens? Or maybe not. It's unclear, but the function's docstring says "dict of ansible-playbook arguments to plumb down directly". So probably the keys are the actual command-line options, possibly with hyphens. Wait, but command-line options can't have underscores in their names. So perhaps the keys are like 'tags', 'limit', etc. So the code can just take the key as the option name, prepend --, and add the value as a separate argument. So for each key, value in ansible_args.items():
+
+command.extend(['--' + key, value])
+
+But what if the value is a list? Like, for a --tags 'setup,deploy'? Then the user should pass it as a string, right? So the code can just pass the value as a string. The user is responsible for formatting the value correctly.
+
+Now, putting all these parts together. The code would start by building the command list, then adding each of the parameters as needed.
+
+Also, the ir_workspace and ir_plugin might be used to set up the environment. For example, the workspace might have a directory where the playbook is located, so changing the current directory to the workspace's path. Or maybe the plugin provides some configuration. The docstring says that the function wraps the CLI, so perhaps the workspace and plugin are used to handle the environment setup before executing the playbook.
+
+Assuming that the ir_workspace has a method to get the current directory, perhaps the code should change the working directory to the workspace's path. For example:
+
+with ir_workspace.as_cwd():
+
+    subprocess.run(...)
+
+But since I don't know the actual API of InfraredWorkspace, I can make a reasonable assumption. Let's say that the ir_workspace has a property called 'path' which is the directory. So changing to that directory would be necessary. Alternatively, maybe the playbook_path is relative to the workspace's directory. So the code should construct the full path by joining the workspace's path with the given playbook_path. Wait, but playbook_path could be an absolute path. Hmm, perhaps the workspace's path is where the playbooks are located, so the function should prepend the workspace's path to the playbook_path? Or maybe the user is expected to provide the full path. The docstring says "the playbook to invoke" so perhaps the path is already correct.
+
+Alternatively, maybe the Infrared workspace is responsible for setting up the environment variables that Ansible needs, like ANSIBLE_HOST_KEY_CHECKING, etc. But that might be handled by the workspace object.
+
+Another thing: the function may need to handle the return value, like capturing the output or checking the exit code. But the function's purpose is to wrap the CLI, so it might just execute the command and return the result, or maybe raise an exception on failure.
+
+Putting it all together, here's the code outline:
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None, extra_vars=None, ansible_args=None):
+    # Build the command
+    cmd = ['ansible-playbook', playbook_path]
+
+    # Add verbose
+    if verbose is not None:
+        cmd.append('-' + 'v' * verbose)
+
+    # Add extra_vars
+    if extra_vars:
+        for k, v in extra_vars.items():
+            cmd.extend(['-e', f'{k}={v}'])
+
+    # Add ansible_args
+    if ansible_args:
+        for key, val in ansible_args.items():
+            cmd.extend(['--' + key, str(val)])
+
+    # Now, execute the command in the workspace's environment
+    # Assuming that the workspace provides a way to run commands in its context
+    # Maybe using a method like run_command or changing the directory
+    # For example:
+    # with ir_workspace.as_cwd():
+    #     subprocess.run(cmd, ...)
+    # But without knowing the actual API, perhaps the code uses the workspace's path
+    # Get the workspace's path
+    workspace_path = ir_workspace.path  # assuming it has a 'path' attribute
+
+    # Then execute the command in that directory
+    import subprocess
+    import os
+    # Change to the workspace's directory
+    # Or perhaps the playbook is in a subdirectory, so the path is already correct
+    # Or maybe the playbook_path is relative to the workspace's directory
+    # Assuming that the playbook is in the workspace's directory, so we can just cd there
+    with os.chdir(workspace_path):
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return result  # or maybe just return True/False, but the user might want the output
+
+Wait, but in Python, the with statement requires a context manager. So if ir_workspace has a context manager, like a method to change the directory, that would be better. Alternatively, the code can use the workspace's path and use os.chdir.
+
+But to avoid leaving the directory changed, it's better to use a context manager. So perhaps:
+
+current_dir = os.getcwd()
+os.chdir(workspace_path)
+try:
+    # run the command
+finally:
+    os.chdir(current_dir)
+
+But that's a bit tedious. Alternatively, using a context manager that handles this.
+
+Alternatively, maybe the ir_workspace has a method to execute a command within its context. Like:
+
+return ir_workspace.run_command(cmd)
+
+But without knowing the actual API, I have to make assumptions. Since the problem statement doesn't specify, perhaps I can proceed under the assumption that the playbook's path is correct, and the workspace's environment is already set, so the code just runs the command in the current directory. Or maybe the workspace's path is needed as part of the command's working directory.
+
+Alternatively, perhaps the Infrared workspace is not needed for the actual execution, but the function must accept it as a parameter. So the code can ignore it for now, but that's probably not the case. The function is part of an Infrared plugin, so the workspace might be needed to set the correct environment variables or paths.
+
+Hmm, perhaps the code should just proceed to build the command and execute it, using the subprocess module, while taking into account the workspace's environment. Maybe the workspace provides environment variables that should be added to the command's environment. But without more details, I'll proceed to write code that constructs the command line and runs it, possibly in the workspace's directory.
+
+Let me structure the code step by step.
+
+First, build the command list as discussed.
+
+Then, handle the environment. Maybe the workspace has an env() method that returns a dictionary of environment variables. Or perhaps it's simpler to just run the command in the workspace's directory.
+
+Assuming that the ir_workspace has a 'path' attribute, which is the directory, then:
+
+import os
+import subprocess
+
+# Change to the workspace's directory
+cwd = ir_workspace.path
+
+# Execute the command
+process = subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
+
+# Then return something, maybe the return code or the output?
+
+Wait, using subprocess.run with check=True will raise a CalledProcessError if the return code is non-zero, so the function would either return normally or raise an exception. The user can handle that.
+
+So putting it all together, here's the code:
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None,
+                     extra_vars=None, ansible_args=None):
+    cmd = ['ansible-playbook', playbook_path]
+
+    if verbose is not None:
+        cmd.append('-' + 'v' * verbose)
+
+    if extra_vars:
+        for k, v in extra_vars.items():
+            cmd.extend(['-e', f'{k}={v}'])
+
+    if ansible_args:
+        for key, val in ansible_args.items():
+            cmd.extend(['--' + key, str(val)])
+
+    # Execute in the workspace's directory
+    import subprocess
+    import os
+
+    with os.chdir(ir_workspace.path):
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+    return result  # Or maybe return True? Or just the output?
+
+Wait, but os.chdir doesn't work like that in a 'with' statement. To properly handle the directory change and restore it, I need a context manager. Alternatively, use a try-finally block:
+
+    original_dir = os.getcwd()
+    os.chdir(ir_workspace.path)
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    finally:
+        os.chdir(original_dir)
+
+    return result
+
+Alternatively, use a context manager class that does this. But perhaps the code can proceed without that for simplicity, given that it's part of the function's logic.
+
+Alternatively, maybe the ir_workspace has a method to execute a command in its context. But without knowing, perhaps proceed as above.
+
+Now, possible edge cases:
+
+- What if playbook_path is an absolute path? Then changing to the workspace's directory might not be needed. But the code would still execute in the workspace's directory, which might not be desired. So perhaps the code should not change the directory unless necessary. Hmm, but the problem statement doesn't specify, so maybe the workspace's directory is where the playbook is located, so the code should change the directory.
+
+Alternatively, perhaps the playbook_path is relative to the workspace's directory, so changing to that directory is necessary.
+
+Another consideration: the ir_plugin might have some configuration that needs to be passed. But the docstring doesn't mention that, so perhaps it's not needed here.
+
+Now, what about the parameters:
+
+- extra_vars is a dict. So if it's None, we skip. But in the code, if it's empty ({}), then we still loop, but do nothing. So that's okay.
+
+- ansible_args is a dict. Each key is the option name (like 'tags'), and the value is the argument. So if the user wants to pass --tags "web,db", the value should be "web,db".
+
+Now, in the code, the 'key' is taken from the ansible_args, so the code uses '--' + key. That's correct.
+
+Now, what about the return value? The function might return the result of the subprocess, which includes the stdout, stderr, returncode, etc. But perhaps the user expects a boolean or just to raise an error on failure. Since the check=True is used, any non-zero exit will raise an exception. So the function either returns normally (with the result object) or raises an error.
+
+The docstring doesn't specify the return type, so perhaps the function just returns None, but the code returns the result. Alternatively, maybe it's better to just return True on success, but the subprocess result has more info.
+
+Alternatively, the function can return the subprocess.CompletedProcess instance. That seems acceptable.
+
+Now, putting all that into code.
+
+Wait, also, the parameters like extra_vars and ansible_args can be None. The code checks if they are not None before processing.
+
+Wait, in the case of extra_vars, if it's None, we skip. If it's an empty dict, then the loop doesn't run. So that's okay.
+
+Now, the code's imports: the function uses subprocess and os, so those should be imported at the top. But since the code is supposed to be only the function, perhaps the imports are inside the function. But in Python, it's better to have imports at the top. However, the code must be the function only. So the code can include the necessary imports inside the function? No, that's not standard. The code must have the imports outside the function. But the problem says to output only the code generated, in Python markdown format. So the code should include the necessary imports. Wait, but the function's code must be self-contained. So perhaps the code would have the imports inside the function, but that's not standard practice. Alternatively, the code can assume that the necessary modules are already imported. Hmm, no, better to include the necessary imports inside the function.
+
+Wait, in the code I wrote earlier, the code does:
+
+import subprocess
+import os
+
+But inside the function. That's not allowed in Python. So the correct approach is to have the imports at the top of the file. Since the problem requires only the function code, perhaps the code can include the imports inside the function, but that's not valid syntax. Therefore, I need to have the imports at the top.
+
+Hmm, but the user wants the code in Python markdown format, so the code should be enclosed in ```python ... ``` and include the necessary imports. So the code would look like:
+
+import os
+import subprocess
+
+def ansible_playbook(...):
+    ...
+
+So the code should start with those imports.
+
+Putting it all together:
+
+The final code would look like:
+
+import os
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None,
+                     extra_vars=None, ansible_args=None):
+    cmd = ['ansible-playbook', playbook_path]
+
+    if verbose is not None:
+        cmd.append('-' + 'v' * verbose)
+
+    if extra_vars:
+        for k, v in extra_vars.items():
+            cmd.extend(['-e', f'{k}={v}'])
+
+    if ansible_args:
+        for key, val in ansible_args.items():
+            cmd.extend(['--' + key, str(val)])
+
+    original_dir = os.getcwd()
+    os.chdir(ir_workspace.path)
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        # Maybe re-raise or handle? But the function can let it propagate.
+        raise
+    finally:
+        os.chdir(original_dir)
+
+    return result
+
+Wait, but in the try block, if the subprocess run raises an exception (because check=True), then it would be caught here. But the code re-raises it. So the function would re-raise the exception, which is okay. Alternatively, perhaps the function should just let the exception propagate without handling it, so the try/except can be omitted, but then the finally block still needs to restore the directory.
+
+Alternatively, the code can structure it as:
+
+    original_dir = os.getcwd()
+    os.chdir(ir_workspace.path)
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    finally:
+        os.chdir(original_dir)
+
+    return result
+
+This way, if the subprocess run raises an error (like non-zero exit code), the check=True will raise a CalledProcessError, and the finally block will still execute to restore the directory. The error is propagated to the caller.
+
+This seems better. So the code would be as above, without the except clause.
+
+Now, considering that the ir_workspace might not have a 'path' attribute. Suppose that the Infrared Workspace object has a method to get the path, like get_path(). In that case, the code should use ir_workspace.get_path(). But since I don't know the actual API, perhaps I should assume it has a 'path' attribute. Alternatively, the code may have to call a method like ir_workspace.get_working_dir().
+
+But without knowing, perhaps the code proceeds with the assumption that ir_workspace has a 'path' attribute. Alternatively, maybe the workspace's path is obtained via a different method, but given the problem's description, I'll proceed with that.
+
+Another thing: the ir_plugin parameter isn't used in the code. The function's parameters include it, but the code doesn't use it. That's a problem. The docstring says that the function takes ir_plugin as an InfraredPlugin object, but the code doesn't use it. So perhaps the plugin is needed for something else, like adding plugin-specific arguments or modifying the command.
+
+Hmm, maybe the plugin has some configuration or additional variables to add. For example, the plugin might have a method to get extra vars or ansible args. But without knowing, it's hard to include that.
+
+Alternatively, maybe the ir_plugin is used to get the path to the playbook. For example, the playbook_path is relative to the plugin's directory. So the full path would be os.path.join(ir_plugin.path, playbook_path). But the problem states that the playbook_path is the playbook to invoke, so perhaps it's already the full path. Or maybe the ir_plugin provides the correct path.
+
+Alternatively, the ir_plugin might have some default arguments that are added to the command. For example, the plugin might have a default set of extra_vars that should be merged with the user's extra_vars. But again, without more information, it's hard to include that.
+
+Given the problem's instructions, the function must accept the ir_plugin parameter but doesn't use it in the code. That's a problem. So perhaps the code should include it in some way. Maybe the plugin provides some additional arguments. Alternatively, the code might not use it, but that's an oversight.
+
+Hmm, perhaps the ir_plugin is used to get the path where the playbook is located. For example, the playbook_path is relative to the plugin's directory. So the full path would be os.path.join(ir_plugin.get_playbook_dir(), playbook_path). But without knowing the actual API, I can't be sure.
+
+Alternatively, perhaps the ir_plugin is not needed, and the code can ignore it. But the function's signature requires it, so it must be present.
+
+This is a problem. Since the user provided the function signature with ir_plugin as a parameter but didn't mention how to use it, perhaps the code can leave it unused. But that would be incorrect.
+
+Wait, perhaps the ir_plugin is used to get some configuration or to validate the playbook's existence. Or maybe it's part of Infrared's framework, and the plugin's directory is where the playbook resides. For example, the playbook_path is relative to the plugin's directory, so the full path is os.path.join(ir_plugin.directory, playbook_path). 
+
+Assuming that the ir_plugin has a 'directory' attribute, then the code could construct the full playbook path as:
+
+playbook_full_path = os.path.join(ir_plugin.directory, playbook_path)
+
+and then pass that to the command. But the original playbook_path might already be an absolute path, so we need to check if it's relative. Alternatively, the code should always prepend the plugin's directory.
+
+Hmm, this is getting complicated. Since the problem doesn't specify, perhaps the ir_plugin is not needed for this function and can be ignored. The function's parameters include it, but the code doesn't use it. That would be a mistake, but perhaps the user expects that.
+
+Alternatively, perhaps the ir_workspace is sufficient, and the plugin is not needed. Maybe the plugin is part of the framework but not used in this function's logic. 
+
+In any case, given the problem's instructions, the code must include the ir_workspace and ir_plugin parameters but may not use the latter. So the code will proceed without using ir_plugin, unless I can find a plausible use.
+
+Alternatively, perhaps the plugin has some default ansible_args or extra_vars that should be merged with the user's input. For example:
+
+default_extra_vars = ir_plugin.get_extra_vars()
+if default_extra_vars:
+    if extra_vars:
+        extra_vars = {**default_extra_vars, **extra_vars}
+    else:
+        extra_vars = default_extra_vars
+
+But again, without knowing the plugin's API, I can't do that. So I'll proceed without using ir_plugin, noting that it's a parameter but not used in the code.
+
+The final code would thus be as written earlier, with the ir_workspace's path being used to change directories.
+
+Now, possible test cases:
+
+Test that the command is built correctly with various parameters. For example, verbose=2 should add -vv, extra_vars={'var': 'val'} should add -e var=val, etc.
+
+Testing the execution in the workspace's directory.
+
+But the code's main logic is to build the command and execute it in the workspace's directory. 
+
+Another possible point: the extra_vars might have values that need to be properly escaped or quoted. For example, if a value contains spaces, the command line would need to handle that. But the code uses the format f'{k}={v}', so if v has spaces, it would be passed as a single argument. However, Ansible's -e option can handle that as long as the value is properly quoted. But since the code is building the command as a list, each part is a separate element, so spaces are okay. For example, if v is 'a b', then the command would have '-e', 'var=a b', which is correct because the shell won't split it, since it's passed as a list.
+
+Thus, the code is safe in that regard.
+
+Another point: the ansible_args could have a key like 'tags', and the value is a list. But since the code converts the value to a string with str(val), a list would become '["web", "db"]', which is probably not what the user intended. The user should pass the value as a string like 'web,db' instead of a list. So the code's documentation should mention that, but since the function's docstring says the value is a dict, it's up to the user to provide the correct format.
+
+Overall, the code seems correct based on the given information.

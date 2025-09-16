@@ -1,0 +1,66 @@
+
+
+```python
+import pytest
+import yaml
+
+class IRValidatorException(Exception):
+    """Custom exception for validation errors."""
+    pass
+
+class SpecValidator:
+    REQUIRED_FIELDS = ['name', 'version']  # Example required fields
+
+    @classmethod
+    def validate_from_content(cls, spec_content=None):
+        """
+        Validates that spec (YAML) content has all required fields.
+
+        :param spec_content: content of spec file
+        :raise IRValidatorException: when mandatory data is missing in spec file
+        :return: Dictionary with data loaded from a spec (YAML) file
+        """
+        if spec_content is None:
+            raise IRValidatorException("spec_content cannot be None")
+
+        try:
+            data = yaml.safe_load(spec_content)
+        except yaml.YAMLError as e:
+            raise IRValidatorException(f"Invalid YAML content: {e}")
+
+        required_fields = cls.REQUIRED_FIELDS
+        for field in required_fields:
+            if field not in data:
+                raise IRValidatorException(f"Missing required field: {field}")
+
+        return data
+
+# Unit tests
+def test_validate_from_content_missing_field():
+    spec_content = """
+    name: example
+    # version is missing
+    """
+    with pytest.raises(IRValidatorException) as exc_info:
+        SpecValidator.validate_from_content(spec_content)
+    assert "Missing required field: version" in str(exc_info.value)
+
+def test_validate_from_content_valid():
+    spec_content = """
+    name: example
+    version: 1.0
+    """
+    result = SpecValidator.validate_from_content(spec_content)
+    assert result == {'name': 'example', 'version': '1.0'}
+
+def test_validate_from_content_invalid_yaml():
+    spec_content = "invalid: yaml: content"
+    with pytest.raises(IRValidatorException) as exc_info:
+        SpecValidator.validate_from_content(spec_content)
+    assert "Invalid YAML content" in str(exc_info.value)
+
+def test_validate_from_content_none_input():
+    with pytest.raises(IRValidatorException) as exc_info:
+        SpecValidator.validate_from_content()
+    assert "spec_content cannot be None" in str(exc_info.value)
+```

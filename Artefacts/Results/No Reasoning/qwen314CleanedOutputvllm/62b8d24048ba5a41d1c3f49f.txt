@@ -1,0 +1,38 @@
+import time
+from functools import wraps
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Recently Used (LRU)
+    algorithm with a per-item time-to-live (TTL) value.
+    """
+    def decorator(func):
+        cache = {}
+        size = 0
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, frozenset(kwargs.items())) if typed else (args, frozenset(kwargs.items()))
+            now = timer()
+
+            if key in cache:
+                result, timestamp = cache[key]
+                if now - timestamp < ttl:
+                    return result
+
+            result = func(*args, **kwargs)
+
+            if size >= maxsize:
+                # Evict the least recently used item
+                lru_key = min(cache, key=lambda k: cache[k][1])
+                del cache[lru_key]
+            else:
+                size += 1
+
+            cache[key] = (result, now)
+            return result
+
+        return wrapper
+
+    return decorator

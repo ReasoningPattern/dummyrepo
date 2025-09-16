@@ -1,0 +1,59 @@
+
+
+```python
+import typing
+from urllib import request
+import logging
+import xml
+from lxml import etree
+import xrd
+import federation
+import json
+
+def retrieve_and_parse_diaspora_webfinger(handle: str) -> dict:
+    """
+    Retrieve a and parse a remote Diaspora webfinger document.
+
+    :arg handle: Remote handle to retrieve
+    :returns: dict
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        with request.urlopen(handle, timeout=10) as response:
+            document = etree.fromstring(response.read())
+            
+            # Get public key
+            public_key = _get_element_attr_or_none(document, 'public-key', 'public-key')
+            if public_key is None:
+                logger.warning("Public key not found in webfinger document")
+                return None
+            
+            # Get hcard
+            hcard = retrieve_diaspora_hcard(handle)
+            
+            # Parse profile from hcard
+            profile = parse_profile_from_hcard(hcard, handle)
+            
+            # Get content
+            content = retrieve_and_parse_content(
+                id=profile['id'],
+                guid=profile['guid'],
+                handle=handle,
+                entity_type=profile['entity_type'],
+                sender_key_fetcher=_get_element_text_or_none(document, 'sender-key')
+            )
+            
+            # Combine into final result
+            return {
+                'public_key': public_key,
+                'profile': profile,
+                'content': content
+            }
+    except request.HTTPError as e:
+        logger.error(f"HTTP error occurred: {str(e)}")
+        return None
+    except etree.ParseError as e:
+        logger.error(f"XML parsing error: {str(e)}")
+        return None
+```

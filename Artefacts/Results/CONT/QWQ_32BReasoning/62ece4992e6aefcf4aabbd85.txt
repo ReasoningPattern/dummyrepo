@@ -1,0 +1,478 @@
+Okay, I need to write the Python function find_roots based on the given signature and docstring. Let's see. The function takes a graph, a property (like RDFS.subClassOf), and an optional set of roots. It should return all the root nodes in the transitive hierarchy.
+
+Hmm, the idea is to find nodes that don't have any parents via the given property. So a root is a node that has no incoming edges for that property. Wait, no, the direction is important here. The doc says the triples are in the form (child, prop, parent), which is the same as RDFS.subClassOf where the child is the sub-class. So the parent is the super-class. Therefore, to find roots, we need nodes that are never the object in such triples. Because if a node is a parent of another, it can still have its own parent. So the roots are those nodes that have no child relationships pointing to them via prop.
+
+Wait, maybe another way: Start with all possible nodes, then remove any node that has a parent (i.e., there exists some child that points to it via prop). The remaining nodes are roots.
+
+Alternatively, perhaps we can collect all the possible children and parents, then find nodes that are not children of anyone.
+
+Alternatively, perhaps the algorithm is to start with all possible nodes in the graph that could be part of the hierarchy, and then eliminate any node that has an outgoing prop edge (since that would mean it has a parent, so it's not a root). Wait, no, the root would be a node that has no parent. So a node has a parent if there exists some triple where (this node, prop, parent) exists. Therefore, a root is a node that has no such triples. Wait, no. Wait, if a node has a parent, then there is a triple (child, prop, parent). Wait, the child is the subject, and the parent is the object. So for a node to have a parent, there must be some triple where the node is the subject and the predicate is prop, pointing to the parent. Wait, no. Let me think again. The child is the subject, the prop is the predicate, and the parent is the object. So the parent is the object. Therefore, if a node is the object in any such triple, it has at least one child. But to find roots, we need nodes that are not the object of any such triple. Because if a node is the object, that means it's a parent of some child, but it might still have its own parent. Wait, no, the root would be a node that has no parent. So a node has a parent if there exists a triple where (this node, prop, parent) exists. Wait, no, the parent is the object. So the node in question is the subject of such a triple. Therefore, if there is a triple (node, prop, parent), then node has a parent. Therefore, the root nodes are those nodes that are never the subject of such a triple, and also are not objects of any such triples? Wait no, perhaps not. Wait, the root is a node that has no parent. So for a node to have no parent, there must be no triples where (node, prop, parent) exists for any parent. So the roots are all nodes in the graph that are not the subject of any such triple, but they can be objects (since that means they are parents of someone else, but they themselves don't have a parent).
+
+Wait, but how do we collect all the possible nodes in the hierarchy? Because the graph might have other nodes not part of the hierarchy. So perhaps the roots are those nodes that are part of the hierarchy (i.e., either a subject or object in such triples) but have no parent (i.e., no (node, prop, parent) triple exists). Alternatively, maybe the roots are all nodes that are not the object of any such triple? Wait, that might not be right. Let me think with an example.
+
+Suppose we have:
+
+A is a subClassOf B.
+
+B is a subClassOf C.
+
+C has no parent.
+
+Then the roots should be C. Let's see:
+
+The triples are (A, prop, B), (B, prop, C). So the objects are B and C. So C is not the object of any triple. So the roots would be nodes that are not the object in any such triples. Because for C, there's no triple where (C, prop, ...) exists, so it has no parent. So in that case, the roots would be all nodes that are not the object of any such triples. But wait, what about a node D that is not part of any triple? Like, it's not in the hierarchy. If we consider D to be part of the hierarchy or not? The function's doc says "find the roots in some sort of transitive hierarchy", so maybe D is not part of the hierarchy and thus not considered a root. Hmm, but the function might need to include nodes that are part of the hierarchy but have no parents.
+
+Alternatively, perhaps the way to approach this is:
+
+1. Collect all nodes that are in the graph's subject or object of a triple with the given predicate. Wait, maybe all nodes that are in the hierarchy are those that are either the subject or object of such triples. Or perhaps the hierarchy is defined by all the triples with that predicate. So the nodes in the hierarchy are all the subjects and objects in those triples.
+
+2. The roots are those nodes in the hierarchy that have no parent. A node has a parent if there's a triple where it's the subject, pointing to a parent via the predicate.
+
+So to find roots:
+
+- Find all nodes in the hierarchy (all subjects and objects of triples with predicate prop).
+
+- For each such node, check if there exists a triple (node, prop, parent). If not, it's a root.
+
+Alternatively, the roots are the nodes in the hierarchy that are not the subject of any such triples. Because if they are not the subject, then they don't have any parent.
+
+Wait, let's see the example again:
+
+In the example above, the nodes in the hierarchy are A, B, C. The triples are (A, prop, B), (B, prop, C). So the subjects are A and B. The objects are B and C. So:
+
+- A has a parent (B), so not a root.
+
+- B has a parent (C), so not a root.
+
+- C is not a subject in any such triple, so no parent. So it is a root.
+
+That's correct.
+
+Another example: Suppose there are two separate hierarchies: X → Y → Z and P → Q. Then the roots would be X and P. Because X is not a subject in any triple with prop (assuming X is the top of that chain), P same.
+
+Wait, no. Wait, in the first hierarchy, the triples would be (Y, prop, X) and (Z, prop, Y). So X is the object of the first triple. So the subjects are Y and Z. The objects are X and Y. So for X, is there a triple where X is the subject? No. So X would be a root. Similarly P would be a root if there are no triples where P is the subject. So that works.
+
+So the algorithm could be:
+
+- Collect all the possible nodes in the hierarchy. These are all the subjects and objects of triples with the given predicate prop.
+
+- The roots are those nodes in that set that are not the subject of any such triples.
+
+Wait, but the set of nodes in the hierarchy is all subjects and objects of the triples with predicate prop. So, for each such triple (s, p, o), s and o are part of the hierarchy.
+
+So, the roots are the nodes in the hierarchy (so in the set of all s and o) that are not the subject in any triple with that predicate. Because if they are not the subject, then they have no parent.
+
+Therefore, the steps:
+
+1. Iterate over all triples in the graph where the predicate is prop. For each such triple, collect the subject and object into a set of all nodes in the hierarchy.
+
+2. The roots are those nodes in this set that are not the subject of any such triple.
+
+Alternatively, we can:
+
+- Collect all subjects of the triples (since those are the ones that have parents).
+
+- The roots are the nodes in the hierarchy (all s and o) that are not in the set of subjects.
+
+Wait, exactly. Let me see:
+
+The nodes in the hierarchy are all s and o from triples with predicate prop.
+
+The set of nodes that have a parent is exactly the set of subjects in such triples. So the roots are the nodes in the hierarchy that are not in that set of subjects.
+
+Therefore, the code can be structured as follows:
+
+First, get all the triples with the given predicate. For each triple (s, prop, o):
+
+- add s and o to the hierarchy_nodes set.
+
+- add s to the subjects_with_parents set.
+
+Then, the roots are the hierarchy_nodes that are not in subjects_with_parents.
+
+Wait, but also, what about nodes that are only objects and not subjects? They are in hierarchy_nodes but not in subjects_with_parents, so they are roots.
+
+Yes.
+
+So the code steps:
+
+Initialize roots as the provided roots set if given, else a new set.
+
+Wait, the function's parameter has roots as an optional Set[Node]. The doc says "roots: Optional list with set type". Wait, the parameter is roots: Optional[Set[Node]] = None. So, if roots is provided, perhaps we start with that set and add to it? Or maybe the roots parameter is for memoization or something else? The doc says "roots: Optional list with set type" but the function returns a set. Hmm, perhaps the roots parameter is an initial set to build upon. Maybe in case of multiple calls, but the function's behavior isn't clear. The default is None, so when it's not provided, we create a new set.
+
+Alternatively, maybe the roots parameter is to allow passing in existing roots, but in the code, it's probably better to ignore that unless needed. Wait, the function's return is a set of nodes. The parameter roots is optional, perhaps for internal use, but according to the doc, the function's purpose is to find the roots of the hierarchy. Let me read the doc again:
+
+The docstring says "Assumes triple of the form (child, prop, parent), i.e. the direction of RDFS.subClassOf or SKOS.broader".
+
+The Args section says:
+
+roots: Optional list with set type.
+
+Return: roots: a set with nodes.
+
+Wait, perhaps the roots parameter is an optional starting point, but the function is supposed to find all roots, so maybe the roots parameter is to allow passing in some initial roots, but in the standard case, it's None and the function calculates it from scratch.
+
+Hmm, perhaps the code can proceed as follows:
+
+Initialize roots as a set. If the roots parameter is provided, we use that as the starting point, but I'm not sure. Wait, looking at the example in the docstring:
+
+find_roots(graph, rdflib.RDFS.subClassOf) will return the roots. So the roots parameter is optional, but in the example it's not used. So perhaps the parameter is for memoization or allowing to pass in some existing roots? Maybe the code can use it as an accumulator. Wait, maybe the function is recursive, and the roots parameter is for accumulating the found roots. But that's unclear. Alternatively, perhaps the roots parameter is to allow the user to pass in some known roots, but the function will process the graph and add to it. Or maybe it's a mistake, and the roots parameter is actually for the initial set, but the function is supposed to compute the roots from the graph, so the roots parameter is optional, but the code will ignore it unless needed. Alternatively, perhaps the roots parameter is an optional set of nodes to start with, and the function appends to it. But I'm not sure. Let me check the function signature again.
+
+The function signature is def find_roots(graph: Graph, prop: URIRef, roots: Optional[Set[Node]] = None) -> Set[Node]:
+
+The return is a set of nodes. The roots parameter is optional, defaulting to None.
+
+The docstring says "roots: Optional list with set type". So perhaps the roots parameter is to allow passing in an initial set of roots, but the function will compute the full set. Maybe the function is designed to build upon the roots passed in, but I'm not sure. Alternatively, maybe it's a mistake and the roots parameter is part of the function's logic, like in some recursive approach where roots is accumulated.
+
+Hmm, perhaps the intended approach is that the roots parameter is an optional set that can be provided to start with. For example, if the function is called with some existing roots, it can add to them. But without that, it starts fresh. But given the example in the docstring, the roots parameter is not used there, so perhaps it's optional and the function ignores it unless needed. Alternatively, maybe the roots parameter is actually for the return value. But that's not possible. Let me think again.
+
+Alternatively, perhaps the roots parameter is used as a way to pass in the initial roots, but the function's job is to find all roots starting from those. But that's unclear. Since the problem is to write the code based on the signature and docstring, perhaps the roots parameter is optional and the code can proceed by initializing it as an empty set if not provided.
+
+Alternatively, perhaps the function is supposed to traverse the graph, starting from the roots, and find all nodes that have no parent. Wait, maybe the roots parameter is the starting points, and the function returns all nodes that are reachable from those roots? But that doesn't align with the example given.
+
+Alternatively, perhaps the function is intended to find all nodes that are roots in the hierarchy, i.e., nodes with no parents, and the roots parameter is for some initial set, but in the standard case, it's None and the function calculates it from the graph.
+
+Given that, perhaps the code should proceed as follows:
+
+Initialize the roots set as the provided one if given, else create an empty set.
+
+Then, iterate over all the triples in the graph with the given predicate.
+
+Collect all the subjects and objects into a set of all nodes in the hierarchy.
+
+Then, the roots are the nodes in that set which are not the subject of any such triples. So, for each node in the hierarchy_nodes, if it is not present in the set of subjects (those that have a parent), then it is a root. So we can do:
+
+roots = hierarchy_nodes - subjects_with_parents
+
+Wait, but how to implement that.
+
+Alternatively:
+
+First, collect all the subjects and objects in the triples with predicate prop.
+
+subjects_with_parent = set()
+
+all_nodes = set()
+
+for s, p, o in graph.triples((None, prop, None)):
+
+    subjects_with_parent.add(s)
+
+    all_nodes.add(s)
+
+    all_nodes.add(o)
+
+Then the roots would be the nodes in all_nodes that are not in subjects_with_parent.
+
+roots = all_nodes - subjects_with_parent
+
+Then, if the roots parameter was provided, perhaps we have to merge it? Or perhaps the roots parameter is for an initial set. Wait, the function's return is the roots found in the graph. So perhaps the roots parameter is not used in the standard case, unless there's some other logic.
+
+Wait, looking back at the function's parameters, the roots is an optional Set[Node], defaulting to None. The return is a Set[Node].
+
+The docstring says that the function returns the roots. So perhaps the roots parameter is for memoization or passing in some existing roots. Maybe the function is written in a way that if roots are provided, it adds to them, but I can't see why. Alternatively, maybe the roots parameter is a set that is modified in place, but the function returns it. But the example doesn't use it, so perhaps the code can just ignore it and compute the roots as I described.
+
+Alternatively, perhaps the roots parameter is used as the initial set, and the function's code adds to it. But in the example, when roots is None, it would start with an empty set.
+
+Wait, maybe the code is supposed to start with the roots parameter, and then iterate over the graph to find other roots. But I'm not sure. Since the example in the docstring doesn't use the roots parameter, I think it's safe to proceed under the assumption that the roots parameter is optional and when it's None, we compute the roots from scratch. So in the code, if roots is provided, perhaps we use it as part of the calculation, but in the standard case, we ignore it and compute from the graph.
+
+Alternatively, perhaps the roots parameter is for when the function is called recursively, but I'm not seeing that.
+
+Hmm, perhaps the function is supposed to find all nodes that are not the object of any triple with the given predicate. Wait no, that would be different. Let me think again. The root is a node that has no parent. So a node has a parent if there exists a triple (node, prop, parent). So the root is a node that is not the subject of any such triples. So the roots are all nodes in the hierarchy (i.e., in the set of all s and o from the triples) minus the subjects.
+
+Wait, but nodes can be part of the hierarchy even if they are only objects. For example, if a node is an object but not a subject, it has no parent, so it's a root. So that's correct.
+
+Therefore, the code can be structured as follows:
+
+Initialize roots as an empty set. Then:
+
+1. Iterate over all triples in the graph with predicate prop. Collect all subjects and objects into a set called all_nodes.
+
+2. Collect all the subjects into a set called subjects_with_parent.
+
+3. The roots are all_nodes minus subjects_with_parent.
+
+So the code would be something like:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    # Or wait, maybe the roots parameter is not used here. The example in the docstring doesn't use it, so perhaps it's just an optional parameter that can be ignored unless needed. Alternatively, perhaps it's used for memoization, but I'm not sure. Since the problem says to generate the code based on the signature and docstring, perhaps the roots parameter is part of the function's parameters but not used in the calculation unless needed.
+
+Wait the function's return is the set of roots. The code must return the correct set regardless of the roots parameter. So perhaps the roots parameter is for when the function is used in some other way, but in the standard case, it's None, so we can ignore it. So the code can proceed as:
+
+def find_roots(graph, prop, roots=None):
+    # collect all the triples with the given predicate
+    all_nodes = set()
+    subjects_with_parent = set()
+    for s, p, o in graph.triples((None, prop, None)):
+        subjects_with_parent.add(s)
+        all_nodes.add(s)
+        all_nodes.add(o)
+    # The roots are those nodes in all_nodes that are not in subjects_with_parent
+    result = all_nodes - subjects_with_parent
+    return result
+
+Wait but what if there are nodes that are not part of any triples with the given predicate? For example, a node that is not in any such triples would not be considered part of the hierarchy, so it's not included in all_nodes. So the code is correct.
+
+Wait but in the case where a node is only an object (so part of the hierarchy) but not a subject, then it is a root. So the code works.
+
+Wait, but what about nodes that are not in any triples with the given predicate? They are not part of the hierarchy, so they are not considered roots. So the code is correct.
+
+Another test case: suppose a node D has no triples with the given predicate. It's not part of the hierarchy, so it's not included in all_nodes, so not considered.
+
+Another case: a node E is both a subject and an object. Suppose there's a triple (E, prop, F). Then E is in subjects_with_parent, so not a root. But F is in all_nodes but not in subjects_with_parent, so F is a root unless there's another triple where F is the subject.
+
+So the code seems correct.
+
+But what about cycles? Like, A is a parent of B, and B is a parent of A. Then both are in subjects_with_parent, so they are not roots. So the code correctly ignores them.
+
+Now, what about the roots parameter? The function signature allows passing a set, but the code above ignores it. The docstring says "roots: Optional list with set type" and the return is a set. So perhaps the roots parameter is supposed to be added to the result. Like, the function can take some existing roots and combine with the ones found? Or maybe it's for some other use case. Let me read the docstring again.
+
+The function's docstring says "Assumes triple of the form (child, prop, parent), i.e. the direction of RDFS.subClassOf or SKOS.broader".
+
+The Args section says roots is an optional set. The return is a set of nodes.
+
+The example in the docstring does not use the roots parameter, so perhaps it's optional and can be ignored. The code I wrote above does not use the roots parameter, but according to the problem statement, we have to generate the code based on the signature and docstring, so perhaps the roots parameter is part of the function's logic.
+
+Wait, perhaps the roots parameter is used to pass in an initial set of roots, and the function returns that plus any new roots found. Or maybe it's for memoization. Alternatively, perhaps the function is supposed to start with the roots provided and then add to it any other roots found in the graph. But without more info, perhaps the roots parameter is not used, and the code can proceed as written. But maybe the function is supposed to do something different.
+
+Alternatively, maybe the function is supposed to traverse the graph upwards from the roots, but that's not the case as per the example.
+
+Alternatively, perhaps the roots parameter is a set that the function will add to, and return. For example, if roots is provided, it's used as the starting point, and the function adds to it any roots found in the graph. But in that case, the code would need to merge the existing roots with the ones found. But I'm not sure. The example in the docstring doesn't use it, so perhaps it's optional and can be ignored.
+
+Alternatively, perhaps the roots parameter is for the initial set of roots to start with, and the function finds all nodes that are connected via the property from those roots. But that would be a different problem, like finding descendants or something else. But the docstring's example is about finding roots, so that's unlikely.
+
+Given the ambiguity, perhaps the roots parameter is optional and can be ignored in the code. The problem says to generate code based on the given signature and docstring, so perhaps the code should use it. Wait the function's parameters are graph, prop, roots. The code needs to account for roots being passed in. How?
+
+Looking at the function's return type: it returns a set of nodes. The roots parameter is an optional Set[Node]. So maybe the roots parameter is to allow passing in some initial roots, and the function returns the union of those with the ones found from the graph. But why would that be needed?
+
+Alternatively, perhaps the roots parameter is a set that the function modifies and returns. For example, if roots is provided, then the function appends to it. But that would require checking if roots is None, then initializing it as a new set, else using the provided one.
+
+Wait, the function's return is a set, so perhaps when roots is provided, the function uses it as the starting set and adds the computed roots to it. But that would be merging the existing roots with the new ones, but that may not be correct. Alternatively, maybe the roots parameter is a set of possible roots, and the function returns the intersection or something else. But the example doesn't use it, so perhaps the code should treat roots as an optional parameter that, if given, is added to the result.
+
+Alternatively, perhaps the roots parameter is for passing in the set to collect the results into, so that if it's provided, the function uses it, else creates a new one. So in the code:
+
+if roots is None:
+
+    roots = set()
+
+then proceed to compute the roots and add them to the roots set, then return roots.
+
+Wait, but in that case, the code would need to collect the roots as per before and add them to the roots set. So the code would be:
+
+def find_roots(graph, prop, roots=None):
+
+    if roots is None:
+
+        roots = set()
+
+    all_nodes = set()
+
+    subjects_with_parent = set()
+
+    for s, p, o in graph.triples((None, prop, None)):
+
+        subjects_with_parent.add(s)
+
+        all_nodes.add(s)
+
+        all_nodes.add(o)
+
+    computed_roots = all_nodes - subjects_with_parent
+
+    roots.update(computed_roots)
+
+    return roots
+
+Wait, but in this case, if the user passes in a roots set, the function will add the computed roots to it. But that may not be what the user expects. The example in the docstring would then need to pass roots=None, which would create a new set and return it. That could be correct.
+
+Alternatively, maybe the roots parameter is supposed to be the starting set of roots, and the function returns the minimal roots by checking if any of the roots have parents. But that complicates things.
+
+Alternatively, perhaps the roots parameter is to allow passing in a set of nodes that are already considered roots, and the function will return those plus any others found in the graph. But that's not clear from the docstring.
+
+The function's docstring says that the return is a set of nodes. The example shows that when you call it without roots, it returns all the roots. So perhaps the roots parameter is for cases where you have some existing roots (maybe from a previous call) and want to combine them with new ones. But without more info, it's hard to say.
+
+Alternatively, maybe the roots parameter is a set that contains the current roots, and the function is supposed to find all nodes that are roots, considering those in roots as well. But that's not clear.
+
+Alternatively, perhaps the roots parameter is for memoization, but that's also unclear.
+
+Given the ambiguity, perhaps the best approach is to write the code without using the roots parameter, as the example does not use it, and the function's purpose is to compute the roots from scratch.
+
+Alternatively, the roots parameter may be there to allow passing in a set of possible roots to check, but that's not clear.
+
+Looking back at the problem statement, the user says to generate the code based on the function signature and docstring, without any other explanation. So I need to make sure that the code uses the parameters as per the signature.
+
+The function signature has roots as an optional parameter. So in the code, we must handle it. Let's think again.
+
+Perhaps the roots parameter is for the initial set of roots, and the function returns the roots of the graph starting from those roots? But that doesn't make sense for finding roots.
+
+Alternatively, maybe the roots parameter is a set of nodes that are already known to be roots, and the function should return that set plus any others found in the graph. But again, not sure.
+
+Alternatively, perhaps the roots parameter is for the return value. Like, the function modifies the roots set and returns it. But in that case, the code would have to check if roots is None, create a new set, add the computed roots, and return.
+
+Wait, let me think of the function's purpose again. The function is to find the roots in a transitive hierarchy. The roots are the nodes with no parents (i.e., not the subject in any such triples). So the code as I first wrote would correctly compute that, regardless of the roots parameter. So perhaps the roots parameter is not used in the code, and the function's code can proceed as I first wrote, ignoring the roots parameter. But then why is it in the function signature?
+
+Hmm. That's a problem. The function signature includes roots as a parameter. So the code must handle it.
+
+Looking back at the docstring's Args section:
+
+Args:
+
+    graph: Graph Class Object
+
+    prop: URIRef Class Object
+
+    roots: Optional list with set type
+
+Wait, the docstring says "roots: Optional list with set type". Maybe that's a mistake, and it should be "Optional set".
+
+Alternatively, the roots parameter is an optional set that is to be used as an initial set of roots, and the function will return the union of that with the computed roots. Or perhaps the function returns the roots parameter if provided, else computes.
+
+Alternatively, perhaps the roots parameter is a set of nodes that are the current roots, and the function is supposed to return those, but that doesn't make sense.
+
+Alternatively, perhaps the roots parameter is a set that the function will add to, and the function returns that set. So if roots is provided, it's used, else a new set is created.
+
+In that case, the code would be:
+
+def find_roots(graph, prop, roots=None):
+
+    if roots is None:
+
+        roots = set()
+
+    # compute the roots as before
+
+    all_nodes = set()
+
+    subjects_with_parent = set()
+
+    for s, p, o in graph.triples((None, prop, None)):
+
+        subjects_with_parent.add(s)
+
+        all_nodes.add(s)
+
+        all_nodes.add(o)
+
+    computed_roots = all_nodes - subjects_with_parent
+
+    roots.update(computed_roots)
+
+    return roots
+
+Wait, but that would mean that if you pass in a roots set, it would add the computed roots to it. But that may not be correct because the computed roots may include nodes not in the provided roots. However, the function's purpose is to return all roots in the graph, so if you pass in a roots set, it's probably because you want to merge them. But the example in the docstring doesn't use roots, so perhaps this is the correct approach.
+
+Alternatively, perhaps the roots parameter is for the case where the hierarchy has multiple disconnected parts, and the roots are passed in as a way to collect all roots across multiple graphs. But that's speculative.
+
+Alternatively, perhaps the roots parameter is a set that the function should use to start with, and then find all roots that are reachable from those. But that would be a different problem.
+
+Alternatively, perhaps the roots parameter is a set of nodes that are considered roots, and the function returns those that are actually roots in the graph. But I'm not sure.
+
+Given the ambiguity, perhaps the best way is to proceed under the assumption that the roots parameter is for the case where the user provides an initial set of roots (e.g., from another graph), and the function returns the union of those with the computed ones. Or perhaps it's a mistake in the function's signature and the roots parameter shouldn't be there, but since we have to follow it, perhaps the code should just return the computed roots, ignoring the parameter, but that would not use the parameter, which is part of the function's signature.
+
+Alternatively, perhaps the roots parameter is for the case where the function is used recursively, and the roots are accumulated. But I can't see how.
+
+Hmm, perhaps the function is supposed to find all nodes that are in the roots set or have no parents. But that's not clear.
+
+Alternatively, maybe the roots parameter is for the initial set of roots, and the function returns the minimal roots, by checking if any of the nodes in roots have parents, and if so, excluding them. But that would require checking each node in roots.
+
+Alternatively, perhaps the function is supposed to return the provided roots if they are valid, otherwise compute the real roots. But that's also not clear.
+
+Given that the example in the docstring does not use the roots parameter, and the function's purpose is to compute the roots from the graph, perhaps the roots parameter is a mistake or a leftover parameter that is not used. So the code can proceed to ignore it, but the function's signature requires it. So the code must include the parameter but not use it.
+
+But that would be a problem because the function would not use the parameter, but the signature includes it. So perhaps the correct approach is to include the roots parameter but not use it unless needed.
+
+Wait, maybe the function is supposed to return the roots parameter if it's provided, else compute the roots. But that would make the function return the provided roots, which is not correct unless they are indeed the roots. So that's unlikely.
+
+Alternatively, perhaps the roots parameter is used to avoid recomputing the roots multiple times. For example, if the function is called multiple times with the same graph and prop, but the roots can be passed in for efficiency. But in that case, the code would just return the roots parameter if provided, but that would only work if the roots are correct. So that's not a safe assumption.
+
+Hmm. Since the problem requires generating the code based on the given signature and docstring, and the docstring doesn't mention the roots parameter's use, I'll proceed under the assumption that the roots parameter is not used in the standard case and can be ignored. Therefore, the code will compute the roots as before and return them, regardless of the roots parameter.
+
+But since the function's signature includes the roots parameter, the code must accept it. So in the code, the roots parameter is present but not used in the computation. The code will return the computed roots, and the roots parameter is just part of the function's interface but not used.
+
+Alternatively, perhaps the roots parameter is to be used as the initial set, and the code should add the computed roots to it. But that would require modifying the roots set. For example:
+
+def find_roots(graph, prop, roots=None):
+
+    if roots is None:
+
+        roots = set()
+
+    # compute the roots as before
+
+    all_nodes = set()
+
+    subjects_with_parent = set()
+
+    for s, p, o in graph.triples((None, prop, None)):
+
+        subjects_with_parent.add(s)
+
+        all_nodes.add(s)
+
+        all_nodes.add(o)
+
+    computed_roots = all_nodes - subjects_with_parent
+
+    roots.update(computed_roots)
+
+    return roots
+
+Wait, but this would mean that if roots is provided, it's modified and returned. For example, if you call find_roots(graph, prop, existing_roots), then existing_roots will have the computed roots added to it. That might be the intended use.
+
+The docstring's example doesn't use roots, so it would create a new set each time. But if someone wants to accumulate roots from multiple calls, they could do so.
+
+This seems plausible, especially if the roots parameter is for memoization or accumulation.
+
+Therefore, this approach would be better. So the code would take the roots parameter, and add the computed roots to it. If roots is None, it creates a new set.
+
+This way, the function can be used in cases where you want to build up the roots set incrementally. For example, if you have multiple graphs, you can pass in the roots from the previous graph and get the combined roots.
+
+The example in the docstring would work by passing None, so the function creates a new set, computes the roots, and returns that set.
+
+Therefore, the code should be written as follows:
+
+def find_roots(graph, prop, roots=None):
+
+    if roots is None:
+
+        roots = set()
+
+    all_nodes = set()
+
+    subjects_with_parent = set()
+
+    for s, p, o in graph.triples((None, prop, None)):
+
+        subjects_with_parent.add(s)
+
+        all_nodes.add(s)
+
+        all_nodes.add(o)
+
+    computed_roots = all_nodes - subjects_with_parent
+
+    roots.update(computed_roots)
+
+    return roots
+
+This way, the roots parameter is used as the base set, and the computed roots are added to it.
+
+But wait, the computed_roots are all the roots in the graph. So if roots is provided, it adds those to it, but that could lead to duplicates. But since it's a set, it won't matter. So this approach seems correct.
+
+Testing this:
+
+Case 1: roots is None.
+
+The function creates a new set, adds computed_roots (the graph's roots), returns it. Correct.
+
+Case 2: roots is provided as an existing set.
+
+The existing set's elements are kept, and the computed_roots are added. So if the existing roots are from another graph, the combined set is returned.
+
+This makes sense for the function's purpose.
+
+Therefore, this is the correct approach.
+
+So the final code is as above.

@@ -1,0 +1,78 @@
+
+
+```python
+import subprocess
+import os
+
+def subprocess_run_helper(func, *args, timeout, extra_env=None):
+    """
+    Run a function in a sub-process
+
+    Args:
+        func: function, the function to be run. It must be in a module that is importable.
+        *args: str. Any additional command line arguments to be passed in
+                   the first argument to ``subprocess.run``.
+        extra_env: dict[str, str]. Any additional environment variables to be set for the subprocess.
+    Returns:
+        CompletedProcess instance
+    """
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+    command = [func] + list(args)
+    result = subprocess.run(command, timeout=timeout, env=env)
+    return result
+```
+
+```python
+import unittest
+from unittest.mock import patch, MagicMock
+import subprocess
+import os
+
+class TestSubprocessRunHelper(unittest.TestCase):
+    @patch('subprocess.run')
+    def test_basic_case(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+        result = subprocess_run_helper('my_script', 'arg1', 'arg2', timeout=10)
+        mock_run.assert_called_once_with(
+            ['my_script', 'arg1', 'arg2'],
+            timeout=10,
+            env=os.environ.copy()
+        )
+        self.assertEqual(result.returncode, 0)
+
+    @patch('subprocess.run')
+    def test_extra_env(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+        extra_env = {'TEST_VAR': 'test_value'}
+        result = subprocess_run_helper('my_script', 'arg1', extra_env=extra_env, timeout=5)
+        mock_run.assert_called_once_with(
+            ['my_script', 'arg1'],
+            timeout=5,
+            env=os.environ.copy()
+        )
+        # Verify that extra_env is merged into the environment
+        self.assertIn('TEST_VAR', mock_run.call_args[1]['env'])
+        self.assertEqual(mock_run.call_args[1]['env']['TEST_VAR'], 'test_value')
+
+    @patch('subprocess.run')
+    def test_timeout(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+        subprocess_run_helper('my_script', timeout=5)
+        mock_run.assert_called_once_with(
+            ['my_script'],
+            timeout=5,
+            env=os.environ.copy()
+        )
+
+    @patch('subprocess.run')
+    def test_no_extra_env(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+        subprocess_run_helper('my_script', 'arg1', timeout=10)
+        mock_run.assert_called_once_with(
+            ['my_script', 'arg1'],
+            timeout=10,
+            env=os.environ.copy()
+        )
+```

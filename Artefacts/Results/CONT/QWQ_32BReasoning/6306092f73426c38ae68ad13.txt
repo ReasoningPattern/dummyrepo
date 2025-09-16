@@ -1,0 +1,199 @@
+Okay, I need to generate Python code for the ansible_playbook function based on the provided signature and docstring. Let me start by understanding the parameters.
+
+The function has parameters like ir_workspace, ir_plugin, playbook_path, and some optional ones like verbose, extra_vars, and ansible_args. The docstring mentions that it wraps the ansible-playbook CLI, so the code should probably execute the ansible-playbook command with the given arguments.
+
+First, I should import necessary modules. Maybe subprocess to run the CLI command. But wait, perhaps the Infrared Workspace and Plugin objects have methods to handle this? The parameters include ir_workspace and ir_plugin, which are objects. Maybe they have methods to get the playbook path or handle variables. But the problem says to generate code based on the given signature and docstring, so I should focus on the parameters provided.
+
+The function needs to construct the command line for ansible-playbook. The playbook_path is required. Then, handle the optional parameters.
+
+Let's think about the parameters:
+
+- verbose: Ansible verbosity level. The user can set this to a number, like -v, -vv, etc. So, if verbose is provided, we add -v multiplied by the level? Or maybe check if it's an integer and append the appropriate number of v's.
+
+- extra_vars: a dictionary. These need to be converted into --extra-vars flags. Each key-value pair in the dict would be part of the extra_vars. Alternatively, maybe it's better to pass them as a list of "key=value" strings. Wait, Ansible's --extra-vars can take a YAML file or a key=value string. Since it's a dictionary, perhaps we can convert it into a JSON or a list of strings. Alternatively, maybe using the -e flag for each key-value pair.
+
+- ansible_args: a dictionary of ansible-playbook arguments. These should be converted into command-line arguments. For each key-value pair, the key is the argument name (like 'tags') and the value is the argument's value. So for example, if ansible_args has {'tags': 'mytag'}, it becomes --tags mytag.
+
+The function should construct the command line by starting with "ansible-playbook" followed by the playbook path, then adding all the options from the parameters.
+
+Also, the ir_workspace and ir_plugin might provide some context, like the working directory or additional variables. But since the problem doesn't specify their methods, maybe we can just use them as part of the command execution, like setting the current directory to the workspace's directory?
+
+Wait, perhaps the ir_workspace has a method to get the current directory or to handle some environment variables. But without knowing the exact structure of these objects, maybe the code will just use them in a way that's consistent with their intended use. Since the function parameters include them, perhaps they are used for passing context, but the actual command execution might need to use their attributes. Alternatively, maybe they are just passed along but not used in the code here. Hmm, perhaps the main thing is to construct the ansible-playbook command with the given parameters.
+
+Let me outline the steps:
+
+1. Start building the command list. The first elements are 'ansible-playbook' and the playbook_path.
+
+2. Handle the verbose parameter. If it's not None, add the appropriate -v's. For example, if verbose is 2, add '-vv'.
+
+3. Handle extra_vars. If it's a dictionary, convert each key-value pair into --extra-vars entries. Alternatively, perhaps using the @ notation with a file, but since it's a dict, maybe it's better to pass each as a key=value pair. Wait, but Ansible's --extra-vars can take a JSON string. Alternatively, maybe loop through the items and add '-e key=value' for each. So for each key, val in extra_vars.items(), add '-e' followed by f"{key}={val}". But this might not handle complex structures. Alternatively, perhaps the function converts the dict into a JSON string and passes it via -e @jsonfile, but that's more complicated. Since the user might expect to pass a simple dictionary, perhaps the code should loop through each key-value pair and add '-e' and the key=value string.
+
+4. Handle ansible_args: loop through the dictionary, and for each key (argument name), add the corresponding option. For example, if the key is 'tags', and the value is 'mytag', then add '--tags mytag'. For boolean flags, if the value is True, just add the option without a value, else omit. Wait, but the user provided a dict, so maybe they set it to True to enable a flag. So for each key in ansible_args:
+
+   - if the value is a list, maybe join with commas? Or just pass as is?
+
+   - if the value is a boolean, and it's True, add the option without a value (since it's a flag), else if False, skip.
+
+   - else, add the option with the value.
+
+But this could get complicated. Maybe the code just appends each key and value as separate arguments. For example, for each (k, v) in ansible_args.items():
+
+   if v is True, then add '--' + k (since it's a flag)
+
+   else, add '--' + k + ' ' + str(v)
+
+Wait, but some arguments might take multiple values, like --extra-vars can be used multiple times. Hmm. Maybe the code just constructs each key-value pair as a separate argument. So for each key in ansible_args, the code would add the corresponding command line option.
+
+5. Then, execute the command using subprocess, perhaps via the run() function from subprocess, capturing output, etc. But the function's purpose is to wrap the CLI, so maybe it just runs the command and returns the result.
+
+Putting this together, here's a possible structure:
+
+import subprocess
+
+def ansible_playbook(...):
+    cmd = ['ansible-playbook', playbook_path]
+    # handle verbose
+    if verbose is not None:
+        cmd.append('-' + 'v' * verbose)
+    # handle extra_vars
+    if extra_vars is not None:
+        for k, v in extra_vars.items():
+            cmd.extend(['-e', f'{k}={v}'])
+    # handle ansible_args
+    if ansible_args is not None:
+        for k, v in ansible_args.items():
+            # construct the argument name, like --tags
+            arg = f'--{k}'
+            if v is True:  # for boolean flags
+                cmd.append(arg)
+            elif v is False:
+                pass  # or maybe skip?
+            else:
+                cmd.extend([arg, str(v)])
+    # Now, execute the command
+    # Need to consider the environment or cwd from ir_workspace?
+    # Maybe set cwd to ir_workspace's directory?
+    # Assuming ir_workspace has a method to get the directory, perhaps:
+    # cwd = ir_workspace.get_cwd()
+    # but without knowing the actual structure, maybe just proceed
+    # to run the command in the current directory or as per the workspace.
+    # For now, proceed with subprocess.run
+    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return result
+
+Wait, but the function may not return the result, but perhaps just execute and raise on error? Or maybe it's supposed to return the return code? The docstring says it wraps the CLI, so maybe it should run the command and return the result.
+
+But the user may want to handle the output. So using subprocess.run and returning the CompletedProcess instance.
+
+However, perhaps the infrared framework has its own way of handling this, but since the problem doesn't specify, I'll proceed with the above approach.
+
+Wait, the parameters include ir_workspace and ir_plugin. How are those used here? Maybe the ir_workspace has the current directory, so the command should be run in that directory. For example, ir_workspace.path or something. Let's assume that ir_workspace has a 'cwd' property or method. So in the subprocess call, we can set cwd=ir_workspace.path.
+
+So modifying the code:
+
+cwd = ir_workspace.path  # or some attribute like that.
+
+So in the subprocess.run call, add cwd=cwd.
+
+Also, the ir_plugin might have some default variables or paths, but unless specified, perhaps it's not used here. Maybe the function just needs to pass the necessary arguments.
+
+Another consideration: the extra_vars could be a list of vars, but the parameter says it's a dict. So the code as above is okay.
+
+What about the ansible_args? For example, if someone passes {'tags': 'setup'}, that would add --tags setup. If they pass {'extra_vars': {'key': 'val'}}, but that's conflicting with the extra_vars parameter? Probably not, since the user should use the extra_vars parameter for that, and ansible_args is for other arguments.
+
+Now, let's code this step by step.
+
+Also, need to make sure that all parameters are handled. Let's check:
+
+- The ir_workspace and ir_plugin parameters are present, but unless they are used in the code, like setting the working directory, they might not be used here. The code example I thought of uses ir_workspace's path for the cwd. So that's necessary.
+
+But perhaps the ir_workspace has a method like get_working_dir() or similar. Since the problem statement doesn't specify, I'll assume that ir_workspace has a 'path' attribute or something like that. Let's go with that.
+
+Now, putting it all together:
+
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None,
+                     extra_vars=None, ansible_args=None):
+    """
+    ... (docstring as given)
+    """
+    cmd = ['ansible-playbook', playbook_path]
+    if verbose is not None:
+        cmd.append('-' + 'v' * verbose)
+    if extra_vars is not None:
+        for k, v in extra_vars.items():
+            cmd.extend(['-e', f'{k}={v}'])
+    if ansible_args is not None:
+        for k, v in ansible_args.items():
+            arg = f'--{k.replace("_", "-")}'  # in case the keys are in snake_case, converting to hyphenated
+            if v is True:
+                cmd.append(arg)
+            elif v is False:
+                continue
+            else:
+                cmd.extend([arg, str(v)])
+    # Execute the command in the workspace's directory
+    cwd = ir_workspace.path  # assuming ir_workspace has a 'path' attribute
+    result = subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
+    return result
+
+Wait, but the keys in ansible_args might be in snake_case (like 'tags' or 'become_user'), but Ansible uses hyphenated options. For example, 'become_user' would be --become-user. So converting underscores to hyphens would be better. So in the code above, I added k.replace("_", "-"). That way, if someone passes 'become_user' as a key, it becomes '--become-user'.
+
+That's a good point. So that's necessary.
+
+What about if the key is already in hyphenated form? Like 'extra-vars'? Probably, the user would use the Pythonic key 'extra_vars', so converting to hyphen is correct.
+
+So that line is important.
+
+Another thing: the 'ansible_args' can have values that are lists. For example, {'tags': ['setup', 'deploy']}, which would need to be passed as --tags setup,deploy. So in that case, when v is a list, we can join with commas. So in the code:
+
+else:
+    if isinstance(v, list):
+        v_str = ','.join(map(str, v))
+    else:
+        v_str = str(v)
+    cmd.extend([arg, v_str])
+
+Hmm, so modifying the code to handle lists.
+
+So the code for handling ansible_args would need to check if the value is a list and then join with commas.
+
+So adjusting that part:
+
+if ansible_args is not None:
+    for k, v in ansible_args.items():
+        arg = f'--{k.replace("_", "-")}'
+        if v is True:
+            cmd.append(arg)
+        elif v is False:
+            continue
+        else:
+            # Handle lists by joining with commas
+            if isinstance(v, list):
+                v_str = ','.join(map(str, v))
+            else:
+                v_str = str(v)
+            cmd.extend([arg, v_str])
+
+That's better.
+
+Now, what about the 'check=True' in subprocess.run? That will raise an exception if the command returns a non-zero exit code. But maybe the function should allow that, as per the wrapper's purpose. Alternatively, perhaps it should return the result regardless, but the user might want to handle errors. The function's docstring says it wraps the CLI, so returning the result (including the return code) is better. However, using check=True will raise an exception. So maybe remove check=True and handle the return code, but the user can inspect the result. Alternatively, leave check=True to make it raise, but the function's purpose might be to let the user handle that. Hmm, perhaps the code should not use check=True, so that the return code is part of the result. Let me think.
+
+The subprocess.run returns a CompletedProcess instance, which has a returncode attribute. So returning that allows the user to check it. So perhaps it's better to omit check=True, so that the command runs and returns the result even if it fails. So changing:
+
+result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+
+Yes. So the function can return the result, and let the caller handle any errors.
+
+Now, putting it all together, the code would be as above.
+
+Wait, but in the parameters, the 'ansible_args' is a dictionary, so the user can pass any arguments. The code converts the keys to hyphenated form. But what if the user wants to pass an argument that's not in the form of a key-value pair, like --list-tasks which is a flag with no value? The code handles that by checking if the value is True, so the user would pass {'list_tasks': True}, leading to --list-tasks being added.
+
+That makes sense.
+
+Another edge case: if a user passes a value of None, but that's probably not intended, but the code would convert it to a string 'None', which might not be desired. But since the parameter is supposed to be a dictionary of arguments, the user should provide valid values.
+
+So the code should handle those cases.
+
+Now, considering all the points, the code should look like this.

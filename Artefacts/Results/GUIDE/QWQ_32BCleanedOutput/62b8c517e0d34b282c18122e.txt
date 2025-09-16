@@ -1,0 +1,29 @@
+import traceback
+
+def extostr(cls, e, max_level=30, max_path_level=5):
+    tb = e.__traceback__ if hasattr(e, '__traceback__') else None
+    lines = traceback.format_exception(type(e), e, tb)
+    num_frames = len(lines) - 1  # Exclude the first line (exception type/message)
+    truncated_lines = lines[:1] + lines[1:1+max_level]
+    
+    # Process each frame line to shorten the path
+    for i in range(1, len(truncated_lines)):
+        line = truncated_lines[i]
+        if 'File "' not in line:
+            continue  # Skip non-frame lines
+        parts = line.split('", line ')
+        if len(parts) < 2:
+            continue  # Invalid line format
+        file_part = parts[0].split('File "')[1]
+        rest_part = parts[1]
+        path_components = file_part.split('/')
+        non_empty = [p for p in path_components if p]
+        if max_path_level <= 0:
+            shortened = non_empty
+        else:
+            shortened = non_empty[-max_path_level:]
+        shortened_path = '/'.join(shortened)
+        new_line = f'File "{shortened_path}", line {rest_part}'
+        truncated_lines[i] = new_line
+    
+    return ''.join(truncated_lines)

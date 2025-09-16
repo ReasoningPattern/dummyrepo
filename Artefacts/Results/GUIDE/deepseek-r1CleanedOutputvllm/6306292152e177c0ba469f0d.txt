@@ -1,0 +1,43 @@
+import json
+import pytest
+from requests import Request, Response
+
+def identify_request(request: Request) -> bool:
+    """
+    Check whether the request body loaded using JSON contains events.
+    """
+    json_data = request.json()
+    
+    if json_data is None:
+        return False
+    if isinstance(json_data, str):
+        return False
+    
+    if isinstance(json_data, list):
+        for item in json_data:
+            if isinstance(item, dict):
+                return True
+        return False
+    elif isinstance(json_data, dict):
+        return True
+    else:
+        return False
+
+@pytest.fixture
+def requests_object():
+    return Response()
+    
+@pytest.mark.parametrize("json_payload", [
+    {"type": "event1", "data": {"id": 1}},
+    {"type": "event2", "data": {"id": 2}},
+    {"type": "no_event", "data": {"status": "success"}},
+    {"type": "another_event", "data": {"timestamp": "2023-10-01"}},
+    [],
+    "invalid_string",
+    "200 OK",
+    "This is a string body"
+])
+def test_identify_request(requests_object, json_payload):
+    response = requests_object.copy()
+    response.json = json.loads(json_payload)
+    assert identify_request(response) == (json_payload.strip() != "")

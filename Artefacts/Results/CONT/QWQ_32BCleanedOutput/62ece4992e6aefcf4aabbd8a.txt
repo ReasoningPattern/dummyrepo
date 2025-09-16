@@ -1,0 +1,53 @@
+import json
+import os
+import logging
+
+def load_configurations(config_filenames, overrides=None, resolve_env=True):
+    configs = {}
+    errors = []
+    for filename in config_filenames:
+        try:
+            with open(filename, 'r') as f:
+                content = f.read()
+        except (PermissionError, FileNotFoundError) as e:
+            error_msg = f"Error reading file '{filename}': {str(e)}"
+            record = logging.LogRecord(
+                name='config_loader',
+                level=logging.ERROR,
+                pathname=filename,
+                lineno=0,
+                msg=error_msg,
+                args=None,
+                exc_info=None
+            )
+            errors.append(record)
+            continue
+        
+        try:
+            config = json.loads(content)
+        except json.JSONDecodeError as e:
+            error_msg = f"Error parsing config file '{filename}': {e}"
+            record = logging.LogRecord(
+                name='config_loader',
+                level=logging.ERROR,
+                pathname=filename,
+                lineno=0,
+                msg=error_msg,
+                args=None,
+                exc_info=None
+            )
+            errors.append(record)
+            continue
+        
+        if resolve_env:
+            for key in config:
+                val = config[key]
+                if isinstance(val, str):
+                    config[key] = os.path.expandvars(val)
+        
+        if overrides is not None:
+            config.update(overrides)
+        
+        configs[filename] = config
+    
+    return (configs, errors)

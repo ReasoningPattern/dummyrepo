@@ -1,0 +1,516 @@
+Okay, I need to create a TTL cache decorator in Python. The user provided the function signature and a docstring. Let me think about how to approach this.
+
+First, I remember that Python has the functools.lru_cache decorator, but it doesn't support TTL. So I have to build a similar decorator but add the time-to-live feature. The parameters are maxsize, ttl, timer, and typed. The timer defaults to time.monotonic, which is good because it's monotonic and not affected by system time changes.
+
+The decorator needs to store results along with their expiration times. Each time the function is called, I check if the result is still valid (not expired and present in the cache). If it is, return it. Otherwise, compute the result, store it with the current time plus ttl, and manage the cache size using LRU.
+
+Hmm, how to structure the cache? Maybe use a dictionary to hold the keys and their values along with expiration times. But also need an ordered structure to track the LRU order. Oh right, maybe use an OrderedDict. When the maxsize is exceeded, the oldest items (those not recently used) are removed first, but only if they haven't expired yet. Wait, but we also need to check if items have expired when accessing them.
+
+Wait, the LRU part is about the order of usage. So each time a key is accessed (either as a hit or a miss leading to a new entry), it should be moved to the end of the order. The expiration is separate: each entry has an expiration time, and when checking, if the current time is past that, it's considered expired and needs to be recalculated.
+
+So the steps for the decorator:
+
+1. The decorator function will take the parameters and return a wrapper function.
+2. The wrapper function will handle the actual caching logic.
+3. The cache needs to store the function's arguments (key), the result, and the expiration time.
+4. The key needs to be generated from the function's arguments, considering if typed is True (so different argument types would have different keys, like in the built-in lru_cache).
+5. When the function is called, first generate the key based on the arguments.
+6. Check if the key is in the cache. If it is:
+   a. Check if the expiration time is in the future. If yes, return the value.
+   b. If expired, remove the entry and proceed to compute.
+7. If not in cache or expired, compute the result, store it with the current time + ttl, and add to the cache.
+8. Also, when adding a new entry, if the maxsize is exceeded, remove the oldest items until under maxsize. But need to check if those are expired first before removing.
+
+Wait, but the LRU order needs to be maintained. So every time an entry is accessed (whether a hit or a new entry), it should be moved to the end of the order. So perhaps using an OrderedDict where the keys are the function's keys, and the values are tuples of (result, expiration_time). The order in the OrderedDict will track the LRU order.
+
+The steps in code:
+
+The decorator function:
+
+def ttl_cache(...):
+
+    def decorating_function(user_function):
+        ... setup the cache ...
+        return wrapper
+
+    return decorating_function
+
+The wrapper function:
+
+def wrapper(*args, **kwds):
+
+    key = make_key(args, kwds, typed)
+    now = timer()
+
+    # Check if key is in the cache
+    if key in cache:
+        value, expires = cache[key]
+        if now < expires:
+            # move to end of ordered dict (mark as recently used)
+            # but how? since in OrderedDict, when you access, you can pop and reinsert?
+            # Maybe using an ordered dict and when accessed, we pop and re-add to end
+            # So:
+
+            # first, check if the key exists and is valid
+            # then, move it to the end
+            # but in the ordered dict, maybe we need to track the order, so perhaps:
+
+            # pop the key and reinsert it, so that it's at the end
+            del cache[key]
+            cache[key] = (value, expires)
+            return value
+        else:
+            # expired, so remove it
+            del cache[key]
+
+    # Now compute the result
+    result = user_function(*args, **kwds)
+    expires = now + ttl
+    cache[key] = (result, expires)
+
+    # Now check the size and trim if needed
+    while len(cache) > maxsize:
+        # remove the first item (oldest)
+        oldest = next(iter(cache))
+        del cache[oldest]
+
+    return result
+
+Wait, but using an OrderedDict would make this easier. Let me think again. Maybe using an OrderedDict where the keys are the function's keys, and the values are (result, expiration). The order is maintained so that the first item is the least recently used. But when we access a key, we need to move it to the end to mark it as recently used.
+
+Wait, but in the code above, when we check the key, and it's valid, we pop it and re-add it. That way, it's moved to the end. However, if we use a regular dict, this is O(1) for each access but the order isn't tracked. So using an OrderedDict is better here.
+
+So perhaps the cache should be an instance of an ordered dictionary. Let's adjust the code:
+
+Initialize the cache as an OrderedDict. But since we need to track the expiration, maybe:
+
+cache = collections.OrderedDict()
+
+Wait, but in Python, the ordered dict preserves the insertion order. When you delete and reinsert an item, it moves it to the end. So when we access a key and it's valid, we can pop it and reinsert it. That way, it's moved to the end. Similarly, when adding a new item, it's added to the end.
+
+So in the code:
+
+When checking the key:
+
+if key in cache:
+    value, expires = cache[key]
+    if now < expires:
+        # move to end
+        del cache[key]
+        cache[key] = (value, expires)
+        return value
+    else:
+        # expired, so remove
+        del cache[key]
+
+Then, when adding the new result:
+
+cache[key] = (result, expires)
+
+But adding a new key to the end. The while loop to check the size:
+
+while len(cache) > maxsize:
+    # the first item is the oldest, so pop it
+    # but also check if it's expired? Because if it's expired, we can just remove it
+    # Wait, but when we add items, we only keep those that are not expired. So the items in the cache are all non-expired when they were added. However, over time, some may have expired but not yet checked. So when trimming, we should check if the item is expired before considering it for removal.
+
+Hmm, but in the while loop, we need to remove the oldest items (the first in the ordered dict) until the size is within maxsize. But if the oldest item is expired, then removing it is okay. But maybe we should check if it's expired, and if so, just remove it without considering the size? Or perhaps, during the trimming phase, we can check each item's expiration and only remove those that are still valid but just need to be pruned because of the maxsize.
+
+Wait, perhaps the trimming is done after adding the new item. Since when we add a new item, it's possible that the cache exceeds the maxsize, so we have to remove the oldest items (those at the start of the ordered dict) until the size is okay. But those items may have expired, so maybe we can remove them even if they are expired. Because if they are expired, they would have been removed already when accessed. But when trimming, we have to consider that some entries may have expired but haven't been accessed yet, so they are still in the cache but their expiration time has passed. So when trimming, we can check each item's expiration:
+
+Wait, perhaps the while loop should be:
+
+while len(cache) > maxsize:
+    # get the first key (oldest)
+    oldest_key = next(iter(cache))
+    # check if it's expired
+    val, exp = cache[oldest_key]
+    if timer() < exp:
+        # it's still valid, so we need to remove it because of maxsize
+        del cache[oldest_key]
+    else:
+        # it's expired, so we can remove it without considering the size
+        del cache[oldest_key]
+
+But this complicates things, because even if it's expired, it's still part of the cache's length. So the while loop would continue until the size is within maxsize. But perhaps it's better to just remove the oldest entry regardless of its expiration. Because even if it's expired, it's part of the count towards maxsize. So when the cache is full, the oldest entry (regardless of expiration) is removed. But that's not ideal, because maybe some entries are expired and can be removed without considering the maxsize.
+
+Hmm, perhaps the trimming should be done by checking each item's expiration and only keep non-expired items. But that's more involved. Alternatively, during the cache access (when checking the key), we already remove expired entries. So in the trimming loop, when we reach the maxsize, the items are all non-expired (since any expired ones would have been removed when they were accessed or when we check during trimming? Not sure).
+
+Alternatively, maybe the trimming can just remove the first entry (the oldest) regardless of expiration. Because if it's expired, then when we access it again, it would be removed. But the maxsize is just a limit on the number of entries, so when the cache is full, we have to remove the oldest, even if it's expired. But maybe it's better to check the expiration and remove it only if it's still valid. Because if it's expired, then it's better to remove it and not count towards the maxsize. So in the trimming loop:
+
+while len(cache) > maxsize:
+    oldest_key = next(iter(cache))
+    val, exp = cache[oldest_key]
+    if timer() < exp:
+        # still valid, must remove to reduce the size
+        del cache[oldest_key]
+    else:
+        # expired, remove it but don't count towards the size anymore
+        del cache[oldest_key]
+
+Wait, but the length of the cache is being tracked, so in any case, deleting the oldest key reduces the length. So the loop will eventually terminate once the length is <= maxsize.
+
+Alternatively, maybe during trimming, we can just remove the first item, because even if it's expired, it's part of the count. So it's better to remove it to make space for the new entry.
+
+Hmm, perhaps the trimming loop can just proceed to remove the first item, regardless of expiration, because the cache's maxsize is a hard limit. The expiration is handled when the key is accessed, so when the cache is full, the oldest entry is removed to make space, even if it's expired. But since it's expired, maybe it's better to just remove it and not count it. But perhaps it's okay to proceed.
+
+Alternatively, maybe the code can be written so that the trimming loop just removes the first item, without checking expiration, because the next time someone accesses it, it will be removed if expired.
+
+Hmm, perhaps the best approach is to proceed with the ordered dict, and in the trimming loop, just remove the first item. Let me structure the code with that.
+
+Now, the code structure:
+
+The decorator function:
+
+We need to import the necessary modules. The user's code should have from functools import wraps, and also import collections.OrderedDict and time.
+
+Wait, the parameters include timer=time.monotonic, so the timer is passed in. So the code will need to use that.
+
+The code outline:
+
+First, the decorator function:
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    def decorating_function(user_function):
+        if typed:
+            # need to consider the types of the arguments
+            # the key function should take into account the types
+            # so in the key creation, we can use the _make_key function from functools.lru_cache
+            # but since I can't copy that, perhaps need to reimplement it
+            # Alternatively, use the inspect module to get the types, but that's complicated
+            # Alternatively, create a key that includes the types of the args and kwargs
+            # For simplicity, perhaps use the same approach as the lru_cache's _make_key
+            # but how?
+
+            # Alternatively, use the code from the standard lru_cache's _make_key function.
+            # Looking at the Python 3.9 source code for functools, the _make_key function is:
+
+            # def _make_key(args, kwds, typed):
+            #     # if some of the arguments have unhashable types, type errors are
+            #     # raised as in a normal function call.  Other errors?  Probably want
+            #     # to raise them as in normal function calls.
+            #     key = args
+            #     if kwds:
+            #         sorted_items = sorted(kwds.items())
+            #         key += tuple(sorted_items)
+            #     if typed:
+            #         key += tuple(type(arg) for arg in args)
+            #         if kwds:
+            #             key += tuple(type(val) for (k, val) in sorted_items)
+            #     return key
+
+            # So I can reimplement this function here.
+
+            # So perhaps in the code, we can define a helper function to make the key.
+
+            # So in the wrapper function:
+
+            # need to create a key based on args, kwargs, and typed.
+
+            # So first, define a helper function to make the key.
+
+            # So inside the decorating function:
+
+            make_key = _make_key if not typed else _make_key_typed?
+
+            Wait, perhaps it's better to create the key-making function here.
+
+            Let me think. Let's write a helper function inside the decorating function to create the key.
+
+            Let me write that:
+
+            def make_key(args, kwds):
+                # combine args and sorted kwds into a tuple
+                # if typed is True, also include the types of each argument
+                key_parts = list(args)
+                if kwds:
+                    sorted_items = sorted(kwds.items())
+                    key_parts.extend(sorted_items)
+                if typed:
+                    # add the types of each arg in args and sorted_items
+                    types = [type(arg) for arg in args]
+                    if kwds:
+                        types.extend([type(v) for (k, v) in sorted_items])
+                    key_parts.append(tuple(types))
+                return tuple(key_parts)
+
+                Wait, perhaps not exactly, but similar to the standard approach. Alternatively, maybe the standard method is better.
+
+                Alternatively, the code can be:
+
+                key = args
+                if kwds:
+                    key += tuple(sorted(kwds.items()))
+                if typed:
+                    key += tuple(map(type, args))
+                    if kwds:
+                        key += tuple(map(type, (value for (k, value) in sorted(kwds.items()))))
+                return key
+
+                Hmm, perhaps I need to code that. Let me structure that as a helper function.
+
+                So in the code, inside the decorating function:
+
+                if typed:
+                    def _make_key(args, kwds):
+                        # create the key including the types
+                        key = list(map(type, args))
+                        key.append(tuple(sorted(kwds.items())))
+                        key.append(tuple(map(type, (v for (k, v) in sorted(kwds.items())))))
+                        # wait, not sure. Maybe need to adjust.
+
+                        # Alternatively, the standard approach as in the lru_cache:
+
+                        # The key is made by combining the args and the sorted kwds items, plus the types if typed is True.
+
+                        # So:
+
+                        # args are converted to a tuple, and the kwds are sorted and added as a tuple.
+
+                        # Then, if typed is True, we also include the types of each argument.
+
+                        # So:
+
+                        key = args
+                        if kwds:
+                            key += tuple(sorted(kwds.items()))
+                        if typed:
+                            key += tuple(map(type, args))
+                            if kwds:
+                                key += tuple(map(type, (v for (k, v) in sorted(kwds.items()))))
+                        return key
+                else:
+                    def _make_key(args, kwds):
+                        key = args
+                        if kwds:
+                            key += tuple(sorted(kwds.items()))
+                        return key
+
+                Wait, but in Python, tuples are hashable, so the key can be a tuple of the args and the sorted kwds items. But the types would be added as part of the tuple.
+
+                Alternatively, perhaps the key is made by combining the args and sorted kwds items into a tuple, and if typed is True, also include the types of each argument and each kwarg's value.
+
+                Hmm, perhaps the helper function should return a tuple that combines all these elements.
+
+                So, in code:
+
+                def _make_key(args, kwds):
+                    # combine args and sorted kwds into a tuple
+                    items = list(args)
+                    if kwds:
+                        items.extend(sorted(kwds.items()))
+                    # if typed, add the types of each arg and each kwarg value
+                    if typed:
+                        types = []
+                        for arg in args:
+                            types.append(type(arg))
+                        if kwds:
+                            for k, v in sorted(kwds.items()):
+                                types.append(type(v))
+                        items.append(tuple(types))
+                    return tuple(items)
+
+                Wait, but the items list is the args plus the sorted kwds items. Then, if typed is True, we append a tuple of the types of all the args and the kwarg values. But that would make the key's last element a tuple of types, which is okay.
+
+                Hmm, perhaps this is the way to do it. So the key is created correctly.
+
+                So in the code, inside the decorating function, we can have a helper function for making the key.
+
+                Now, putting this together.
+
+                So the structure is:
+
+                The decorating function (inside the ttl_cache) will return a wrapper function that uses an ordered dict as the cache.
+
+                Here's the code outline:
+
+                import collections
+                from functools import wraps
+
+                def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+                    def decorating_function(user_function):
+                        cache = collections.OrderedDict()
+                        make_key = _make_key  # as defined above, depending on typed
+
+                        @wraps(user_function)
+                        def wrapper(*args, **kwds):
+                            key = make_key(args, kwds)
+                            now = timer()
+                            if key in cache:
+                                value, expires = cache[key]
+                                if now < expires:
+                                    # move to end of order
+                                    del cache[key]
+                                    cache[key] = (value, expires)
+                                    return value
+                                else:
+                                    # expired, remove
+                                    del cache[key]
+                            # compute the result
+                            result = user_function(*args, **kwds)
+                            expires = now + ttl
+                            cache[key] = (result, expires)
+                            # trim the cache if needed
+                            while len(cache) > maxsize:
+                                # remove the first item (oldest)
+                                oldest_key = next(iter(cache))
+                                del cache[oldest_key]
+                            return result
+                        return wrapper
+                    return decorating_function
+
+                Wait, but the make_key function needs to be defined inside the decorating function, taking into account whether 'typed' is True or not. So the _make_key function needs to be conditionally defined.
+
+                Let me adjust the code to include that.
+
+                So inside decorating_function:
+
+                if typed:
+
+                    def _make_key(args, kwds):
+                        # the code for including types
+                        # as before.
+
+                else:
+
+                    def _make_key(args, kwds):
+                        # code without types
+
+                Alternatively, perhaps a helper function can be created with a closure.
+
+                Let me code the make_key function properly.
+
+                Let me think of the _make_key function:
+
+                def _make_key(args, kwds):
+                    # create the key based on args and kwds, considering 'typed'
+                    items = []
+                    items.extend(args)
+                    if kwds:
+                        items.extend(sorted(kwds.items()))
+                    if typed:
+                        types = []
+                        for arg in args:
+                            types.append(type(arg))
+                        if kwds:
+                            for k, v in sorted(kwds.items()):
+                                types.append(type(v))
+                        items.append(tuple(types))
+                    return tuple(items)
+
+                So this function will handle both cases. Wait, actually, if typed is True, then we add the types as an extra element in the items list. But in the case of typed, the types are appended as a tuple. So the items list becomes [args..., sorted_kwd_items..., (types...)], and then converted to a tuple. So the key will include the types only when typed is True.
+
+                Wait, but in the code, the 'typed' variable is fixed when the decorating_function is called. So inside the decorating function, the _make_key can be defined with the 'typed' value.
+
+                So:
+
+                inside decorating_function:
+
+                    def _make_key(args, kwds):
+                        items = []
+                        items.extend(args)
+                        if kwds:
+                            items.extend(sorted(kwds.items()))
+                        if typed:
+                            types = []
+                            for arg in args:
+                                types.append(type(arg))
+                            if kwds:
+                                for k, v in sorted(kwds.items()):
+                                    types.append(type(v))
+                            items.append(tuple(types))
+                        return tuple(items)
+
+                That way, the 'typed' is captured from the outer scope (the decorating_function's parameters).
+
+                So that's better. So the code can be written as:
+
+                Now putting all together.
+
+                Also, need to import the necessary modules: from functools import wraps, and import collections.
+
+                So the code would start with:
+
+                import collections
+                from functools import wraps
+
+                def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+                    def decorating_function(user_function):
+                        cache = collections.OrderedDict()
+
+                        def _make_key(args, kwds):
+                            items = []
+                            items.extend(args)
+                            if kwds:
+                                items.extend(sorted(kwds.items()))
+                            if typed:
+                                types = []
+                                for arg in args:
+                                    types.append(type(arg))
+                                if kwds:
+                                    for k, v in sorted(kwds.items()):
+                                        types.append(type(v))
+                                items.append(tuple(types))
+                            return tuple(items)
+
+                        @wraps(user_function)
+                        def wrapper(*args, **kwds):
+                            key = _make_key(args, kwds)
+                            now = timer()
+                            if key in cache:
+                                value, expires = cache[key]
+                                if now < expires:
+                                    del cache[key]
+                                    cache[key] = (value, expires)
+                                    return value
+                                else:
+                                    del cache[key]
+                            result = user_function(*args, **kwds)
+                            expires = now + ttl
+                            cache[key] = (result, expires)
+                            while len(cache) > maxsize:
+                                oldest_key = next(iter(cache))
+                                del cache[oldest_key]
+                            return result
+                        return wrapper
+                    return decorating_function
+
+                Wait, but there might be a problem with the timer function. The 'timer' is passed as an argument to the decorator. So in the code, the timer is correctly referenced as the parameter passed. Since the decorating function closes over the 'timer' variable from the outer scope (the parameters of the ttl_cache function), that should be okay.
+
+                Now, testing possible issues:
+
+                1. The key creation must be correct. For example, when two different calls have the same arguments but different types (like 1 vs 1.0), the typed=True would make them different keys.
+
+                2. The LRU is maintained by using the ordered dict. Each time a key is accessed (and valid), it's popped and reinserted, so it moves to the end.
+
+                3. When the cache exceeds maxsize, the oldest item (first in the ordered dict) is removed, regardless of expiration. But when it's removed, if it was expired, that's okay because it would have been removed anyway.
+
+                4. The timer uses the provided timer function, which is time.monotonic by default.
+
+                Possible edge cases:
+
+                - maxsize=0: but the code would not allow that. The while loop would run infinitely. So perhaps the code should handle maxsize=0 by not using the cache? Or the user should not use it. The problem states that the default is 128, so maybe it's okay.
+
+                - ttl=0: which would make the cache immediately expire. So it's effectively no caching. But the code should handle that.
+
+                Now, the code structure seems correct. Let me check again for the steps:
+
+                When the key is in the cache and not expired:
+
+                - it's popped and re-added to the end, so the order is maintained.
+
+                When the key is expired, it's removed.
+
+                The new result is stored with its expiration time.
+
+                Then, after adding, if the length exceeds maxsize, remove the first item (the oldest).
+
+                That should work.
+
+                Now, in the code above, the _make_key function is properly defined inside the decorating function, so it has access to the 'typed' parameter.
+
+                Also, the cache is an ordered dict, so the order is tracked correctly.
+
+                I think this should work. Now, to write the code as per the user's request, without any explanations.
+
+                The user also mentioned to include the code in markdown format, but just the code. So I need to make sure that the code is properly formatted with the necessary imports.

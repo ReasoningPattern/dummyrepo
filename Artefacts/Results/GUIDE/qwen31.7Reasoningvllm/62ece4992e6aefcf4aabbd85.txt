@@ -1,0 +1,337 @@
+
+Okay, I need to generate Python code for the find_roots function based on the given docstring. Let me start by understanding the problem.
+
+The function is supposed to find roots in a transitive hierarchy. The example given is using RDFS.subClassOf or SKOS.broader. The roots are nodes that are at the top of their hierarchy. The function takes a graph, a property (prop), and an optional roots parameter. The return is a set of nodes.
+
+First, I need to figure out how to find the roots. In graph traversal, roots are nodes that have no incoming edges except possibly from the graph's initial nodes. But since the direction is from child to parent (like in RDFS.subClassOf), the roots would be the nodes that have no parents. Wait, no. Wait, the direction is (child, prop, parent), so the edges are from child to parent. So, for example, if a node is a subclass of another, there's an edge from the subclass to the superclass. So the roots would be the nodes that have no outgoing edges, meaning they are not subsumed by any other node. Wait, no. Wait, if a node has no outgoing edges, then it's a root. Because if there's an edge from it to another node, then that node is its child. So the roots are nodes with no outgoing edges. But how do I find that?
+
+So, the approach would be to traverse the graph, starting from nodes that have no parents. But how to model that. Let's think.
+
+The function needs to find all nodes that are roots in the hierarchy. So, the roots are the nodes that are not subsumed by any other node. So, in terms of the graph, a root is a node that has no outgoing edges. Because if a node has an outgoing edge, then it's a child of another node. So, the roots are the nodes with no outgoing edges.
+
+But wait, the example says that find_roots(graph, rdflib.RDFS.subClassOf) returns all roots of the sub-class hierarchy. So, for example, if there's a hierarchy like A is a subclass of B, which is a subclass of C, then C is the root. But if A is a subclass of B, and B is a subclass of C, then C is the root. So the roots are the nodes that are not subsumed by any other node. So, in the graph, the roots are the nodes that have no outgoing edges. Because if a node has an outgoing edge, then it's a child of another node. So, the roots are the nodes with no outgoing edges.
+
+So, the plan is:
+
+1. Iterate through all nodes in the graph.
+2. For each node, check if it has any outgoing edges (i.e., edges where the node is the subject, and the predicate is prop, and the object is some node).
+3. If a node has no outgoing edges, it's a root.
+
+But how to implement this in Python.
+
+First, the function parameters: graph is a Graph object, prop is a URIRef, and roots is an optional set.
+
+The function returns a set of nodes.
+
+So, the code needs to:
+
+- Find all nodes in the graph that have no outgoing edges with respect to the prop.
+
+But how to check if a node has outgoing edges. For each node, we need to check if there are any triples in the graph where the subject is the node, the predicate is prop, and the object is some node.
+
+So, for each node in the graph, we can check if there exists any (node, prop, object) in the graph.
+
+But how to do that efficiently. Since the graph is a Graph object, perhaps we can use the graph.triples() method, but that might be inefficient for large graphs. However, given that the function is supposed to be written in a way that's efficient, perhaps we can use a set to track the nodes that have outgoing edges.
+
+Alternatively, for each node, we can check if there's any triple in the graph where the subject is the node, the predicate is prop, and the object is any node.
+
+So, the code steps:
+
+- Iterate over all nodes in the graph.
+- For each node, check if there exists any (node, prop, object) in the graph.
+- If not, add to the roots set.
+
+But how to get all nodes in the graph. The Graph object has a method called triplets, but perhaps we can get all the nodes by using the graph.subjects() method. However, that would give all the subjects of the triples, but there might be multiple triples with the same subject. So, perhaps we can collect all the nodes in the graph.
+
+But for the purpose of this function, perhaps we can collect all the nodes that are part of any triple in the graph. But how to do that.
+
+Alternatively, for each node, check if it's a subject of any triple in the graph. But that's not exactly correct. Because the node could be the object of a triple, but then it's not a subject. So, perhaps the correct way is to check if there's any triple where the subject is the node and the predicate is prop.
+
+So, for each node, we can check if there's any (node, prop, obj) in the graph.
+
+So, in code:
+
+roots = set()
+
+for node in graph.subjects(prop):
+    has_outgoing = False
+    for triple in graph.triples((node, prop, None)):
+        has_outgoing = True
+        break
+    if not has_outgoing:
+        roots.add(node)
+
+Wait, but this would check for each node in the subjects of prop. But maybe there are nodes that are not subjects of prop but are objects of other triples. For example, if there's a triple (A, prop, B), then B is an object of a triple. But in that case, B is not a subject of any triple, so it's not in the subjects of prop. So, the code above would miss those nodes.
+
+Wait, no. The code above is checking for nodes that are subjects of prop. But the roots could be nodes that are not subjects of prop, but have outgoing edges. For example, if there's a triple (B, prop, A), then B is a subject of prop, and has an outgoing edge to A. So, B would be considered as having an outgoing edge, and thus not a root.
+
+But if there's a node C that is not a subject of prop, but has an outgoing edge to some node, then it's not considered in the code above. So, the code as written would miss those nodes.
+
+So, the problem is that the code checks only nodes that are subjects of prop, but the roots could be nodes that are not subjects of prop, but have outgoing edges.
+
+Wait, no. Because the edges are of the form (child, prop, parent). So, the direction is from child to parent. So, for example, if a node is a child, then there's a triple (child, prop, parent). So, the parent is the subject of the triple. So, the parent is the one that is the subject of the triple. So, for the edge (child, prop, parent), the subject is child, the predicate is prop, and the object is parent.
+
+So, for a node to have an outgoing edge, it must be the subject of a triple where the predicate is prop and the object is some node.
+
+Therefore, the code should check for each node, whether there exists a triple (node, prop, obj) in the graph. If there is such a triple, then the node has an outgoing edge, and thus is not a root.
+
+Therefore, the code should iterate over all nodes in the graph, and check if they have any outgoing edges.
+
+But how to get all nodes in the graph. The Graph object has a method called subjects() which returns all the subjects of triples. However, that's not all nodes. For example, if there's a triple (A, prop, B), then A is a subject, but B is an object. So, the nodes in the graph are all the subjects and objects of triples.
+
+But to get all nodes, perhaps we can collect all the subjects and objects from all triples. However, that's not efficient, but for the purpose of this function, perhaps we can do that.
+
+Alternatively, we can collect all the nodes that are part of any triple in the graph. So, for each triple in the graph, add the subject and the object to a set.
+
+So, in code:
+
+nodes = set()
+for subject, predicate, obj in graph.triples((None, prop, None)):
+    nodes.add(subject)
+    nodes.add(obj)
+
+Then, for each node in nodes, check if it has any outgoing edges (i.e., if there's a triple (node, prop, obj) in the graph).
+
+But this approach would collect all nodes in the graph, including both subjects and objects.
+
+So, the code steps:
+
+1. Collect all nodes in the graph.
+2. For each node, check if there's any triple (node, prop, obj) in the graph.
+3. If not, add to roots.
+
+But how to check that. For each node, we can check if there exists a triple where the subject is node, predicate is prop, and the object is any node.
+
+So, in code:
+
+roots = set()
+
+for node in nodes:
+    has_outgoing = False
+    for triple in graph.triples((node, prop, None)):
+        has_outgoing = True
+        break
+    if not has_outgoing:
+        roots.add(node)
+
+But this would check for each node in the nodes set. However, the nodes set is built from all triples in the graph. So, this would cover all possible nodes.
+
+But wait, the graph.triples() method returns all triples in the graph. So, the code would iterate over all nodes in the graph, and for each, check if they have any outgoing edges.
+
+But how to get the nodes. The code for collecting nodes would be:
+
+nodes = set()
+for subject, predicate, obj in graph.triples((None, prop, None)):
+    nodes.add(subject)
+    nodes.add(obj)
+
+But the graph.triples() method can be called with (None, prop, None) to get all triples where the predicate is prop. Wait, no. The triples are of the form (subject, predicate, object). So, to get all triples in the graph, we can use graph.triples() without any parameters, but that would return all triples. However, the code for collecting nodes would need to iterate over all triples.
+
+But in Python, the Graph object's triples method returns all triples in the graph. So, to get all nodes, we can iterate over all triples and collect the subject and object.
+
+But for efficiency, perhaps we can do that.
+
+But in the function, the roots parameter is optional. So, the function should return the roots, but if roots is provided, it should return the intersection of the found roots with the provided set.
+
+Wait, the function's docstring says that roots is an Optional[Set["Node"]], so it's possible that the user wants to specify some roots and then find the roots in the hierarchy.
+
+But the problem is that the function is supposed to find the roots in the hierarchy, but the roots parameter is optional. So, the function should return the roots in the hierarchy, but if roots is provided, it should return the intersection of the found roots with the provided set.
+
+But the docstring says that the function returns the roots. So, perhaps the function is supposed to find all roots in the hierarchy, and if roots is provided, return the intersection.
+
+But the function's parameters are:
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+    ...
+
+So, the function is supposed to find the roots, and if roots is provided, return the intersection of the found roots with the provided set.
+
+But how to implement that.
+
+So, the code would first find all roots in the hierarchy, and then if roots is provided, return the intersection between those roots and the provided set.
+
+But the problem is that the roots parameter is optional. So, the function should return the roots in the hierarchy, but if roots is provided, then it returns the intersection.
+
+So, the code would be:
+
+def find_roots(graph, prop, roots=None):
+    # find all roots in the hierarchy
+    all_roots = set()
+    # collect all nodes in the graph
+    nodes = set()
+    for subject, predicate, obj in graph.triples((None, prop, None)):
+        nodes.add(subject)
+        nodes.add(obj)
+    # for each node, check if it has outgoing edges
+    for node in nodes:
+        has_outgoing = False
+        for triple in graph.triples((node, prop, None)):
+            has_outgoing = True
+            break
+        if not has_outgoing:
+            all_roots.add(node)
+    # if roots is provided, return the intersection
+    if roots is not None:
+        return all_roots & roots
+    else:
+        return all_roots
+
+But wait, the code for collecting nodes is not correct. Because the graph.triples((None, prop, None)) would return all triples where the predicate is prop. But the code is trying to collect all nodes in the graph, not just those in the prop's triples. So, the code is incorrect here.
+
+Wait, the code for collecting nodes is:
+
+for subject, predicate, obj in graph.triples((None, prop, None)):
+    nodes.add(subject)
+    nodes.add(obj)
+
+But this would collect all subjects and objects of triples where the predicate is prop. But the graph has other triples with different predicates. So, this code would collect only the nodes that are in the prop's triples. But the roots could be nodes that are not in any of the prop's triples, but have outgoing edges.
+
+Wait, no. Because the roots are nodes that have outgoing edges. The outgoing edges are those where the node is the subject of a triple with predicate prop. So, the nodes that have outgoing edges are those that are subjects of triples with predicate prop. Therefore, the code for collecting nodes should be:
+
+nodes = set()
+for subject, predicate, obj in graph.triples((None, None, None)):
+    nodes.add(subject)
+    nodes.add(obj)
+
+But that's not correct. Because the graph.triples() method can take parameters. For example, if we want to get all triples in the graph, we can call graph.triples() without any parameters. But in the code above, the code is using graph.triples((None, prop, None)), which would get all triples where the predicate is prop. But that's not correct. Because the code is trying to collect all nodes in the graph, not just those in the prop's triples.
+
+So, the code is incorrect here. The correct way to collect all nodes in the graph is to iterate over all triples in the graph, and collect both subject and object.
+
+So, the code should be:
+
+nodes = set()
+for subject, predicate, obj in graph.triples():
+    nodes.add(subject)
+    nodes.add(obj)
+
+But in Python, the Graph object's triples method returns all triples in the graph. So, the code would be:
+
+for subject, predicate, obj in graph.triples():
+    nodes.add(subject)
+    nodes.add(obj)
+
+But this would collect all nodes in the graph, regardless of the predicate. So, for example, if there's a triple (A, prop, B), then A and B are added to the nodes set. If there's a triple (B, other_prop, C), then B is added again. But the set will have unique entries.
+
+So, the code for collecting nodes is correct.
+
+Then, for each node in the nodes set, check if there's any triple (node, prop, obj) in the graph. If not, then it's a root.
+
+So, the code for checking outgoing edges is:
+
+has_outgoing = False
+for triple in graph.triples((node, prop, None)):
+    has_outgoing = True
+    break
+
+But wait, the graph.triples((node, prop, None)) would return all triples where the subject is node, the predicate is prop, and the object is any node. So, if there's such a triple, then the node has an outgoing edge.
+
+So, the code for checking is correct.
+
+Now, the code for the function.
+
+But there's another issue: the roots parameter is optional. So, the function should return the roots in the hierarchy, but if roots is provided, return the intersection between the found roots and the provided set.
+
+So, the code would be:
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+    # Collect all nodes in the graph
+    nodes = set()
+    for subject, predicate, obj in graph.triples():
+        nodes.add(subject)
+        nodes.add(obj)
+    # Find all roots
+    all_roots = set()
+    for node in nodes:
+        has_outgoing = False
+        for triple in graph.triples((node, prop, None)):
+            has_outgoing = True
+            break
+        if not has_outgoing:
+            all_roots.add(node)
+    # Return the intersection with roots if provided
+    return all_roots & roots if roots is not None else all_roots
+
+But wait, the code for the roots parameter is optional. So, if roots is provided, the function returns the intersection between the found roots and the provided set.
+
+But the problem is that the roots parameter is a Set["Node"], but in Python, the set is not necessarily a set of nodes. However, the function is supposed to return a set of nodes.
+
+But the code above uses the & operator, which works with sets.
+
+Now, testing this code.
+
+For example, if the graph has a triple (A, prop, B), then A has an outgoing edge, so it's not a root. B has an outgoing edge (if there's a triple (B, prop, C)), so it's not a root. C has no outgoing edges, so it's a root.
+
+So, the code would return {C}.
+
+Another test case: if there are no triples, then all nodes are roots. But in that case, the code would return all nodes in the graph.
+
+But what about nodes that are not in any triple? For example, if there's a node D that is not part of any triple, then it's not in the nodes set, so it's not considered. So, the code would not include it.
+
+So, the code seems correct.
+
+But there's another issue: the graph.triples() method may return triples with different predicates. But the code is checking for triples where the predicate is prop. So, the code is correct.
+
+Another thing: the code uses graph.triples((node, prop, None)), which is correct.
+
+But in Python, the graph.triples() method returns a list of triples. So, for each triple, the subject, predicate, and object are the components.
+
+So, the code should work.
+
+Now, considering the function's parameters. The prop is a URIRef, which is an object from rdflib. So, the code should handle that.
+
+But in the code, the function uses graph.triples(), which is correct.
+
+So, the generated code would be as above.
+
+But the user wants the code to be in Python markdown format, outputting only the code generated.
+
+So, the final code would be:
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+    """Find the roots in some sort of transitive hierarchy.
+
+    find_roots(graph, rdflib.RDFS.subClassOf)
+    will return a set of all roots of the sub-class hierarchy
+
+    Assumes triple of the form (child, prop, parent), i.e. the direction of
+    RDFS.subClassOf or SKOS.broader
+
+    Args:
+        graph: Graph Class Object
+        prop: URIRef Class Object
+        roots: Optional list with set type
+
+    Return:
+        roots: a set with nodes
+    """
+    nodes = set()
+    for subject, predicate, obj in graph.triples():
+        nodes.add(subject)
+        nodes.add(obj)
+    all_roots = set()
+    for node in nodes:
+        has_outgoing = False
+        for triple in graph.triples((node, prop, None)):
+            has_outgoing = True
+            break
+        if not has_outgoing:
+            all_roots.add(node)
+    return all_roots & roots if roots is not None else all_roots
+
+Wait, but the function's docstring is part of the code. The user said to generate the code based on the function signature and docstring. So, the code should include the docstring.
+
+But in the code above, the function is defined with the docstring. However, in the code, the docstring is part of the function.
+
+But the user's instruction says to output only the code generated, in Python markdown format. So, the code should include the function definition and the docstring.
+
+But in the code above, the function is defined with the docstring. So, the code is correct.
+
+But the code uses "URIRef" and "Graph" as types, which are from rdflib. But the code is written in Python, so the types are correctly handled.
+
+So, the final code is as above.

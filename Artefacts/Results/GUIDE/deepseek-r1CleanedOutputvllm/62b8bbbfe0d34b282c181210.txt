@@ -1,0 +1,77 @@
+import unittest
+import os
+import io
+import json
+import logging
+import unittest.mock
+import pytest
+
+class TestAppendTextToFile(unittest.TestCase):
+    def setUp(self):
+        self.mock_file = unittest.mock.Mock()
+        self.mock_file.write = unittest.mock.Mock()
+        self.mock_file.open = unittest.mock.Mock()
+        self.mock_file.close = unittest.mock.Mock()
+        self.file_name = "test.txt"
+        self.text_buffer = "test text"
+        self.encoding = "utf-8"
+        self.overwrite = False
+
+    def test_append_text_to_file_with_valid_file(self):
+        with pytest.raises(OSError) as e:
+            append_text_to_file("nonexistentfile.txt", "test text", "utf-8", False)
+        self.assertEqual(e.value, os.errorlevel.EEXIST)
+        
+        with open("test.txt", "w", encoding=self.encoding) as f:
+            f.write("initial content")
+        with open("test.txt", "a", encoding=self.encoding) as f:
+            append_text_to_file("test.txt", self.text_buffer, self.encoding, False)
+        with open("test.txt", "r", encoding=self.encoding) as f:
+            content = f.read()
+            self.assertEqual(content, "initial contenttest text")
+
+    def test_append_text_to_file_with_overwrite(self):
+        with open("test.txt", "w", encoding=self.encoding) as f:
+            f.write("initial content")
+        with open("test.txt", "a", encoding=self.encoding) as f:
+            append_text_to_file("test.txt", self.text_buffer, self.encoding, True)
+        with open("test.txt", "r", encoding=self.encoding) as f:
+            content = f.read()
+            self.assertEqual(content, "initial contenttest text")
+
+    def test_append_text_to_file_with_empty_file(self):
+        with open("test.txt", "a", encoding=self.encoding) as f:
+            append_text_to_file("test.txt", self.text_buffer, self.encoding, False)
+        with open("test.txt", "r", encoding=self.encoding) as f:
+            content = f.read()
+            self.assertEqual(content, self.text_buffer)
+
+    def test_append_text_to_file_with_invalid_file_path(self):
+        with pytest.raises(OSError) as e:
+            append_text_to_file("invalidfile.txt", "test text", "utf-8", False)
+        self.assertEqual(e.value, os.errorlevel.EexistentFileError)
+
+def append_text_to_file(file_name, text_buffer, encoding, overwrite=False):
+    """
+    Writes the data in the text buffer to a file
+
+    Args:
+        file_name (str): The name of the file to write to
+        text_buffer (str): The text data to write to the file
+        encoding (str): The encoding to use when writing the file
+        overwrite (bool): If True, overwrite the file instead of appending
+
+    Returns:
+        bool: True if the file was successfully written, False otherwise
+    """
+    try:
+        with open(file_name, "a", encoding=encoding) as f:
+            if overwrite:
+                f.seek(0, os.SEEK_END)
+                f.truncate()
+            f.write(text_buffer)
+            f.close()
+        return True
+    except IOError as e:
+        logging.error(f"Failed to write to file: {e}")
+        return False

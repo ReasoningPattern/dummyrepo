@@ -1,0 +1,70 @@
+
+
+To implement a decorator with the specified functionality, we'll create a class-based decorator that handles memoization with a time-to-live (TTL) mechanism. The decorator will use a dictionary to cache results, track their timestamps, and manage cache eviction based on the LRU algorithm.
+
+```python
+import functools
+import time
+from collections import OrderedDict
+
+class TtlCache:
+    def __init__(self, maxsize, ttl, timer=time.monotonic, typed=False):
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self.timer = timer
+        self.typed = typed
+        self.cache = OrderedDict()
+    
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if self.typed:
+                try:
+                    args = tuple(args)
+                    key = (args, kwargs)
+                except TypeError:
+                    key = (args, kwargs)
+            else:
+                key = (args, kwargs)
+            
+            current_time = self.timer()
+            
+            if key in self.cache:
+                # Update the timestamp
+                self.cache[key][0] = current_time
+                return self.cache[key][1]
+            
+            # Check if we need to evict
+            if len(self.cache) > self.maxsize:
+                # Evict the LRU item
+                for k, v in list(self.cache.items()):
+                    last_access = v[0]
+                    if last_access < current_time - self.ttl:
+                        del self.cache[k]
+                        break
+            
+            # Store the new item
+            self.cache[key] = (current_time, func(*args, **kwargs))
+            return self.cache[key][1]
+        
+        return wrapper
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    decorator = TtlCache(maxsize, ttl, timer, typed)
+    return decorator
+```
+
+This implementation includes:
+
+1. **TtlCache Class**: Manages the caching logic with an OrderedDict to maintain insertion order and efficiently find the least recently used item.
+2. **Wrapper Function**: The decorated function is wrapped to check the cache, update timestamps, and manage cache size.
+3. **Handling Typed Functions**: Ensures that functions with specific return types are handled correctly when `typed=True`.
+4. **Time Tracking**: Uses the provided timer function to get current time and track the TTL for each cached item.
+
+The decorator can be tested with various scenarios to ensure it behaves as expected, such as:
+- Caching with different TTL values.
+- Evicting items based on TTL.
+- Handling functions with different argument types.
+- Managing cache size limits.
+
+This implementation provides a robust solution for memoization with TTL, suitable for a wide range of applications.

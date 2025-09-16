@@ -1,0 +1,39 @@
+import os
+import logging
+from ruamel.yaml import load, dump
+
+def deep_merge_nodes(nodes):
+    """
+    merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains.
+    """
+    def deep_merge(a, b):
+        if isinstance(a, MappingNode) and isinstance(b, MappingNode):
+            merged = {}
+            for key in a:
+                if key in b:
+                    deep_merge(a[key], b[key])
+                    if key in merged:
+                        if isinstance(merged[key], list):
+                            merged[key].append(deep_merge(a[key], b[key]))
+                        else:
+                            merged[key] = [merged[key], deep_merge(a[key], b[key])]
+                    else:
+                        merged[key] = deep_merge(a[key], b[key])
+                else:
+                    merged[key] = a[key]
+            return merged
+        elif isinstance(a, MappingNode) or isinstance(b, MappingNode):
+            return b if isinstance(b, MappingNode) else a
+        else:
+            return b if isinstance(b, MappingNode) else a
+
+    merged_nodes = {}
+    for key, value in nodes.items():
+        if isinstance(value, MappingNode):
+            if key in merged_nodes:
+                deep_merge(merged_nodes[key], value)
+            else:
+                merged_nodes[key] = value
+        else:
+            merged_nodes[key] = nodes[key]
+    return load(dump(merged_nodes))

@@ -1,0 +1,41 @@
+def lfu_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        cache = {}
+        def make_key(args, kwds):
+            key_parts = []
+            for arg in args:
+                if typed:
+                    key_parts.append((type(arg), arg))
+                else:
+                    key_parts.append(arg)
+            for k in sorted(kwds):
+                val = kwds[k]
+                if typed:
+                    key_parts.append((k, (type(val), val)))
+                else:
+                    key_parts.append((k, val))
+            return tuple(key_parts)
+        def wrapper(*args, **kwds):
+            key = make_key(args, kwds)
+            if key in cache:
+                val, freq = cache[key]
+                new_freq = freq + 1
+                cache[key] = (val, new_freq)
+                return val
+            else:
+                result = user_function(*args, **kwds)
+                if len(cache) >= maxsize:
+                    min_freq = float('inf')
+                    evict_key = None
+                    for k in cache:
+                        freq = cache[k][1]
+                        if freq < min_freq:
+                            min_freq = freq
+                            evict_key = k
+                        elif freq == min_freq:
+                            pass
+                    del cache[evict_key]
+                cache[key] = (result, 1)
+                return result
+        return wrapper
+    return decorating_function

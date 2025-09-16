@@ -1,0 +1,32 @@
+
+
+```python
+import zope.interface
+from zope.interface import Invalid
+import inspect
+
+def verifyObject(iface, candidate, tentative=False):
+    errors = []
+    if not tentative:
+        if not iface.providedBy(candidate):
+            errors.append(f"Candidate does not declare that it provides the interface {iface}")
+    for name, description in iface.namesAndDescriptions(0):
+        if description.isMethod():
+            method = getattr(type(candidate), name, None)
+            if method is None:
+                method = getattr(candidate, name, None)
+                if method is None:
+                    errors.append(f"Method '{name}' not found in candidate")
+                    continue
+            interface_sig = description.signature
+            candidate_sig = inspect.signature(method)
+            if candidate_sig != interface_sig:
+                errors.append(f"Method '{name}' has incorrect signature")
+        elif description.isAttribute():
+            if not hasattr(candidate, name):
+                errors.append(f"Attribute '{name}' not found in candidate")
+    if errors:
+        error_msg = '\n'.join(errors)
+        raise Invalid(error_msg)
+    return True
+```

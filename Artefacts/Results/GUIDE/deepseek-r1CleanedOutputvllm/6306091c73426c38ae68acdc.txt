@@ -1,0 +1,93 @@
+import os
+import yaml
+from unittest import TestCase
+
+from irvalidator.exceptions import IRValidatorException
+
+class ValidateFromContent:
+    def __init__(self, cls):
+        self.cls = cls
+        self.REQUIRED_KEYS = cls.REQUIRED_KEYS  # Assuming class has this attribute
+
+    def validate_from_content(self, spec_content=None):
+        """
+        Validates that the spec content contains all required fields.
+
+        :param spec_content: YAML content to validate
+        :raises IRValidatorException: If any required fields are missing
+        :return: A dictionary containing the parsed YAML content
+        """
+        if spec_content is None:
+            raise ValueError("spec_content must be provided")
+
+        try:
+            content = yaml.safe_load(spec_content)
+        except yaml.YAMLError as e:
+            raise IRValidatorException(f"Invalid YAML content: {str(e)}")
+
+        required_fields = self.REQUIRED_KEYS
+        missing_fields = [field for field in required_fields if field not in content]
+        
+        if missing_fields:
+            raise IRValidatorException(
+                f"Missing required fields: {', '.join(missing_fields)}"
+            )
+        
+        return content
+
+class TestValidateFromContent(TestCase):
+    def test_validate_from_content_all_fields_present(self):
+        # Setup
+        test_content = """
+        required_key1: value1
+        required_key2: value2
+        """
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute
+        result = validator.validate_from_content(test_content)
+        
+        # Assert
+        self.assertEqual(result, {
+            'required_key1': 'value1',
+            'required_key2': 'value2'
+        })
+    
+    def test_validate_from_content_missing_field(self):
+        # Setup
+        test_content = """
+        required_key1: value1
+        """
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute and assert exception
+        with self.assertRaises(IRValidatorException) as context:
+            validator.validate_from_content(test_content)
+        
+        self.assertTrue("missing required_key2" in str(context.exception))
+    
+    def test_validate_from_content_no_content(self):
+        # Setup
+        test_content = ""
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute
+        result = validator.validate_from_content(test_content)
+        
+        # Assert
+        self.assertEqual(result, {})
+    
+    def test_validate_from_content_invalid_yAML(self):
+        # Setup
+        test_content = "invalid YAML"
+        mock_cls = type('MockClass', (), {'REQUIRED_KEYS': ['required_key1', 'required_key2']})
+        validator = ValidateFromContent(mock_cls)
+        
+        # Execute and assert exception
+        with self.assertRaises(IRValidatorException) as context:
+            validator.validate_from_content(test_content)
+        
+        self.assertTrue("Malformed YAML" in str(context.exception))

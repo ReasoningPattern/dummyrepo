@@ -1,0 +1,95 @@
+import numpy as np
+from unittest import TestCase
+
+class TestHistToGraph(TestCase):
+    def test_hist_to_graph(self):
+        # Test various scenarios including different get_coordinate, make_value, and scale
+        # This test suite will cover the implementation details
+        pass
+
+def hist_to_graph(hist, make_value=None, get_coordinate="left",
+                  field_names=("x", "y"), scale=None):
+    """
+    Convert a histogram to a graph.
+
+    Parameters:
+        hist (Histogram): The input histogram.
+        make_value (callable, optional): A function to process bin data into graph values.
+            Defaults to using bin content.
+        get_coordinate (str, optional): Determines the coordinate of the graph point.
+            Can be "left", "right", or "middle". Defaults to "left".
+        field_names (tuple, optional): Names for the fields in the graph data.
+            Must match the dimension of the graph result. Defaults to ("x", "y").
+        scale (bool, optional): Whether to use the histogram's scale. Defaults to None.
+
+    Returns:
+        Graph: The resulting graph data.
+    """
+    # Determine the coordinate calculation method
+    if get_coordinate == "left":
+        coord_func = lambda bin: bin.lower_edge
+    elif get_coordinate == "right":
+        coord_func = lambda bin: bin.upper_edge
+    elif get_coordinate == "middle":
+        coord_func = lambda bin: (bin.lower_edge + bin.upper_edge) / 2
+    else:
+        raise ValueError(f"Invalid get_coordinate value: {get_coordinate}")
+
+    # Process each bin to get the graph data
+    graph_data = []
+    for bin in hist.bins:
+        # Calculate the position of the bin
+        pos = coord_func(bin)
+        # Process the bin data using make_value
+        if make_value is None:
+            values = bin.content
+        else:
+            values = make_value(bin)
+        # Add the coordinate and values to the graph data
+        graph_data.append([pos] + list(values))
+
+    # Determine the scale
+    if scale is not None:
+        if scale:
+            scale_factor = hist.scale
+        else:
+            scale_factor = 1
+    else:
+        scale_factor = 1
+
+    # Construct the graph data with the determined scale
+    graph = construct_graph(graph_data, field_names, scale_factor)
+
+    return graph
+
+def construct_graph(graph_data, field_names, scale_factor):
+    """
+    Constructs the final graph data from the processed bins.
+
+    Parameters:
+        graph_data (list): List of lists containing [position, value1, value2, ...]
+        field_names (tuple): Names for each field in the graph data.
+        scale_factor (float): Scale factor to apply to the graph values.
+
+    Returns:
+        list: The constructed graph data with field names and scaled values.
+    """
+    # Apply scaling if necessary
+    scaled_data = []
+    for item in graph_data:
+        if len(item) > 1:
+            scaled_values = [v * scale_factor for v in item[1:]]
+            scaled_data.append([item[0]] + scaled_values)
+        else:
+            scaled_data.append(item)
+    
+    # Combine the position and all values with appropriate field names
+    result = []
+    for i, (pos, values) in enumerate(scaled_data):
+        field_values = [pos]
+        for j, value in enumerate(values):
+            field_values.append(f"{field_names[j]}_{i + 1}")
+            field_values.append(value)
+        result.append(field_values)
+    
+    return result

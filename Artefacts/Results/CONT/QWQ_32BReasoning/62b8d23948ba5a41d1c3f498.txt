@@ -1,0 +1,596 @@
+Okay, I need to create a Python decorator called lru_cache that implements an LRU cache. The parameters are maxsize and typed, similar to the built-in functools.lru_cache. Let me think about how to approach this.
+
+First, the decorator needs to wrap a function and store its results. The LRU part means that when the cache exceeds maxsize, the least recently used item is removed. So I need some data structure to track the order of usage.
+
+Hmm, maybe using a dictionary to store the key-value pairs, and a linked list (like an ordered dictionary) to track the order. Oh right, in Python, collections has an OrderedDict which can be useful here. Because when you access an item in an OrderedDict, you can move it to the end, keeping track of the most recently used. And when you add a new item beyond the maxsize, you can pop the first item, which is the oldest.
+
+Wait, the typed parameter is for considering the argument's type. So if typed is True, then arguments of different types are cached separately. For example, 1 (int) and 1.0 (float) would be treated as different even if their values are equal. So the key should include the type of each argument.
+
+So the steps would be:
+
+1. The decorator function will return a wrapper class or another function that handles the caching.
+
+Wait, the standard approach is to have the decorator return a wrapper function. But for the LRU cache, perhaps using a class-based approach would be better, since we need to maintain state between calls.
+
+Alternatively, using a closure. Let me think of the structure.
+
+The lru_cache function is the decorator factory. When called, it returns the actual decorator that wraps the function. So the structure would be something like:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        # setup the cache here
+        # maybe using a class to hold the state
+        class LRUCache:
+            def __init__(self, func, maxsize, typed):
+                self.func = func
+                self.maxsize = maxsize
+                self.typed = typed
+                self.cache = OrderedDict()
+                self.hits = 0
+                self.misses = 0
+            def __call__(self, *args, **kwargs):
+                # create a key based on args and kwargs, considering typed
+                key_args = tuple(args)
+                key_kwargs = tuple(sorted(kwargs.items()))
+                if self.typed:
+                    key = (key_args, tuple(type(v) for v in key_args),
+                           key_kwargs, tuple(type(v) for v in key_kwargs.values()))
+                else:
+                    key = (key_args, key_kwargs)
+                # check if key is in cache
+                if key in self.cache:
+                    self.hits +=1
+                    # move to end (most recent)
+                    val = self.cache.pop(key)
+                    self.cache[key] = val
+                    return val
+                else:
+                    self.misses +=1
+                    # compute the result
+                    result = self.func(*args, **kwargs)
+                    # add to cache
+                    self.cache[key] = result
+                    # if over maxsize, pop the first item
+                    if len(self.cache) > self.maxsize:
+                        self.cache.popitem(last=False)
+                    return result
+        return LRUCache(func, maxsize, typed)
+    return decorator
+
+Wait, but I might have messed up the key creation. The key must uniquely identify the function's arguments, including their types if typed is True. So for the args, each element's type needs to be part of the key. Similarly for the kwargs.
+
+Alternatively, for the key, when typed is True, each argument's value and type are part of the key. So for example, for an argument 1, the key would include (1, int). For a float 1.0, it would be (1.0, float). So when building the key, for each positional argument and each keyword argument, we have to include their types.
+
+Hmm, so perhaps the key is constructed by converting each argument into a tuple of (value, type), and then combining all of them. So for positional args:
+
+key_args = tuple( ( (arg, type(arg)) ) for arg in args )
+
+Similarly for the keyword arguments:
+
+for each key-value pair in kwargs, we have to include the key (the name), the value, and its type. So for a kwarg 'x': 5, it would be ('x', 5, type(5)). But the order of the keyword arguments is maintained by using sorted items, perhaps.
+
+Wait, the key for the cache must be such that different order of the same arguments would be considered different. But in Python, the **kwargs are stored as a dictionary, which is unordered. However, when sorted, the key would be consistent for the same set of keyword arguments. So converting the kwargs into a sorted tuple of (key, value) pairs. But when considering types, each value's type is part of the key.
+
+Alternatively, the key for the function's arguments would be a tuple that includes all the positional arguments (each as (value, type)), the keyword arguments (sorted, each as (name, value, type)), and the function's name? Wait, no, the function is the same, so the key is just based on the arguments.
+
+Hmm, this might get complicated. Let me think of the key as follows:
+
+If typed is False, then the key is the tuple of args and a tuple of the sorted kwargs items. So the key would be (args_tuple, sorted_kwargs_tuple).
+
+But if typed is True, then each element in the args and kwargs must include their type. So for each positional argument, we have (arg, type(arg)), and for each keyword argument (name, value, type(value)). Then the key would be constructed by combining all of these into tuples.
+
+Wait, perhaps the correct approach is:
+
+For each argument in args, create a tuple (value, type(value)), then the entire args part becomes a tuple of these. Similarly for each key-value in kwargs, create a tuple (key, value, type(value)), then the kwargs part is a tuple of sorted such tuples. Then the overall key is (args_tuple, kwargs_tuple).
+
+So, in code:
+
+if typed:
+    # args part
+    key_args = tuple( ( (v, type(v)) for v in args ) )
+    # kwargs part
+    sorted_kwargs = sorted(kwargs.items())
+    key_kwargs = tuple( ( (k, v, type(v)) for (k, v) in sorted_kwargs ) )
+    key = (key_args, key_kwargs)
+else:
+    key_args = tuple(args)
+    key_kwargs = tuple(sorted(kwargs.items()))
+    key = (key_args, key_kwargs)
+
+Wait, but tuples are not hashable if they contain lists or other non-hashable types? Well, but in Python, the arguments to the function can be any hashable types. The key must be hashable, so the arguments passed to the function must be hashable. So we can assume that the arguments are hashable, otherwise the user's code would have issues anyway.
+
+So putting that together, the key is built based on that.
+
+Now, the cache is an OrderedDict. Each time the key is accessed, if it exists, we move it to the end (most recently used). When a new item is added, and the size exceeds maxsize, we pop the first item (the oldest).
+
+Wait, in the code I wrote earlier, when accessing a key that's already present, we pop it and then re-insert it. That way, it becomes the last item. So that's correct.
+
+But in the code above, the __call__ method would check if the key is in the cache. If yes, pop and re-add. If not, compute and add.
+
+Now, the problem is how to handle **kwargs. The order of the keyword arguments can vary, so we have to sort them to create a consistent key. That's why sorted(kwargs.items()) is used.
+
+Another thing: the parameters for the lru_cache are maxsize and typed. The default for maxsize is 128, and typed is False. So the decorator should handle those.
+
+Wait, the decorator structure is that lru_cache is a function that returns the actual decorator. So when you write @lru_cache(), it calls the function, which returns the decorator which takes the function and returns the wrapped version.
+
+So the code structure is:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        class LRUCacheWrapper:
+            def __init__(self):
+                self.cache = OrderedDict()
+                self.maxsize = maxsize
+                self.typed = typed
+                self.hits = 0
+                self.misses = 0
+            def __call__(self, *args, **kwargs):
+                # build the key here based on typed
+                # check cache, etc.
+                pass
+        return LRUCacheWrapper()
+    return decorator
+
+Wait, but in the __init__ method of the LRUCacheWrapper, the 'func' is needed. So perhaps the class should take the function as an argument.
+
+Ah right, so the class should be initialized with the function. So the code would be:
+
+class LRUCacheWrapper:
+    def __init__(self, func, maxsize, typed):
+        self.func = func
+        self.maxsize = maxsize
+        self.typed = typed
+        self.cache = OrderedDict()
+        self.hits = 0
+        self.misses = 0
+
+    def __call__(self, *args, **kwargs):
+        # build the key here
+        ...
+
+Then, in the decorator:
+
+def decorator(func):
+    return LRUCacheWrapper(func, maxsize, typed)
+
+Wait, but the variables maxsize and typed are from the outer scope (the lru_cache function's parameters). So inside the decorator, yes, they are accessible.
+
+Putting this together, the code would look something like:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        if maxsize == 0:
+            # no caching, just return the function
+            return user_function
+        class LRUWrapper:
+            def __init__(self):
+                self.cache = OrderedDict()
+                self.maxsize = maxsize
+                self.typed = typed
+                self.hits = 0
+                self.misses = 0
+                self.user_function = user_function
+            def __call__(self, *args, **kwds):
+                # build the key
+                key_args = args
+                key_kwargs = sorted(kwds.items())
+                if self.typed:
+                    key_args = tuple( ( (v, type(v)) for v in args ) )
+                    key_kwargs = tuple( ( (k, v, type(v)) for (k, v) in sorted(kwds.items()) ) )
+                else:
+                    key_args = tuple( (v for v in args) )
+                    key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+                key = (key_args, key_kwargs)
+                if key in self.cache:
+                    self.hits += 1
+                    # move to end (most recent)
+                    val = self.cache.pop(key)
+                    self.cache[key] = val
+                    return val
+                else:
+                    self.misses += 1
+                    result = self.user_function(*args, **kwds)
+                    self.cache[key] = result
+                    # check if over maxsize
+                    if len(self.cache) > self.maxsize:
+                        # remove the first item
+                        self.cache.popitem(last=False)
+                    return result
+        return LRUWrapper()
+    return decorating_function
+
+Wait, but in the __call__ method, the LRUWrapper is initialized with the user_function, but in the code above, the LRUWrapper's __init__ doesn't take the user_function. So I need to fix that.
+
+Ah right, the LRUWrapper should be initialized with the user_function. So:
+
+class LRUWrapper:
+    def __init__(self, user_function):
+        self.user_function = user_function
+        self.cache = OrderedDict()
+        self.maxsize = maxsize
+        self.typed = typed
+        self.hits = 0
+        self.misses = 0
+
+Then, in the decorator:
+
+def decorating_function(user_function):
+    return LRUWrapper(user_function)
+
+Wait, but the variables maxsize and typed are from the outer scope (the lru_cache's parameters). So inside the LRUWrapper's __init__ method, those variables need to be accessible. Since the class is defined inside the decorating_function, that should be okay. Because in Python, the class has access to the variables in the enclosing scope.
+
+Wait, but the LRUWrapper's __init__ is inside the decorating_function. So when LRUWrapper is created, it can access the maxsize and typed variables from the outer scope. So the code can be written as:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        class LRUWrapper:
+            def __init__(self):
+                self.user_function = user_function
+                self.cache = OrderedDict()
+                self.maxsize = maxsize  # from outer scope
+                self.typed = typed
+                self.hits = 0
+                self.misses = 0
+            def __call__(self, *args, **kwds):
+                # build the key
+                # ... same as before ...
+        return LRUWrapper()
+    return decorating_function
+
+Wait but in __init__, how do we get user_function? Because the LRUWrapper is being returned from the decorating_function which has access to user_function. So the __init__ should take user_function as an argument? Or perhaps the __init__ can just assign self.user_function = user_function, since the class is defined inside the decorating_function's scope.
+
+Yes, because in the __init__ method, the user_function is accessible via the closure. Wait, no. The __init__ is part of the LRUWrapper class, which is defined inside the decorating_function. So when LRUWrapper is instantiated, the __init__ can refer to user_function because it's in the enclosing scope.
+
+Wait, the LRUWrapper's __init__ method is inside the decorating_function's scope, so it can see user_function. So the code can have:
+
+def __init__(self):
+    self.user_function = user_function
+
+Yes, that's correct.
+
+Now, the key building part. Let's see:
+
+if self.typed is True:
+
+    For positional arguments:
+
+    each element in args is (value, type(value)), so:
+
+    key_args = tuple( ( (v, type(v)) for v in args ) )
+
+Wait, but that's a generator expression, so the tuple would be ((v, type(v)) for each v in args). Wait, the parentheses inside the tuple() would be a generator, so the tuple would correctly create a tuple of tuples.
+
+Wait, no, the generator expression is ( (v, type(v)) for v in args ), and then the tuple() constructor wraps that. So yes, that gives a tuple of (value, type) pairs for each positional argument.
+
+Similarly for the keyword arguments:
+
+sorted_kwargs is sorted(kwds.items()) which gives a list of (key, value) pairs. Then for each (k, v) in that list, we create a tuple (k, v, type(v)). So the key_kwargs is a tuple of these.
+
+Then the key is (key_args, key_kwargs).
+
+When typed is False, then the key is just the tuple of the original args and the sorted kwargs items. Wait, but the key_kwargs in that case would be a tuple of (k, v) pairs sorted by key, so that the order is consistent.
+
+Wait, in the code above, when typed is False:
+
+key_args = tuple( (v for v in args) ) → which is just the original args tuple.
+
+key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+
+So the key_kwargs is a tuple of (k, v) pairs, sorted by k.
+
+Thus the key is (tuple(args), tuple of sorted (k,v) pairs).
+
+So that's correct.
+
+Now, in the __call__ function:
+
+First, we build the key as described.
+
+Check if key is in self.cache.
+
+If yes:
+
+    increment hits, pop the key and re-add it to the end (so it's most recent)
+
+    return the value.
+
+Else:
+
+    increment misses, compute the result, store in cache.
+
+    if the length exceeds maxsize, pop the first item (LRU).
+
+Wait, but in the code above, after adding the new key-value pair, we check if the length is over maxsize. If so, pop the first item (since the first item in the OrderedDict is the oldest, because when you add items, they go to the end, so the first is the first one not accessed recently).
+
+Wait, when you add a new item, the cache's length becomes len(cache) +1. So after adding the new key, if the length is over maxsize, then we have to remove the oldest (the first in the order).
+
+So the code:
+
+self.cache[key] = result
+
+if len(self.cache) > self.maxsize:
+
+    self.cache.popitem(last=False)
+
+But what if maxsize is 0? Then the code should not cache anything. But earlier, in the lru_cache, if the user sets maxsize=0, the decorating_function returns the user_function directly. So that's handled.
+
+Wait, in the code I wrote earlier, in the lru_cache function, the first line of the decorating_function could check if maxsize is 0, and return user_function. Let me see:
+
+def lru_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        if maxsize == 0:
+            return user_function
+        class LRUWrapper:
+            ...
+        return LRUWrapper()
+    return decorating_function
+
+Yes, that's better. Because if maxsize is zero, the cache is disabled.
+
+Now, I need to make sure that the key is properly built. Also, in the case of mutable arguments, but since the key is built from the values, that could cause issues if the mutable object changes, but that's a problem with any memoization function. The user is supposed to pass hashable arguments.
+
+Now, let's think about the code structure again.
+
+Wait, the LRUWrapper is returned as an instance. So when you do @lru_cache(), the function is wrapped by the LRUWrapper instance's __call__ method.
+
+Now, testing for possible errors:
+
+What if the function has **kwargs with unhashable types? The key_kwargs would include them, but since they are part of the key, they must be hashable. So the user should ensure that the arguments to the function are hashable.
+
+Another possible issue is when the function has default arguments. But since the key is built from the actual arguments passed, that's okay.
+
+Now, the code for the key in the __call__ function:
+
+Wait, in the code I have:
+
+if self.typed:
+    key_args = tuple( ( (v, type(v)) for v in args ) )
+    key_kwargs = tuple( ( (k, v, type(v)) for (k, v) in sorted(kwds.items()) ) )
+else:
+    key_args = tuple( (v for v in args) )
+    key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+
+Wait, in the else clause, for key_kwargs, the sorted(kwds.items()) is a list of tuples (k, v). So when we loop over them, each (k, v) is a pair, so the tuple for each is (k, v). So the key_kwargs becomes a tuple of (k, v) pairs. That's correct.
+
+Wait, but in the code above, the key_kwargs is built as:
+
+key_kwargs = tuple( ( (k, v) for ... ) )
+
+But the (k, v) is already a tuple. So the generator expression creates tuples of (k, v), and then the outer tuple() just makes a tuple of those.
+
+So the key_kwargs is a tuple of (k, v) pairs, sorted by key. So that's correct.
+
+Now, putting all this into code.
+
+Wait, also note that the original function's **kwargs must be hashable. Since we're converting the kwds into a sorted list of (k, v) pairs, and then building a tuple of those, which is hashable as long as each v is hashable. So that's okay.
+
+Another thing: the code uses the user_function, but in the LRUWrapper's __call__ method, when the key is not present, it calls self.user_function with *args and **kwds. So that's correct.
+
+Now, the code structure.
+
+Wait, in the LRUWrapper's __init__ method, the maxsize and typed are assigned from the outer variables. Since the class is defined inside the decorating_function, which is inside the lru_cache function, those variables are available. So that should work.
+
+Now, let's write the code step by step.
+
+The function lru_cache is the outer function, which takes maxsize and typed. It returns decorating_function.
+
+The decorating_function takes the user_function and returns an instance of LRUWrapper (or returns user_function if maxsize is 0).
+
+The LRUWrapper class has __init__ and __call__.
+
+Putting this together:
+
+import collections
+
+def lru_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        if maxsize == 0:
+            return user_function  # no caching
+        class LRUWrapper:
+            def __init__(self):
+                self.user_function = user_function
+                self.cache = collections.OrderedDict()
+                self.maxsize = maxsize
+                self.typed = typed
+                self.hits = 0
+                self.misses = 0
+            def __call__(self, *args, **kwds):
+                # build the key
+                key_args = args
+                key_kwargs = sorted(kwds.items())
+                if self.typed:
+                    # include types in the key
+                    key_args = tuple( ( (v, type(v)) for v in args ) )
+                    key_kwargs = tuple( ( (k, v, type(v)) for (k, v) in sorted(kwds.items()) ) )
+                else:
+                    key_args = tuple( (v for v in args) )
+                    key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+                key = (key_args, key_kwargs)
+                # check cache
+                if key in self.cache:
+                    self.hits += 1
+                    # move to end
+                    val = self.cache.pop(key)
+                    self.cache[key] = val
+                    return val
+                else:
+                    self.misses += 1
+                    result = self.user_function(*args, **kwds)
+                    self.cache[key] = result
+                    # check size
+                    if len(self.cache) > self.maxsize:
+                        self.cache.popitem(last=False)
+                    return result
+        return LRUWrapper()
+    return decorating_function
+
+Wait, but in the __call__ method, the key is built correctly. Let me check the code again.
+
+Wait, in the else clause (when typed is False):
+
+key_kwargs is built from the sorted kwds.items(). Each (k, v) is converted into a tuple (k, v), so the key_kwargs becomes a tuple of those pairs. So the key is (tuple(args), tuple of sorted (k, v) pairs).
+
+Yes.
+
+Now, testing with some examples.
+
+Suppose we have a function add(a, b):
+
+@lru_cache(maxsize=2)
+def add(a, b):
+    return a + b
+
+Calling add(1, 2), then add(3,4), then add(1,2) again. The second call should hit the cache.
+
+But the code's key for (1,2) would be ( (1, 2), () ) since no kwargs. So the key is ((1,2), ()) ?
+
+Wait, no, the key is (key_args, key_kwargs). The key_kwargs is sorted(kwds.items()), which is empty, so the tuple of those is empty. So the key is ( (1,2), () ), but when typed is False, the key_args is just the tuple of the args (so (1,2)), and key_kwargs is empty. So the key is ( (1,2), () ).
+
+Wait, but the code for key_kwargs when typed is False would be:
+
+key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+
+If there are no kwds, then sorted(kwds.items()) is an empty list, so the generator produces nothing, so key_kwargs is an empty tuple. So the key is ( (1,2), () ), which is correct.
+
+Another test case where typed=True and same value but different types:
+
+Suppose we have a function f(x):
+
+@lru_cache(typed=True)
+def f(x):
+    return x
+
+Calling f(1) (int) and f(1.0) (float) would be considered different keys. The key for 1 is ( ( (1, int), ), () ), and for 1.0 is ( ( (1.0, float), ), () ). So they are different, which is correct.
+
+Now, what about when maxsize is 0? The decorating function returns user_function, so no cache is used.
+
+Now, possible issues:
+
+- The use of sorted(kwds.items()) ensures that the order of the keyword arguments does not affect the key. So even if the user passes the same arguments in different order, they are considered the same key. Wait, no, because the sorted function sorts by the key names, so the order of the arguments in the **kwargs doesn't matter. So that's correct.
+
+Another possible problem is that the code uses the type of the arguments even for the keys. But that's exactly what the typed parameter is for.
+
+Another thing to note is that the cache is stored in an OrderedDict, which maintains insertion order. When we pop an item, it's the first one (the oldest).
+
+Now, what about the case when the cache is exactly maxsize, and adding a new entry causes it to exceed, so we pop the oldest.
+
+Yes.
+
+Now, the code uses the collections.OrderedDict, so need to import that. So the code should start with import collections.
+
+Wait, in the code I wrote earlier, I included that.
+
+Yes, the code starts with:
+
+import collections
+
+def lru_cache(...):
+
+So that's okay.
+
+Another possible issue: when the function has no arguments, like a function that returns a constant. Then the key would be ((), ()) which is correct.
+
+What about functions with *args and **kwargs? The code handles that.
+
+Now, the code may have some inefficiencies, like rebuilding the key each time. But for the purposes of this problem, it should work.
+
+Now, the user's requirement is to output the code in Python markdown format, without any explanations. So the final code would be:
+
+import collections
+
+def lru_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        if maxsize == 0:
+            return user_function
+        class LRUWrapper:
+            def __init__(self):
+                self.user_function = user_function
+                self.cache = collections.OrderedDict()
+                self.maxsize = maxsize
+                self.typed = typed
+                self.hits = 0
+                self.misses = 0
+            def __call__(self, *args, **kwds):
+                key_args = args
+                key_kwargs = sorted(kwds.items())
+                if self.typed:
+                    key_args = tuple( ( (v, type(v)) for v in args ) )
+                    key_kwargs = tuple( ( (k, v, type(v)) for (k, v) in sorted(kwds.items()) ) )
+                else:
+                    key_args = tuple( (v for v in args) )
+                    key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+                key = (key_args, key_kwargs)
+                if key in self.cache:
+                    self.hits += 1
+                    val = self.cache.pop(key)
+                    self.cache[key] = val
+                    return val
+                else:
+                    self.misses += 1
+                    result = self.user_function(*args, **kwds)
+                    self.cache[key] == result  # Wait, here is a mistake! The code uses == instead of = ?
+
+Oh no! In the code, when assigning the result to the cache, I have:
+
+self.cache[key] == result
+
+Wait, that's a typo! It should be a single =, not a comparison. So that's a bug.
+
+Oh right! That's a critical mistake. The line should be:
+
+self.cache[key] = result
+
+So that needs to be fixed.
+
+Another possible error: in the else clause, when building key_kwargs, the sorted(kwds.items()) is a list, but when typed is True, the code uses that sorted list again. That's okay because in the generator for key_kwargs, we loop through the sorted list again, but since it's already sorted, the order is correct.
+
+So the correct code should have:
+
+self.cache[key] = result
+
+instead of the ==.
+
+Other than that, the code should be correct.
+
+So the corrected code is:
+
+import collections
+
+def lru_cache(maxsize=128, typed=False):
+    def decorating_function(user_function):
+        if maxsize == 0:
+            return user_function
+        class LRUWrapper:
+            def __init__(self):
+                self.user_function = user_function
+                self.cache = collections.OrderedDict()
+                self.maxsize = maxsize
+                self.typed = typed
+                self.hits = 0
+                self.misses = 0
+            def __call__(self, *args, **kwds):
+                key_args = args
+                key_kwargs = sorted(kwds.items())
+                if self.typed:
+                    key_args = tuple( ( (v, type(v)) for v in args ) )
+                    key_kwargs = tuple( ( (k, v, type(v)) for (k, v) in sorted(kwds.items()) ) )
+                else:
+                    key_args = tuple( (v for v in args) )
+                    key_kwargs = tuple( ( (k, v) for (k, v) in sorted(kwds.items()) ) )
+                key = (key_args, key_kwargs)
+                if key in self.cache:
+                    self.hits += 1
+                    val = self.cache.pop(key)
+                    self.cache[key] = val
+                    return val
+                else:
+                    self.misses += 1
+                    result = self.user_function(*args, **kwds)
+                    self.cache[key] = result
+                    if len(self.cache) > self.maxsize:
+                        self.cache.popitem(last=False)
+                    return result
+        return LRUWrapper()
+    return decorating_function
+
+Now, that should be correct.

@@ -1,0 +1,596 @@
+Okay, I need to generate a Python function called xargs based on the given signature and docstring. Let me start by understanding the parameters. The function takes a command as a tuple of strings, varargs as a Sequence of strings, and some keyword-only arguments like color, target_concurrency, _max_length, and others via **kwargs.
+
+The docstring says it's a simplified implementation of the Linux xargs command. So, the goal is to process the varargs (probably the list of arguments to pass to the command) in a way similar to how xargs does it. 
+
+First, I should think about how xargs works. Typically, xargs reads items from standard input and executes the command with those items as arguments, breaking them into chunks if needed to stay within the system's argument length limits. Here, the _max_length parameter might be the maximum allowed length for the command line. 
+
+The parameters: cmd is the command to run, varargs is the list of arguments to process. The color flag could be for enabling color output, but I'm not sure how that's implemented here. The target_concurrency might indicate how many processes to run in parallel. The _max_length is probably the maximum allowed length of the command line, defaulting to a platform-specific value from _get_platform_max_length().
+
+The function needs to split the varargs into chunks that fit within the _max_length. Each chunk would form a command line. The challenge is to split the arguments so that each command's total length (summing the lengths of each argument plus the command itself plus spaces and quotes?) doesn't exceed _max_length. But how exactly to compute the length? Maybe just the sum of the lengths of the arguments plus the length of the command and the separators. Alternatively, maybe it's considering the actual command line length as in the system's ARG_MAX. 
+
+Wait, but in Python, when building the command, each argument is passed as a separate string, so the total length would be the sum of all the strings (command parts plus the arguments) plus the spaces between them. The exact calculation might be tricky, but perhaps for simplicity, the function can split the arguments into chunks of a certain size, without overcomplicating the length check. Alternatively, maybe the _max_length is the maximum number of arguments per command, but that's not clear. The problem states it's a simplified implementation, so maybe we can ignore some edge cases.
+
+The function's output is probably a list of commands (each as a tuple of the cmd plus some subset of the varargs) split into chunks. Alternatively, maybe it runs the commands and returns the outputs? The problem says "simplified implementation", so perhaps it just constructs the list of command invocations.
+
+Looking at the parameters again: the function's return type isn't specified, but given the docstring, perhaps it's supposed to return the list of commands constructed. Alternatively, maybe it's supposed to execute them, but the parameters include **kwargs, which might be for subprocess.run or similar. 
+
+Alternatively, maybe the function is supposed to generate the commands as a list of tuples. Let's think of the steps:
+
+1. Split the varargs into chunks such that each chunk, when combined with the cmd, doesn't exceed the _max_length. 
+
+But how to compute the length? Let's assume that each argument contributes its length plus some fixed overhead (like the command itself and the spaces between them). Alternatively, the _max_length is the maximum number of arguments per command. But the problem mentions the Linux xargs, which uses the system's maximum argument length. 
+
+Alternatively, for simplicity, the function can split the varargs into chunks of a certain size, determined by the _max_length. Let's see: perhaps the total length of the command line (the sum of all the arguments plus the command parts plus the necessary spaces) must be less than or equal to _max_length. 
+
+But calculating the exact length is a bit involved. For the simplified version, maybe we can just split the varargs into chunks of a fixed size, say, as many as possible without exceeding the max_length. 
+
+Alternatively, the function could just split the varargs into groups, each group being added to the cmd as arguments, and return a list of all those command tuples. 
+
+Wait, the function's parameters have varargs as a Sequence[str], so the function can process those into chunks. 
+
+Let me think of an example. Suppose cmd is ("echo",), and varargs is ["a", "b", "c", "d"], and the max_length allows all four in one command. Then the result would be [("echo", "a", "b", "c", "d")]. But if the max_length is smaller, say allows only 3 arguments (including the command?), then maybe split into two commands: ("echo", "a", "b", "c") and ("echo", "d").
+
+Hmm. So the core part is splitting the varargs into chunks such that each chunk's total length (including the command) is within the _max_length. 
+
+But how to compute that? Let's think: the total length for a chunk is the sum of the lengths of all the elements in the cmd plus each argument in the chunk, plus the number of spaces between them (since each argument is separated by a space). Also, the command itself is part of the command line. 
+
+Alternatively, maybe the _max_length is the maximum total length of the command line (all the characters in the command plus all the arguments). 
+
+So for each chunk, the sum of the lengths of all the elements in (cmd + chunk) plus the number of spaces (which is (number_of_elements - 1)), must be <= _max_length. 
+
+Wait, the number of spaces between elements is (number_of_elements - 1). 
+
+So, total_length = sum(len(str) for str in (cmd + chunk)) + (len(cmd + chunk) - 1)
+
+But the cmd is a tuple of strings, so each element in cmd is part of the command line. 
+
+Therefore, for each possible chunk, we need to check if adding that chunk to the command would keep the total length under _max_length.
+
+Alternatively, perhaps the _max_length is the maximum allowed total length, so the function has to split the arguments into chunks where each chunk's total length (as calculated above) is less than or equal to _max_length.
+
+The function would then need to iterate over the varargs, building chunks until adding another would exceed the limit.
+
+So the steps would be:
+
+Initialize a list of commands.
+
+current_chunk = []
+current_length = 0
+
+for arg in varargs:
+
+    # compute the length if we add this arg to current_chunk
+    # need to calculate the tentative length
+    tentative_length = current_length + len(arg) + 1 (since adding a space and the arg)
+    # but wait, the current_length is the length of the current chunk plus the cmd's length?
+
+Wait, perhaps I need to precompute the base length of the command. Let me think again.
+
+The base length is the length of the command itself plus the spaces between its elements. So for the command tuple, the base length is sum(len(c) for c in cmd) + (len(cmd) - 1) (spaces between command elements). 
+
+Each time we add an argument to the chunk, the total length becomes base_length + (sum(len(a) for a in chunk) + (len(chunk) + len(cmd) - 1) spaces? Wait, perhaps the total length for the command plus the chunk is:
+
+base_length + sum(len(a) for a in chunk) + (len(chunk) + (len(cmd) - 1) + 1?) Hmm, maybe I'm overcomplicating. 
+
+Alternatively, the total length for a chunk is:
+
+sum(len(c) for c in cmd) + sum(len(a) for a in chunk) + (len(cmd) + len(chunk) - 1) 
+
+because the command elements are separated by spaces, then the arguments are added after, separated by spaces, and between the command and the arguments there's a space as well.
+
+Wait, the command is a list of elements, like "echo" and then the arguments. So the total length is:
+
+sum(len(c) for c in cmd) + (len(cmd) - 1) * 1 (spaces between command elements) 
+
+plus 
+
+sum(len(a) for a in chunk) + (len(chunk) - 1) * 1 (spaces between arguments) 
+
+plus 
+
+(len(cmd) > 0 ? 1 : 0) if there are any arguments, since between the command and the first argument there's a space. 
+
+Wait, if the command has elements, and the chunk has elements, then between the command's last element and the first argument is a space. So the total is:
+
+command_length (sum of command elements plus spaces between them) 
+
+plus 
+
+arguments_length (sum of arguments plus spaces between them) 
+
+plus 
+
+if both command and chunk are non-empty, add 1 more for the space between them.
+
+Hmm, this is getting too complex. Maybe the simplified approach is to just calculate the total length as the sum of all the elements in (cmd + chunk) plus the number of elements minus 1 (since each element is separated by a space). 
+
+Wait, that would be:
+
+total_length = sum(len(s) for s in (cmd + chunk)) + (len(cmd + chunk) - 1)
+
+Because each element is separated by a space. 
+
+Yes, that's probably the way to go. So for the command plus the chunk, the total length is the sum of the lengths of each string, plus the number of spaces between them (which is the total number of elements minus 1).
+
+So when building chunks, each time we consider adding an argument to the current chunk, we can compute the tentative length and see if it exceeds _max_length. 
+
+The process would be:
+
+Initialize:
+
+current_chunk = []
+current_total_length = 0
+
+for each arg in varargs:
+
+    # calculate the tentative length if we add this arg to current_chunk
+    tentative_length = current_total_length + len(arg) + 1 (since adding one more element adds len(arg) and a space)
+    # Wait, no: 
+
+Wait, the current_total_length is the total length of cmd + current_chunk. Adding the next arg would make the new chunk current_chunk + [arg], so the new length is current_total_length + len(arg) + 1 (the +1 for the space between the last element of current_chunk and the new arg). However, if the current chunk is empty, then the first element would be added without a preceding space. Wait, no: the current chunk is part of the command, so the command is cmd followed by the chunk. So when the current chunk is empty, adding the first element would mean the command is cmd followed by [arg], so the total length is (base_length of cmd) + len(arg) + (1 if cmd is not empty else 0). Wait, this is getting too complicated. 
+
+Alternatively, the base_length is the length of the command itself. Let's compute that first:
+
+base_length = sum(len(c) for c in cmd) + (len(cmd) - 1) 
+
+Because the command elements are separated by spaces. 
+
+Then, for a chunk (the list of arguments to add to the command), the total length would be:
+
+base_length + sum(len(a) for a in chunk) + (len(chunk) + (len(cmd) > 0)) -1 
+
+Wait, perhaps another approach:
+
+The total length is base_length (command's length) plus the length of the chunk's elements plus the spaces between them, plus a space between the command and the first argument (if there are any arguments).
+
+Wait, if the chunk is non-empty, then after the command, we need a space before the first argument. 
+
+So the chunk's contribution is sum(len(a) for a in chunk) + (len(chunk) -1) spaces between arguments, plus 1 space between command and first argument (if the command has elements and the chunk is non-empty). 
+
+Hmm, this is getting too involved. Since the problem says it's a simplified implementation, maybe we can ignore the exact calculation and instead just split the varargs into chunks of a fixed maximum size, determined by the _max_length divided by an average argument length. But that's not precise. 
+
+Alternatively, maybe the function just appends all the varargs to the command as a single list, but that doesn't split them into chunks. 
+
+Wait, perhaps the function's purpose is to split the varargs into chunks so that each chunk, when added to the command, forms a command line that doesn't exceed the _max_length. 
+
+In code, perhaps the steps are:
+
+- Precompute the base length of the command (without any arguments). 
+
+base_length = sum(len(c) for c in cmd) + (len(cmd) -1)
+
+Then, for each argument in varargs, we try to add it to the current chunk. 
+
+Initialize current_chunk as empty list. 
+
+current_length = 0 (the length contributed by the current chunk's arguments plus the spaces between them and the command)
+
+Wait, perhaps:
+
+current_chunk = []
+current_length = 0
+
+for arg in varargs:
+
+    # the length added by this arg to the current chunk:
+    # if current chunk is empty, adding this arg would add len(arg) plus (if the command is non-empty, a space between command and arg)
+    # else, adding a space and the arg's length.
+
+    # So the tentative length would be:
+
+    added_length = len(arg)
+
+    if current_chunk:
+        added_length += 1 # space between existing args
+    else:
+        if cmd:
+            added_length +=1 # space between command and the first arg
+
+    tentative_length = current_length + added_length
+
+    total_length = base_length + tentative_length 
+
+    if total_length > _max_length:
+        # can't add this arg to current chunk, so flush the current chunk and start a new one
+        if current_chunk:
+            commands.append( (cmd + tuple(current_chunk)) )
+            current_chunk = [arg]
+            current_length = len(arg)
+            # check again? Maybe the arg alone is too big? But that's an error case perhaps.
+        else:
+            # the current chunk is empty, but adding this arg would exceed? Then it's impossible. Maybe raise an error?
+            # But the problem says simplified, so perhaps ignore such cases.
+    else:
+        current_chunk.append(arg)
+        current_length += added_length
+
+Wait, this approach requires tracking the current_length, which is the length contributed by the current chunk's arguments and their spacing relative to the command and each other. 
+
+This seems quite involved. 
+
+Alternatively, maybe the simplified approach is to split the varargs into chunks of a certain size, such that the total number of arguments (including the command) doesn't exceed some limit. For example, if the maximum allowed is N arguments, then split into chunks of N - len(cmd). But that's a different approach. 
+
+But the problem mentions _max_length, which is about the total length of the command line. 
+
+Hmm. Since this is a simplified version, perhaps we can just split the varargs into chunks of a fixed size, say, as many as possible without exceeding the _max_length. 
+
+Alternatively, maybe the function just appends all the varargs to the command and returns that as a single command. But that's not splitting into chunks. 
+
+Alternatively, perhaps the function is supposed to return a list of commands, each formed by the cmd followed by a subset of the varargs. The chunks are determined by splitting the varargs into groups as large as possible without exceeding the _max_length. 
+
+But to do that, the code has to compute the lengths. 
+
+Perhaps the code can proceed as follows:
+
+Initialize a list of commands.
+
+current_args = []
+
+current_length = 0
+
+base_length = sum(len(c) for c in cmd) + (len(cmd) -1)
+
+for arg in varargs:
+
+    arg_len = len(arg)
+
+    # The space needed before this arg:
+    # If current_args is empty, then if the command is non-empty, we need a space before the first argument.
+    # So the total added length is:
+
+    if not current_args:
+        if cmd:
+            space_before = 1
+        else:
+            space_before = 0
+    else:
+        space_before = 1
+
+    added_length = space_before + arg_len
+
+    tentative_total_length = current_length + added_length
+
+    total_length = base_length + tentative_total_length
+
+    if total_length > _max_length:
+        # can't add this arg to current chunk. So flush the current chunk.
+        if current_args:
+            commands.append( (*cmd, *current_args) )
+            current_args = []
+            current_length = 0
+        # Now, try adding the arg again, since it might be too big even alone?
+        # If even adding it alone exceeds, then it's an error, but maybe just skip it? Not sure.
+        # For the simplified version, maybe proceed as long as the arg itself plus the base_length + any needed space is okay.
+
+        # Recompute:
+        if cmd:
+            space_before = 1
+        else:
+            space_before = 0
+        arg_len_total = space_before + arg_len
+        if base_length + arg_len_total > _max_length:
+            # can't add even alone, so perhaps skip it? Or raise an error?
+            # In xargs, if an argument is too long, it's an error. But perhaps the simplified version just skips.
+            continue
+        current_args.append(arg)
+        current_length = arg_len_total
+    else:
+        current_args.append(arg)
+        current_length += added_length
+
+# After the loop, add the last chunk
+if current_args:
+    commands.append( (*cmd, *current_args) )
+
+return commands
+
+Wait, but this is getting quite complex. Also, there might be off-by-one errors. 
+
+Alternatively, perhaps the code can be structured as follows, using a loop to build chunks:
+
+def xargs(cmd, varargs, *, color=False, target_concurrency=1, _max_length=..., **kwargs):
+    commands = []
+    current_chunk = list(cmd)  # Wait, no. The command is the first part, then the arguments are added.
+
+    Wait, no. The command is the base, and the varargs are the arguments to be added. So each command in the list is the cmd tuple followed by a subset of the varargs.
+
+    So each command is cmd + (subset of varargs). 
+
+    So, the chunks are the subsets of varargs. 
+
+    So, the code can process the varargs into chunks:
+
+    chunks = []
+    current_chunk = []
+    current_length = 0
+
+    base_length = sum(len(c) for c in cmd) + (len(cmd) - 1)
+
+    for arg in varargs:
+        arg_len = len(arg)
+        # Calculate how much adding this arg would add to the current chunk's length.
+
+        # The current chunk's length is the sum of the arg lengths plus the spaces between them and the base.
+
+        # The space needed before this arg: if current_chunk is empty, then if there are base elements (cmd), we need a space before the first arg. Otherwise, no.
+
+        if not current_chunk:
+            # first arg in the current chunk
+            space_before = 1 if cmd else 0
+        else:
+            space_before = 1  # between previous arg and this one
+
+        added_length = space_before + arg_len
+
+        tentative_length = current_length + added_length
+
+        total_length = base_length + tentative_length
+
+        if total_length > _max_length:
+            # can't add this arg to current chunk. Flush it.
+            chunks.append(current_chunk)
+            current_chunk = [arg]
+            current_length = arg_len + (space_before if current_chunk else 0)
+            # Wait, no. Need to recalculate:
+
+            # After flushing, the new chunk has only this arg. So:
+
+            # current_length is the added_length for this arg alone.
+
+            # The space_before is 1 if cmd exists, else 0.
+
+            # So current_length = space_before + arg_len.
+
+            space_before = 1 if cmd else 0
+            current_length = space_before + arg_len
+        else:
+            current_chunk.append(arg)
+            current_length += added_length
+
+    # Add the last chunk
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # Now, construct the commands
+    commands = [cmd + tuple(chunk) for chunk in chunks]
+
+    return commands
+
+Hmm, that seems plausible, but I might have made an error in the current_length calculation. Let me think through an example. 
+
+Suppose cmd is ("echo",), so base_length is len("echo") + 0 (since only one element) = 4.
+
+varargs is ["a", "b", "c", "d"], and _max_length is say 10.
+
+The first arg is "a":
+
+current_chunk is empty. So space_before is 1 (since cmd exists). added_length is 1 + 1 = 2? Wait, the arg length is 1. So space_before (1) + arg_len (1) = 2. So tentative_length is 0 (current_length) + 2 → 2. total_length is 4 + 2 = 6 ≤10. So current_chunk becomes ["a"], current_length=2.
+
+Next arg "b":
+
+current_chunk is non-empty. space_before is 1. added_length is 1 (space) + 1 (len("b")) → 2. tentative_length 2+2=4. total_length 4+4=8 ≤10. So current_length is now 4. current_chunk is ["a", "b"].
+
+Next "c": 
+
+space_before is 1. added_length is 1 (space) + 1 (len("c")) → 2. tentative_length 4+2=6 → total_length 10. Exactly equal, so okay. current_length becomes 6. current_chunk is ["a","b","c"].
+
+Next "d": 
+
+added_length is 1 (space) +1 → 2. tentative_length 6+2=8. total_length 4+8=12>10. So we have to flush.
+
+So chunks would be ["a", "b", "c"], then the new chunk is ["d"].
+
+Thus the commands would be ("echo", "a","b","c") and ("echo", "d").
+
+The total length for the first is 4 (base) + (space_before 1 for first arg) + 1 + 1 (space between a and b) +1 (b) + 1 (space between b and c) +1 (c) → base_length (4) plus the current_length of 6 (the sum of space_before + arg lengths for each arg). 4+6=10. 
+
+The second chunk has current_length of 1+1 (space_before 1 (since cmd exists) plus the arg length 1. total_length 4+2=6 ≤10.
+
+So that works. 
+
+Another example: if _max_length is 6, then the first chunk would be "a" (total length 4+ (1+1)=6). Then "b" would be next. 
+
+Wait, let's see: 
+
+max_length =6.
+
+First arg "a": 
+
+total_length is 4 + (space_before 1 + 1) → 4+2=6. which is okay. 
+
+Then "b" comes next. 
+
+current_length is 2 (from the first arg). 
+
+adding "b": 
+
+space_before is 1 (since current chunk has a). 
+
+added_length is 1 (space) +1 (len(b) → 2. 
+
+current_length becomes 2+2=4. 
+
+total_length is 4+4=8>6. So cannot add. So flush the current chunk (["a"]), start new chunk with "b".
+
+Then "b" is added to a new chunk. 
+
+current_length is 1 (space_before 1) +1 =2. total_length 4+2=6. okay. 
+
+Then "c" comes: 
+
+current_length is 2. adding "c" would be space_before 1 (current chunk has "b") → added_length 1+1=2 → tentative_length 2+2=4 → total_length 4+4=8>6. So must flush the ["b"] chunk, and start new with "c".
+
+Thus the chunks would be ["a"], ["b"], ["c"], and then "d" would be another. 
+
+So the code's approach works here. 
+
+Therefore, the code can be structured as I outlined. Now, considering the parameters: the function's parameters include color, target_concurrency, and **kwargs. But in the simplified version, perhaps those are ignored, as the function's main job is to split the varargs into commands. 
+
+The function returns the list of commands. 
+
+Now, the code. 
+
+Wait, in the code, the base_length is computed as sum(len(c) for c in cmd) + (len(cmd)-1). 
+
+Then, for each arg in varargs:
+
+the code proceeds as above. 
+
+Now, the code's variables: 
+
+chunks is a list of the argument lists. 
+
+Wait in the code I outlined earlier, the chunks are stored in the chunks list as the current_chunk is appended when it's full. 
+
+Wait, let me re-express the code in code form:
+
+def xargs(
+        cmd: tuple[str, ...],
+        varargs: Sequence[str],
+        *,
+        color: bool = False,
+        target_concurrency: int = 1,
+        _max_length: int = _get_platform_max_length(),
+        **kwargs
+):
+    """
+    Simplified Implementation of Xargs in Linux
+    """
+    chunks = []
+    current_chunk = []
+    current_length = 0  # the length contributed by the current chunk's arguments and their spacing relative to the command
+
+    base_length = sum(len(c) for c in cmd) + (len(cmd) - 1)
+
+    for arg in varargs:
+        arg_len = len(arg)
+        if not current_chunk:
+            # first arg in the chunk
+            space_before = 1 if cmd else 0
+        else:
+            space_before = 1
+        added_length = space_before + arg_len
+        tentative_length = current_length + added_length
+        total_length = base_length + tentative_length
+
+        if total_length > _max_length:
+            # can't add this arg, flush current chunk
+            if current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = []
+                current_length = 0
+            # now try adding the current arg as a new chunk
+            space_before = 1 if cmd else 0
+            new_length = space_before + arg_len
+            if base_length + new_length > _max_length:
+                # even alone it's too big, skip?
+                continue
+            current_chunk.append(arg)
+            current_length = new_length
+        else:
+            current_chunk.append(arg)
+            current_length += added_length
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # Now build the commands
+    return [cmd + tuple(chunk) for chunk in chunks]
+
+Wait, but in the code above, after flushing, when adding the current arg, we have to check if even adding it alone would exceed. 
+
+But in the problem's simplified version, perhaps we can ignore that case (i.e., assume that individual arguments are small enough). 
+
+Alternatively, proceed as above. 
+
+Testing this code with the first example where varargs are ["a", "b", "c", "d"], cmd is ("echo",), and _max_length is 10:
+
+base_length is 4. 
+
+Processing "a":
+
+current_chunk is empty → space_before is 1. added_length = 1+1=2. tentative_length is 0+2=2 → total_length 4+2=6 ≤10. So current_chunk becomes ["a"], current_length 2.
+
+Next "b":
+
+current_chunk has ["a"], so space_before is 1. added_length =1+1=2 → tentative_length 2+2=4 → total_length 8. So added. current_length is 4. 
+
+Next "c": 
+
+added_length 1+1=2 → tentative_length 4+2=6 → total_length 10. 
+
+So current_length becomes 6. 
+
+Next "d": 
+
+added_length is 1 (space) +1 (len("d")) → 2. tentative_length 6+2=8 → total_length 4+8=12>10. 
+
+So need to flush. 
+
+current_chunk is ["a","b","c"], so added to chunks. 
+
+Then current_chunk is reset. 
+
+Then adding "d": 
+
+space_before is 1 (since cmd exists). new_length is 1+1=2 → total_length 4+2=6 ≤10. So current_chunk is ["d"], current_length is 2. 
+
+After loop, add that to chunks. 
+
+Thus chunks are [["a","b","c"], ["d"]], so the commands are ("echo", "a","b","c") and ("echo", "d").
+
+Which is correct. 
+
+Another test case with max_length 6:
+
+varargs ["a","b","c","d"], cmd ("echo") → base_length 4.
+
+Processing "a": 
+
+added_length 2 → total_length 6. 
+
+current_length 2. 
+
+Next "b": 
+
+added_length (space 1 + len(b)=1 → 2 → tentative_length 2+2=4 → total_length 4+4=8>6 → must flush.
+
+So chunks append ["a"], then start with "b". 
+
+space_before for "b" (new chunk) is 1 → new_length 2 → total_length 4+2=6. 
+
+current_length 2. 
+
+Then "c" comes: 
+
+current_chunk has ["b"], adding "c". 
+
+added_length 1+1=2 → tentative_length 2+2=4 → total_length 4+4=8>6 → must flush ["b"] → add to chunks. 
+
+Now new chunk starts with "c": 
+
+space_before 1 → new_length 2 → total_length 6 → okay. 
+
+current_length 2. 
+
+Then "d": 
+
+added_length 1+1 → 2 → tentative_length 2+2=4 → total_length 4+4=8>6 → flush ["c"], add to chunks. 
+
+Now new chunk with "d": new_length 2 → total_length 6. 
+
+Thus chunks are [["a"], ["b"], ["c"], ["d"]], so four commands. 
+
+So the code works. 
+
+Now, what about the parameters color, target_concurrency, and **kwargs? The problem says it's a simplified implementation, so perhaps those are ignored. The function's return is the list of commands. 
+
+Therefore, the code I wrote above should work. 
+
+Now, I need to write it in Python, making sure to use the parameters as given. 
+
+Wait, the function has **kwargs, but in the code above, we don't use them. That's okay. 
+
+Also, the default for _max_length is _get_platform_max_length(), which is a function that's referenced but not defined here. Since the problem provides the signature, we can leave it as is. 
+
+Thus, the code would be as follows.

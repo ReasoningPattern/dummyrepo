@@ -1,0 +1,79 @@
+
+
+```python
+from functools import wraps
+from collections import defaultdict
+
+def lfu_cache(maxsize=128, typed=False):
+    """
+    Decorator to wrap a function with a memoizing callable that saves
+    up to `maxsize` results based on a Least Frequently Used (LFU)
+    algorithm.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            nonlocal size
+            # Generate key
+            key = []
+            # Process args
+            for arg in args:
+                if typed:
+                    key.append((arg, type(arg)))
+                else:
+                    key.append(arg)
+            # Process kwargs
+            for k in sorted(kwargs.keys()):
+                v = kwargs[k]
+                if typed:
+                    key.append((k, v, type(v)))
+                else:
+                    key.append((k, v))
+            key = tuple(key)
+
+            # Check if key is in cache
+            if key in cache:
+                # Hit
+                old_freq = freq[key]
+                # Remove from freq_count[old_freq]
+                freq_count[old_freq].discard(key)
+                if not freq_count[old_freq]:
+                    del freq_count[old_freq]
+                # Increment frequency
+                new_freq = old_freq + 1
+                freq[key] = new_freq
+                # Add to freq_count[new_freq]
+                freq_count[new_freq].add(key)
+                # Return cached value
+                return cache[key]
+            else:
+                # Miss
+                value = func(*args, **kwargs)
+                # Add to cache
+                cache[key] = value
+                # Initialize frequency
+                freq[key] = 1
+                # Add to freq_count[1]
+                freq_count[1].add(key)
+                # Update size
+                size += 1
+                # Check if eviction is needed
+                if size > maxsize:
+                    # Evict
+                    # Find min frequency
+                    min_freq = min(freq_count.keys())
+                    # Get a key from the min_freq group
+                    evict_key = next(iter(freq_count[min_freq]))
+                    # Remove from cache, freq, freq_count
+                    del cache[evict_key]
+                    del freq[evict_key]
+                    freq_count[min_freq].discard(evict_key)
+                    if not freq_count[min_freq]:
+                        del freq_count[min_freq]
+                    size -= 1
+                return value
+        # Initialize cache, freq, etc.
+        cache = {}
+        freq = {}
+        freq_count = defaultdict(set)
+        size = 

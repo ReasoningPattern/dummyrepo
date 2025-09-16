@@ -1,0 +1,77 @@
+
+
+```python
+import unittest
+
+class TestExToStr(unittest.TestCase):
+    def test_simple_exception(self):
+        e = Exception("Test message")
+        result = extostr(Exception, e)
+        self.assertEqual(result, "Exception: Test message\n")
+
+    def test_exception_with_cause(self):
+        cause = Exception("Cause message")
+        e = Exception("Main message")
+        e.__cause__ = cause
+        result = extostr(Exception, e)
+        expected = "Exception: Main message\nCaused by:\nException: Cause message\n"
+        self.assertEqual(result, expected)
+
+    def test_exception_with_context(self):
+        context = Exception("Context message")
+        e = Exception("Main message")
+        e.__context__ = context
+        result = extostr(Exception, e)
+        expected = "Exception: Main message\nContext:\nException: Context message\n"
+        self.assertEqual(result, expected)
+
+    def test_exception_with_both_cause_and_context(self):
+        cause = Exception("Cause message")
+        context = Exception("Context message")
+        e = Exception("Main message")
+        e.__cause__ = cause
+        e.__context__ = context
+        result = extostr(Exception, e)
+        expected = ("Exception: Main message\n"
+                    "Caused by:\n"
+                    "Exception: Cause message\n"
+                    "Context:\n"
+                    "Exception: Context message\n")
+        self.assertEqual(result, expected)
+
+    def test_max_level_exceeded(self):
+        e1 = Exception("e1")
+        e2 = Exception("e2")
+        e3 = Exception("e3")
+        e2.__cause__ = e1
+        e3.__cause__ = e2
+        result = extostr(Exception, e3, max_level=2, max_path_level=5)
+        expected = ("Exception: e3\n"
+                    "Caused by:\n"
+                    "Exception: e2\n"
+                    "Caused by:\n"
+                    "Exception: e1\n")
+        self.assertEqual(result, expected)
+
+    def test_max_path_level_exceeded(self):
+        e1 = Exception("e1")
+        e2 = Exception("e2")
+        e3 = Exception("e3")
+        e2.__cause__ = e1
+        e3.__cause__ = e2
+        result = extostr(Exception, e3, max_level=30, max_path_level=2)
+        expected = "Exception: e3\nCaused by:\nException: e2\n"
+        self.assertEqual(result, expected)
+
+def extostr(cls, e, max_level=30, max_path_level=5):
+    if max_level <= 0 or max_path_level <= 0:
+        return str(e)
+    result = f"{cls.__name__}: {str(e)}\n"
+    if e.__cause__ is not None:
+        result += "Caused by:\n"
+        result += extostr(cls, e.__cause__, max_level-1, max_path_level-1)
+    if e.__context__ is not None:
+        result += "Context:\n"
+        result += extostr(cls, e.__context__, max_level-1, max_path_level-1)
+    return result
+```

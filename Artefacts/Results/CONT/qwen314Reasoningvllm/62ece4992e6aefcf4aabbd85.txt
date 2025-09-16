@@ -1,0 +1,179 @@
+
+Okay, I need to generate Python code for the find_roots function based on the given signature and docstring. Let's start by understanding what the function is supposed to do. The docstring says it finds roots in a transitive hierarchy, like sub-class hierarchy using RDFS.subClassOf. The function takes a graph, a property (prop), and an optional roots set. The triples are in the form (child, prop, parent), so for subClassOf, that would mean a class is a subclass of another.
+
+The goal is to find all roots, which are nodes that have no parents in this hierarchy. So, roots are nodes that are not the child in any triple with the given property. Wait, no. Wait, if the triple is (child, prop, parent), then the root nodes would be those that are never a child. Because if a node is a child in any triple, it has a parent, so it's not a root. So the roots are the nodes that are not present as the subject (child) in any triple with the given property.
+
+Wait, but maybe there's a possibility of cycles or multiple parents. But the function is supposed to find all roots, which are the topmost nodes in the hierarchy. So, the approach would be to collect all nodes that are not mentioned as a child (subject) in any (child, prop, parent) triple. Because if a node is never a child, it has no parent, hence is a root.
+
+But wait, maybe the graph has nodes that are parents but not children. For example, if there's a triple (A, prop, B), then A is a child (since prop is like subClassOf, so A is a subclass of B). So B is a parent. So the root would be a node that is never a child. So, to find roots, we need to find all nodes that are not in the subject position of any triple with the given property.
+
+So the steps would be:
+
+1. Collect all nodes that are subjects in any triple with the given property. These are the non-roots.
+2. Collect all nodes in the graph.
+3. Subtract the non-roots from all nodes to get the roots.
+
+But how to implement this with rdflib?
+
+In rdflib, the graph can be queried using triples. So, for the given prop, we can find all (child, prop, parent) triples. The children are the subjects here. So, the set of children is all the subjects of these triples. The roots are the nodes that are not in this set.
+
+But also, maybe the roots are the nodes that are not children, but are parents. But that's okay. For example, if there's a node that is a parent but not a child, it's a root.
+
+So the code would:
+
+- Initialize the roots set as None, and if not provided, create a new set.
+- Iterate through all triples in the graph where the predicate is prop. For each such triple, add the subject (child) to a set of non-roots.
+- Then, collect all nodes in the graph, and subtract those in the non-roots set. The result is the roots.
+
+Wait, but how to get all nodes in the graph? The graph's subjects, objects, and predicates. But perhaps the nodes are all the subjects and objects in the graph. However, in RDF, a node can be a subject, object, or predicate. But in this case, the prop is a URIRef, so the nodes we are interested in are the subjects and objects of triples, except for the predicate.
+
+But the function's docstring says that the roots are nodes in the hierarchy. So maybe the roots are nodes that are either subjects or objects in the graph, but not as a subject in any (child, prop, parent) triple.
+
+Wait, but the function's example uses RDFS.subClassOf, which is a property. So, in that case, the nodes are classes. So, the roots would be classes that are not the subject of any subClassOf triple. So, they are not a subclass of anything else. Hence, they are roots.
+
+So the approach is:
+
+Collect all nodes that are subjects in any triple with the given property. The roots are all nodes in the graph that are not in this set.
+
+But how to get all nodes in the graph? Well, perhaps using graph.subjects() and graph.objects(), but that might not capture all nodes. Alternatively, maybe the roots are the nodes that are not in the set of children (subjects of the prop triples). However, there might be nodes that are not in any triple, but they would be considered as roots as well. For example, if a node exists in the graph but is not part of any triple with the given property, then it's a root.
+
+But how to collect all nodes in the graph? The problem is that rdflib's Graph might have nodes that are not in any triple. But in practice, nodes are usually part of triples. However, for the purpose of this function, perhaps we need to consider all nodes that are either subjects or objects in the graph. But maybe the function is intended to find roots in the hierarchy defined by the prop, so nodes that are not children (subjects) in any triple with prop. However, if a node is not present as a subject in any such triple, then it's a root.
+
+But what about nodes that are only objects in such triples? For example, if there's a triple (A, prop, B), then B is a parent. But B might not be a subject in any triple with prop. So B would be considered a root unless there's another triple where B is a subject.
+
+So the code steps:
+
+- Get all children (subjects of triples with predicate prop).
+- The roots are all nodes in the graph that are not in this set of children.
+
+But how to get all nodes in the graph? One approach is to collect all subjects and objects from the graph. So:
+
+all_nodes = set(graph.subjects()) | set(graph.objects())
+
+But then, this would include all nodes that are in any triple as a subject or object. However, if a node is only a predicate (like the prop itself), it would not be included. But in RDF, the predicate is a URIRef, and the nodes in the graph are typically resources (subjects and objects). So perhaps that's acceptable.
+
+So, the code would be:
+
+def find_roots(graph, prop, roots=None):
+    if roots is None:
+        roots = set()
+    # Get all children (subjects of triples with predicate prop)
+    children = set(graph.subjects(predicate=prop))
+    # Get all nodes in the graph (subjects and objects)
+    all_nodes = set(graph.subjects()) | set(graph.objects())
+    # Roots are all nodes not in children
+    roots = all_nodes - children
+    return roots
+
+Wait, but the function's parameters have roots as an Optional[Set[Node]], and the docstring says that if provided, it's used. But in the code above, if roots is provided, it's not used. The current code ignores the roots parameter. That's a problem.
+
+Wait, looking back at the function signature:
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+
+The docstring says: "Assumes triple of the form (child, prop, parent), i.e. the direction of RDFS.subClassOf or SKOS.broader"
+
+The roots parameter is optional. The docstring says "roots: Optional list with set type". But the function's current code in the user's example doesn't use the roots parameter. However, perhaps the roots parameter is intended to be a set that is modified, but the function returns a new set. Or maybe the roots parameter is for some other purpose, like pre-populating roots.
+
+But looking at the example given in the docstring:
+
+find_roots(graph, rdflib.RDFS.subClassOf) will return a set of all roots of the sub-class hierarchy.
+
+So the roots parameter is optional and if not provided, the function computes it. But if provided, perhaps it's used as an initial set, but the code in the example doesn't use it. Maybe the roots parameter is intended to be a set that is built upon, but the current code as per the user's initial code doesn't use it. However, the user's initial code may have a mistake here.
+
+Wait, the user's initial code has the function signature with roots as an optional parameter, but the code inside the function is empty. So the user wants us to generate the code for the function.
+
+But according to the docstring, the roots parameter is optional. However, in the code I wrote earlier, the roots parameter is not used. That's a problem. So perhaps the roots parameter is intended to be a set that is modified, but the function returns a new set. Or maybe the roots parameter is for some other purpose.
+
+Alternatively, maybe the roots parameter is a set that is passed in, and the function adds to it. But the function returns a new set. That seems conflicting.
+
+Alternatively, perhaps the roots parameter is for some other purpose. Let me re-examine the docstring.
+
+The docstring says:
+
+Args:
+    graph: Graph Class Object
+    prop: URIRef Class Object
+    roots: Optional list with set type
+
+Return:
+    roots: a set with nodes
+
+So, the roots parameter is optional. The function returns a set of roots. The parameter is perhaps for allowing the user to pass in an existing set to avoid recomputation, but the code would need to use it. However, the example given in the docstring doesn't use it. So perhaps the roots parameter is not used in the function. Maybe it's a mistake in the docstring.
+
+Alternatively, maybe the roots parameter is intended to be a set of nodes that are already known roots, and the function finds additional roots. But that's unclear.
+
+But given the information, perhaps the roots parameter is not used, and the function ignores it, generating a new set each time. However, that would be a problem if the user expects to pass in a set to accumulate results.
+
+But given the example in the docstring, the function is called without the roots parameter. So maybe the roots parameter is not used in the function. However, the presence of the parameter in the function signature suggests that it's intended to be used. Maybe it's a way to allow the user to pass in a set that is modified, but the function returns a new set. That would be a bit odd.
+
+Alternatively, maybe the roots parameter is for some other purpose, like filtering. But without more information, it's hard to tell.
+
+Given the ambiguity, perhaps the best approach is to proceed with the code that computes the roots as all nodes not in the children set, and ignore the roots parameter, as the example in the docstring does not use it. However, that would be inconsistent with the function signature. Alternatively, perhaps the roots parameter is a set that is to be updated, but the function returns it. For example:
+
+def find_roots(...):
+    if roots is None:
+        roots = set()
+    # compute and add to roots
+    return roots
+
+But how?
+
+Alternatively, perhaps the roots parameter is intended to be a set of nodes that are already known roots, and the function finds additional roots. But that's unclear.
+
+Alternatively, perhaps the roots parameter is a mistake and should not be there. But since the user provided the function signature, we have to follow it.
+
+But given that the docstring's example calls find_roots with just graph and prop, and the roots parameter is optional, perhaps the roots parameter is not used in the function. Therefore, the code can ignore it, and generate the set as described earlier.
+
+So, the code would be:
+
+def find_roots(
+    graph: "Graph", prop: "URIRef", roots: Optional[Set["Node"]] = None
+) -> Set["Node"]:
+    """
+    Find the roots in some sort of transitive hierarchy.
+
+    find_roots(graph, rdflib.RDFS.subClassOf)
+    will return a set of all roots of the sub-class hierarchy
+
+    Assumes triple of the form (child, prop, parent), i.e. the direction of
+    RDFS.subClassOf or SKOS.broader
+
+    Args:
+        graph: Graph Class Object
+        prop: URIRef Class Object
+        roots: Optional list with set type
+    Return:
+        roots: a set with nodes
+    """
+    children = set(graph.subjects(predicate=prop))
+    all_nodes = set(graph.subjects()) | set(graph.objects())
+    return all_nodes - children
+
+But wait, in rdflib, graph.subjects(predicate=prop) returns an iterator. Converting it to a set would collect all the subjects. Similarly for objects.
+
+But what about nodes that are only in the graph as predicates? For example, if a node is used as a predicate (like the prop itself), but not as a subject or object. However, in RDF, the predicate is a URIRef, and the nodes in the graph are typically resources (subjects and objects). So, perhaps the code is correct.
+
+But what about blank nodes or other types? The code uses the graph's subjects and objects, which would include all nodes in those positions.
+
+Another thing to consider: the function returns a set of nodes. The code uses set operations, which should work.
+
+But what if the graph is empty? Then all_nodes would be empty, and the return would be an empty set.
+
+Testing with an example: suppose the graph has triples (A, prop, B), (B, prop, C). Then children would be {A, B}. all_nodes would be {A, B, C}. So roots would be {C}.
+
+Yes, that's correct. C is a root because it's not a child in any triple. A is a child (so not a root), B is a child (so not a root). So the roots are C.
+
+Another example: if there's a triple (A, prop, B), and another triple (C, prop, B). Then children are {A, C}, all_nodes is {A, B, C}, so roots are {B}.
+
+Yes, B is a root because it's not a child in any triple. But wait, B is an object in the triples. But in this case, the code would return {B} as roots. Which is correct, because B is not a child (subject) in any triple. So B is a root.
+
+So the code seems correct.
+
+Now, considering the roots parameter. The current code ignores it. But according to the function signature, roots is an optional parameter. However, the docstring's example does not use it. Perhaps the roots parameter is a way to allow the user to pass in a set that is modified, but the function returns a new set. However, the current code does not use it, which may be a mistake.
+
+But given the ambiguity, and the fact that the example in the docstring does not use it, perhaps the roots parameter is not intended to be used, and the code can proceed as written.
+
+Thus, the generated code would be as above.

@@ -1,0 +1,568 @@
+Okay, I need to write a Python function called deep_merge_nodes that merges nodes based on their keys. The docstring says to merge any node values with duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last one stays. Hmm, so first I should think about what the input looks like. The nodes parameter is probably a list of these node objects. Each node has a key and a value. But maybe the nodes are structured in a way that their values can be mappings themselves, like dictionaries. Because the term "deep merge" suggests that if the values are also mappings, they should be merged recursively.
+
+Wait, the problem mentions "non-MappingNode values". So perhaps a node can be of type MappingNode, which indicates that its value is a dictionary-like structure that can be merged deeply. For non-MappingNode types, when there's a key collision, the last one in the list takes precedence. So the strategy is: for each key, collect all the nodes with that key. Then, for each key, check if any of the nodes are MappingNodes. If they are, then their values should be merged deeply. Otherwise, just take the last value.
+
+So the steps would be:
+
+1. Iterate through all the nodes, grouping them by their keys.
+2. For each key group:
+   a. Check if any of the nodes in the group have a value that is a MappingNode (i.e., a dictionary that can be merged).
+   b. If yes, then recursively merge all the values of those nodes. But if a node's value is not a MappingNode, then when merging, those non-mapping values would override the previous ones if they are the last in the list.
+   c. If none are MappingNodes, then the value is the last one in the group.
+
+Wait, but the problem says "the last of the values remains" for non-MappingNode collisions. So for a key with multiple non-MappingNode entries, the last one's value is kept. But for MappingNodes, their values are merged. So the merging is only done when the value is a MappingNode. So the function has to check the type of each node's value. Wait, but how do I know if a node is a MappingNode? The problem's description mentions "non-MappingNode values" so perhaps each node has an attribute or a type that indicates whether it's a MappingNode. Alternatively, maybe the nodes are instances of a class where their value is a dictionary, and we can check if the value is a Mapping (like a dict). Or maybe the problem is abstracted such that if a node's value is a Mapping (like a dict), then it can be merged deeply, otherwise, it's treated as a regular value.
+
+Assuming that the nodes are such that their value can be a dictionary (MappingNode) or another type. So the function needs to handle that. So the algorithm would be:
+
+For each key in all nodes:
+
+- Collect all the values for that key from all the nodes, in the order they appear in the nodes list.
+
+Then, process these values in order, merging them. The merging process would be:
+
+Initialize the merged value as None.
+
+For each value in the list of values for the key:
+
+If the current merged value is a Mapping (i.e., a dict-like object) and the current value is also a Mapping, then merge them recursively.
+
+Else, if the current value is a Mapping, then set the merged value to a new Mapping that is a deep merge of the previous merged value and the current value.
+
+Wait, no. Wait, perhaps the logic is: if the current value is a MappingNode (i.e., a dict), then we merge the existing merged value with this new one. But if the existing merged value is not a Mapping, then perhaps we can't merge and just replace it with the current value? Or maybe the existing merged value is only a Mapping if previous values were also Mappings. Hmm, this is getting a bit confusing.
+
+Alternatively, the merging process for a key's values would be:
+
+Start with an empty dict or None. For each value in the list of values for the key:
+
+- If the current value is a Mapping (dict), and the accumulated value is also a Mapping, then do a deep merge of the two.
+
+- If the current value is a Mapping but the accumulated is not, then replace the accumulated with the current value's Mapping, because you can't merge a non-Mapping into a Mapping?
+
+Wait, maybe the problem is that when merging, only the MappingNodes can be merged. So if any of the values in the group is a non-Mapping, then their value will override previous ones. So the process is:
+
+For each key:
+
+Collect all the values in order. The merged value starts as None.
+
+For each value in the list:
+
+If the current value is a MappingNode (i.e., a dict), then:
+
+   if the accumulated value is also a MappingNode, then merge them deeply (so the merged value becomes the merged dict)
+
+   else, the accumulated value is replaced by this new MappingNode's value (since previous non-Mapping values can't be merged into a Mapping)
+
+Else (current value is not a MappingNode):
+
+   the accumulated value is replaced by this current value (since non-Mapping can't be merged, so the last one in the list will be the final value)
+
+Wait, but that might not capture all cases. Let me think through an example.
+
+Suppose for a key, the values are [ {"a": 1}, 2, {"b":3} ]
+
+Processing the first value (a dict), the accumulated becomes {"a":1}
+
+Second value is 2 (non-Map), so replace accumulated with 2.
+
+Third value is a dict. Since current is a dict and accumulated is 2 (non-Map), the accumulated becomes the new dict? But that would replace the 2 with the new dict. But according to the problem statement, when keys have non-Mapping values, the last remains. Wait, the problem says "colliding keys with non-MappingNode values, the last of the values remains".
+
+Ah, so when the value is a non-Mapping (like 2), it's treated as a regular value, so the last non-Mapping would win. But if a later value is a Mapping, then since that's a different type, perhaps the last value (the Mapping) would replace it?
+
+Hmm, the problem's wording is a bit ambiguous. Let me re-read the docstring:
+
+"merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains."
+
+Ah, so the "colliding keys with non-MappingNode values" part says that when the values are non-MappingNodes, then the last one is kept. But if any of the values is a MappingNode, then merging is done. Wait, perhaps the presence of a MappingNode in the values means that the values should be merged (so that the MappingNodes are merged, and non-Mapping values would be ignored except for the last one? Not sure).
+
+Alternatively, maybe the merging only occurs when all the values are MappingNodes. Otherwise, the last non-Mapping is taken. But that's not clear.
+
+Alternatively, the process is: for each key, collect all the values. If any of the values is a MappingNode (i.e., a dict), then the merged value is the deep merge of all the MappingNode values, and any non-Mapping values are ignored except the last one? Not sure.
+
+Hmm, perhaps I should think of the problem as follows:
+
+The function should merge the nodes such that for each key:
+
+- If any node for that key has a value that is a MappingNode (a dict), then those MappingNode values are merged deeply, and non-Mapping values are ignored except the last one? Or perhaps the non-Mapping values are considered as the final value if the last one is non-Mapping.
+
+Alternatively, the merging process is as follows:
+
+For a given key's values:
+
+- The result is the last value in the list if that value is not a MappingNode. Otherwise, if the last value is a MappingNode, then we have to merge all the MappingNode values in the list, and ignore the non-Mapping values except for their existence?
+
+Wait, maybe the key point is that the non-MappingNode values can't be merged, so when there's a collision between a Mapping and non-Mapping, the last value (whether Mapping or not) determines. So if the last value is a non-Mapping, then that's the result. If the last value is a Mapping, then the result is the merged Mapping, but only considering the Mapping values from all the nodes, but the non-Mappings are ignored except their existence? Not sure.
+
+Alternatively, perhaps the presence of a non-MappingNode in the list for a key means that the last value (the last node's value) is taken, because you can't merge non-Mapping values. So the merging only happens when all the values are MappingNodes. Otherwise, the last value is the result.
+
+Wait, the problem says "merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains."
+
+So, the first part says to merge the node values for duplicate keys. The second part is an exception: when the values are non-MappingNodes, the last one is kept. So the merging (deep merging) only applies when the values are MappingNodes. So the process is:
+
+For each key:
+
+Collect all the values in order. The result is:
+
+If the last value is a non-MappingNode: take it.
+
+Else (the last value is a MappingNode):
+
+Then, among all the values, only the MappingNode ones are considered, and they are merged deeply. The non-Mapping ones are ignored because the last is a MappingNode, so the non-Mapping ones before it don't affect the result?
+
+Wait, but the problem says "merge any node values corresponding to duplicate keys". So if the last is a MappingNode, then all the MappingNode values (including the last) are merged. The non-Mapping values can be ignored because they are not MappingNodes, so their presence doesn't contribute to the merge.
+
+Alternatively, the non-Mapping values before the last MappingNode would be ignored because the last is a MappingNode, so the final value is the merged MappingNodes. So the steps would be:
+
+For a key's values list:
+
+- Check the last value. If it's a non-MappingNode, the result is that last value.
+
+- Else (last is a MappingNode), collect all the values that are MappingNodes (including the last one), and merge them deeply.
+
+Wait, but then the non-Mapping values before the last MappingNode would not affect the result. That seems possible.
+
+Alternatively, perhaps the presence of any non-MappingNode in the list for a key means that the last value (regardless of type) is taken. Because you can't merge non-Mapping values. So the merging only happens when all the values are MappingNodes. Otherwise, the last one is taken.
+
+Hmm, this is a bit ambiguous. Let me try to parse the problem statement again:
+
+"merge any node values corresponding to duplicate keys and return the result. If there are colliding keys with non-MappingNode values, the last of the values remains."
+
+The first part says to merge the values for duplicate keys. The second part is an exception for when the values are non-MappingNodes: in that case, the last value is kept.
+
+So the merging (the first part) applies only when the values are MappingNodes. Otherwise, the exception takes over.
+
+So the algorithm would be:
+
+For each key:
+
+Collect all the values in order. The result is:
+
+If any of the values is a non-MappingNode (i.e., the values are not all MappingNodes), then the last value is taken.
+
+Else (all are MappingNodes), then merge all the MappingNode values deeply.
+
+Wait, but the problem says "if there are colliding keys with non-MappingNode values", so that is when the values have non-MappingNode types. So in that case, the last value is kept.
+
+So the process is:
+
+Check if any of the values for the key are non-MappingNode. If yes, then the last value is the result. Otherwise, merge all the MappingNode values.
+
+Wait, no. Because the "colliding keys with non-MappingNode values" probably means that at least one of the values is a non-MappingNode. So in that case, the last value (could be a non-Mapping or a Mapping?) would be kept.
+
+Wait the problem says "the last of the values remains". So the last value in the list of nodes for that key is the one that remains, regardless of its type. So if there are any non-MappingNode values, then the last value (regardless of type) is kept. So if the last value is a MappingNode, then even if there were non-MappingNode values before it, the last value is kept. But then, in that case, how do you merge?
+
+Hmm, perhaps the problem is structured as:
+
+The merging only occurs when all the colliding keys have values that are MappingNodes. Otherwise, the last value is taken.
+
+So, for a key with values [M1, M2, M3], where M are MappingNodes, merge them into one. For a key with values [M1, 5, M3], since there's a non-Mapping (the 5), the last value (M3) is taken, but since it is a Mapping, then perhaps the M3 is the result? Or wait, no. Because the presence of the non-MappingNode (the 5) means that the exception applies, so the last value (M3) is kept. So the result is M3, not a merged version of M1 and M3?
+
+Wait the problem says that if there are colliding keys with non-MappingNode values, the last remains. So in this case, since there is a non-MappingNode (the 5), the last value (M3) is kept, even though it is a MappingNode. So the result is M3. But that's not merging the M1 and M3. So that's a problem. So maybe my initial interpretation is wrong.
+
+Alternatively, perhaps the exception only applies when the last value is a non-MappingNode. So if the last value is a non-MappingNode, then it is kept. Otherwise, even if there were non-MappingNode values before, but the last is a MappingNode, then you merge all the MappingNode values (including those before the non-Mapping ones?).
+
+Wait, maybe the presence of any non-MappingNode in the list for the key causes the exception to apply, but the last value is kept. So regardless of whether the last is a Mapping or not, the last is taken. So in the example [M1,5,M3], the last is M3 (a MappingNode), but since there were non-Mapping values (the 5), the exception says the last remains. So the result is M3. But that would ignore M1. So merging would not occur between M1 and M3.
+
+Hmm, that's conflicting with the first part of the docstring which says to merge. So perhaps the correct approach is:
+
+The merging happens only when all the colliding keys' values are MappingNodes. Otherwise, the last value is kept (regardless of type).
+
+So, in the example where some values are non-Mapping, you don't merge, you just take the last one.
+
+Therefore, the steps for a key:
+
+Check if all values are MappingNodes. If yes, then merge them all deeply. Else, the last value is the result.
+
+So how do I implement this?
+
+First, I need to process each key in the nodes. Let's assume that the nodes are a list of objects that have a key and a value. But perhaps the nodes are dictionaries themselves? The problem isn't entirely clear. Alternatively, the nodes are a list of dictionaries, each with a 'key' and 'value' field. Or perhaps each node is a tuple (key, value). Or maybe the nodes are objects with .key and .value attributes.
+
+Assuming that the nodes are a list of dictionaries, each with a 'key' and 'value' key. Or maybe each node is a tuple (key, value). To make it simple, perhaps the nodes are a list of (key, value) pairs. So for example, nodes could be like:
+
+nodes = [
+    ("a", {"x": 1}),
+    ("a", {"y": 2}),
+    ("b", 3),
+    ("b", 4),
+    ("c", {"z":5}),
+    ("c", 6),
+]
+
+Then, for key "a", both values are dicts (MappingNodes?), so they would be merged into {"x":1, "y":2}.
+
+For key "b", the values are 3 and 4 (non-Mapping), so the last (4) is taken.
+
+For key "c", the first is a dict, second is 6 (non-Mapping). Since there's a non-Mapping, the last value (6) is taken, so the result for "c" is 6.
+
+So the function's output would be a dictionary:
+
+{
+    'a': {'x':1, 'y':2},
+    'b':4,
+    'c':6
+}
+
+So the steps to implement:
+
+1. Iterate over all nodes, group them by their keys.
+
+2. For each key group:
+
+   a. Collect all the values in the order they appear in the nodes list.
+
+   b. Check if all the values are instances of a Mapping (like a dict). If yes, then perform a deep merge of all these values.
+
+   c. Else, take the last value in the list.
+
+3. The result is a dictionary of key to merged value.
+
+Now, how to check if a value is a Mapping? In Python, we can check if it's an instance of collections.abc.Mapping. So for a value, if isinstance(value, collections.abc.Mapping), then it is a MappingNode. Otherwise, it's a non-MappingNode.
+
+So, in code:
+
+First, import the necessary modules:
+
+from collections.abc import Mapping
+
+Then, the function:
+
+def deep_merge_nodes(nodes):
+    from collections import defaultdict
+    from collections.abc import Mapping
+
+    # Group the nodes by key
+    groups = defaultdict(list)
+    for node in nodes:
+        key = node[0]  # assuming node is a tuple (key, value)
+        val = node[1]
+        groups[key].append(val)
+
+    result = {}
+    for key, values in groups.items():
+        # Check if all values are mappings
+        all_mappings = all(isinstance(v, Mapping) for v in values)
+        if all_mappings:
+            # Merge all the mappings deeply
+            merged = {}
+            for v in values:
+                merged = deep_merge(merged, v)
+            result[key] = merged
+        else:
+            # Take the last value
+            result[key] = values[-1]
+    return result
+
+Wait, but how to do the deep merge? The deep_merge function is not yet defined. Oh right, we need to write a helper function to merge two mappings deeply.
+
+Wait, but the problem says that the function is called deep_merge_nodes, and the code must be generated. So I have to implement the deep merging within the function, or create a helper.
+
+Alternatively, here's the plan:
+
+The helper function for merging two mappings:
+
+def deep_merge(a, b):
+    """Recursively merge two mappings. For conflicting keys, the value from b is used."""
+    merged = a.copy()
+    for key in b:
+        if key in merged and isinstance(merged[key], Mapping) and isinstance(b[key], Mapping):
+            merged[key] = deep_merge(merged[key], b[key])
+        else:
+            merged[key] = b[key]
+    return merged
+
+Wait, but that's a possible way. So in the main function, when merging all the values for a key that are all mappings, you can start with an empty dict and merge each value in order. Wait, but the order is important. For example, the first value is merged into the initial empty, then the second merged into that, etc. So for each value in the list of values (which are all mappings), the next value overwrites the previous.
+
+Alternatively, perhaps the first value is the base, and each subsequent value is merged into it, but using the deep merge function which takes the second argument's values as precedence. So in the deep_merge(a, b), the b's values override a's. So when merging all the values in order, each subsequent value is merged into the accumulated one, so that later values override earlier ones. That makes sense, because in the case of non-Mappings, the last is taken. So for mappings, the same logic applies: the later mappings override the earlier ones, but merging their contents.
+
+Wait, in the example of two mappings {"x":1} and {"y":2}, the merged would be {"x":1, "y":2}. But if the second mapping had an "x", say {"x":3, "y":2}, then the merged would be {"x":3, "y":2}.
+
+So the deep_merge function must take the second parameter (b) as the one that takes precedence. So the helper function would work as above.
+
+Thus, in the main function, for each key's list of values (all mappings), we can start with an empty dict and then iterate through each value in the list, merging them into the accumulated value.
+
+Wait, but starting with the first value. Let me think:
+
+Suppose the values are [v1, v2, v3], all mappings.
+
+merged = v1
+
+merged = deep_merge(merged, v2) → merged now has v2's keys overriding v1's.
+
+merged = deep_merge(merged, v3) → same with v3.
+
+Thus, the final merged is the result of merging all in order, with later values taking precedence over earlier ones. That's correct.
+
+So in the code:
+
+merged = {}
+for v in values:
+    merged = deep_merge(merged, v)
+
+Wait, but that would start with an empty dict. Wait, no. The first iteration, merged is empty. Then merging with v1 would make merged = v1.copy()? Wait, the deep_merge function as written takes a and b, and returns a merged dict where a's values are updated with b's. Wait, no. Let me see:
+
+def deep_merge(a, b):
+    merged = a.copy()
+    for key in b:
+        if key in merged and isinstance(merged[key], Mapping) and isinstance(b[key], Mapping):
+            merged[key] = deep_merge(merged[key], b[key])
+        else:
+            merged[key] = b[key]
+    return merged
+
+So when merging a (which is empty initially) with v1, merged is a.copy() → empty, then for each key in v1, since merged doesn't have the key, it adds it from b (v1). So the first step is merged becomes v1. Then merging with v2: merged starts as v1's copy, then for each key in v2, if the key is in v1, and both are mappings, then merge them. Else, replace with v2's value.
+
+Thus, the merging correctly takes later values into account.
+
+Therefore, the code would look like this.
+
+Now, the problem is, the nodes are passed as a list of nodes, each of which has a key and a value. The code above assumes that each node is a tuple (key, value). But the problem's function signature says "nodes" is the parameter, but the docstring doesn't specify the structure. So perhaps the nodes are a list of dictionaries, each with 'key' and 'value' keys? Or perhaps the nodes are objects with key and value attributes? Since the problem is not specific, I'll assume that each node is a tuple of (key, value), so that nodes is a list of such tuples. That seems reasonable.
+
+Now, writing the code:
+
+First, the helper function for deep_merge. But since Python doesn't allow nested function definitions in a way that can be used in loops without recursion issues, perhaps we need to implement the deep_merge within the loop.
+
+Alternatively, we can write the deep_merge as a helper inside the function.
+
+Wait, but in the code above, the deep_merge is a separate function. So the code would need to define that.
+
+Alternatively, we can inline the merging.
+
+Alternatively, here's the code outline:
+
+def deep_merge_nodes(nodes):
+    from collections import defaultdict
+    from collections.abc import Mapping
+
+    groups = defaultdict(list)
+    for key, val in nodes:
+        groups[key].append(val)
+
+    result = {}
+    for key, values in groups.items():
+        all_mappings = all(isinstance(v, Mapping) for v in values)
+        if all_mappings:
+            merged = {}
+            for v in values:
+                # Merge v into merged
+                new_merged = {}
+                for k in merged:
+                    if k in v:
+                        if isinstance(merged[k], Mapping) and isinstance(v[k], Mapping):
+                            new_merged[k] = deep_merge_nodes([(k, merged[k]), (k, v[k])])[k]
+                        else:
+                            new_merged[k] = v[k]
+                    else:
+                        new_merged[k] = merged[k]
+                for k in v:
+                    if k not in new_merged:
+                        new_merged[k] = v[k]
+                merged = new_merged
+            result[key] = merged
+        else:
+            result[key] = values[-1]
+    return result
+
+Wait, this is getting too complicated. Maybe the helper function is better. Let's try to structure it.
+
+Wait, perhaps the code can be written as follows:
+
+def deep_merge_nodes(nodes):
+    from collections import defaultdict
+    from collections.abc import Mapping
+
+    groups = defaultdict(list)
+    for key, val in nodes:
+        groups[key].append(val)
+
+    def merge_mappings(mappings):
+        merged = {}
+        for m in mappings:
+            temp_merged = {}
+            for k in merged:
+                if k in m:
+                    if isinstance(merged[k], Mapping) and isinstance(m[k], Mapping):
+                        temp_merged[k] = deep_merge_nodes([(k, merged[k]), (k, m[k])])[k]
+                    else:
+                        temp_merged[k] = m[k]
+                else:
+                    temp_merged[k] = merged[k]
+            for k in m:
+                if k not in temp_merged:
+                    temp_merged[k] = m[k]
+            merged = temp_merged
+        return merged
+
+    result = {}
+    for key, values in groups.items():
+        if all(isinstance(v, Mapping) for v in values):
+            result[key] = merge_mappings(values)
+        else:
+            result[key] = values[-1]
+    return result
+
+Hmm, but this might not work because the merge_mappings function is trying to call deep_merge_nodes again, which would loop indefinitely. Alternatively, the merge_mappings function can use the same deep merging approach as before.
+
+Alternatively, let's write the deep_merge helper inside the function.
+
+Wait, here's an alternative approach. Let me try to code the deep_merge as a helper function inside the function:
+
+def deep_merge_nodes(nodes):
+    from collections import defaultdict
+    from collections.abc import Mapping
+
+    groups = defaultdict(list)
+    for key, val in nodes:
+        groups[key].append(val)
+
+    def deep_merge(a, b):
+        merged = a.copy()
+        for key in b:
+            if key in merged:
+                if isinstance(merged[key], Mapping) and isinstance(b[key], Mapping):
+                    merged[key] = deep_merge(merged[key], b[key])
+                else:
+                    merged[key] = b[key]
+            else:
+                merged[key] = b[key]
+        return merged
+
+    result = {}
+    for key, values in groups.items():
+        if all(isinstance(v, Mapping) for v in values):
+            merged = {}
+            for v in values:
+                merged = deep_merge(merged, v)
+            result[key] = merged
+        else:
+            result[key] = values[-1]
+    return result
+
+Ah, that's better. The helper function deep_merge is defined inside the function, so it can use the same logic. Let me test this with some examples.
+
+Test case 1:
+
+nodes = [
+    ("a", {"x": 1}),
+    ("a", {"y": 2}),
+]
+The all_mappings is True. Merging the two dicts. The first merged is {}, then merged with first v ({"x":1}) → merged becomes {"x":1}. Then merged with second v ({"y":2}) → merged becomes {"x":1, "y":2}. So result is correct.
+
+Test case 2:
+
+nodes = [
+    ("b", 3),
+    ("b", 4),
+]
+Values are non-mappings. So take last value 4. Correct.
+
+Test case 3:
+
+nodes = [
+    ("c", {"z":5}),
+    ("c", 6),
+]
+The values are a dict and an int. So not all mappings. Take last value 6. Correct.
+
+Another test case where a later value is a mapping:
+
+nodes = [
+    ("d", 10),
+    ("d", {"a": 20}),
+]
+The values are 10 (non-Mapping) and a dict. Since not all are mappings, take last value (the dict). But according to the code, since the last value is a Mapping, but there was a non-Mapping before, the code will take the last value (the dict) as the result. But according to the problem statement, since there are non-Mapping values (the 10), then the last value (the dict) is kept, even though it is a mapping. So the result is the dict. That's correct.
+
+Another example where the last is a non-Mapping:
+
+nodes = [
+    ("e", {"a":1}),
+    ("e", 2),
+]
+The values are a dict and 2. So the last is 2 (non-Mapping), so the result is 2.
+
+Another test case with multiple mappings and a non-Mapping in between:
+
+nodes = [
+    ("f", {"a":1, "b":2}),
+    ("f", {"a":3}),
+    ("f", {"b":4, "c":5}),
+]
+All are mappings. So merged would be:
+
+Start with {}.
+
+After first v: {"a":1, "b":2}
+
+After second v ({"a":3}): merged becomes {"a":3, "b":2}
+
+Then third v ({"b":4, "c":5}) → merged becomes:
+
+a:3, b:4 (since the third's b is 4), c:5.
+
+So final merged is {"a":3, "b":4, "c":5}.
+
+Yes, that's correct.
+
+Now, what about a case where the values are a mix of mappings and non-mappings but the last is a mapping:
+
+nodes = [
+    ("g", {"x": 10}),
+    ("g", 20),
+    ("g", {"y": 30}),
+]
+
+The values are a dict, 20 (non-Mapping), and a dict. Since not all are mappings, the last value (the dict {"y":30}) is taken. So the result is {"y":30}.
+
+Another case where the last is a non-Mapping:
+
+nodes = [
+    ("h", {"x": 1}),
+    ("h", {"y":2}),
+    ("h", 3),
+]
+The last value is 3 (non-Mapping), so result is 3.
+
+So the code seems to handle these cases.
+
+Now, the code's helper function deep_merge is properly merging two mappings. The code for the helper is inside the function, so it's okay.
+
+Now, the problem requires that I follow test-driven development, first generating comprehensive unit tests before writing the actual code. But since the user is asking me to output only the code, perhaps I can proceed with writing the code as above.
+
+Wait, but the problem says to output only the code in Python markdown format. So the code I wrote above is the solution. Let me check for possible errors.
+
+Wait, in the code, the deep_merge function is defined inside deep_merge_nodes. The parameters a and b are the two mappings to merge. The function starts by copying a, then iterates over the keys in b. For each key in b:
+
+- if the key is in a, then check if both are mappings. If so, recursively merge them. Else, take b's value.
+
+- else, add the key from b.
+
+This should correctly merge the two mappings with b's values taking precedence over a's, except for nested mappings which are merged.
+
+Another possible edge case: a key in a but not in b, so remains. A key in both, but one is a mapping and the other is not. Then the non-mapping is replaced by the b's value.
+
+Yes.
+
+Another case where a key has a list in one and a dict in another. But since lists are not mappings, they would be replaced by the later value.
+
+So the code should work.
+
+Now, the code uses tuples as the nodes, expecting each node to have a key and a value. The function groups the nodes by key, then processes each group.
+
+Now, the code's structure is correct. The only thing left is to make sure that the code is properly formatted, and uses the correct imports.
+
+Wait, the code uses from collections.abc import Mapping inside the function. Wait, no. Wait, in the code I wrote earlier, inside the function:
+
+from collections import defaultdict
+from collections.abc import Mapping
+
+But in Python, you can't have import statements inside a function like that. Oh wait, no! Wait, the code as written would have the import statements inside the function, which is allowed in Python. Wait, actually, you can have imports inside functions, but it's not common. So that's okay.
+
+Wait, let me check:
+
+def deep_merge_nodes(nodes):
+    from collections import defaultdict
+    from collections.abc import Mapping
+
+Yes, that's valid. The imports are inside the function, so they are executed each time the function is called. But that's okay.
+
+Alternatively, the imports could be outside, but since the problem might not require that, this is acceptable.
+
+Thus, the code should be correct.

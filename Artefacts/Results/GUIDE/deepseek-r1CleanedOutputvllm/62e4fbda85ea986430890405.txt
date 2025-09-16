@@ -1,0 +1,123 @@
+import argparse
+import colorama
+from typing import Sequence, Tuple, Optional
+
+colorama.init()
+
+def xargs(
+    cmd: Tuple[str, ...],
+    varargs: Sequence[str],
+    *,
+    color: bool = False,
+    target_concurrency: int = 1,
+    _max_length: int = _get_platform_max_length(),
+    **kwargs
+) -> Tuple[str, Optional[str]]:
+    """
+    Simplified Implementation of Xargs in Linux
+
+    Finds matching command line arguments based on patterns provided in cmd.
+
+    Args:
+        cmd: Tuple of patterns to match against command line arguments
+        varargs: Sequence of command line arguments to search through
+        color: Whether to output matched arguments in green (default: False)
+        target_concurrency: Number of arguments to process concurrently
+        _max_length: Maximum length for argument matching (automatically determined)
+        **kwargs: Additional options (e.g., --help, -v)
+
+    Returns:
+        Tuple containing the matched arguments and a message string
+
+    Raises:
+        argparse.error: If invalid options are provided
+    """
+    # Process command line arguments with concurrency
+    processed_args = process_args(varargs, target_concurrency)
+
+    # Filter arguments based on patterns
+    matches = filter_matches(cmd, processed_args, _max_length)
+
+    # Highlight matches based on color flag
+    highlighted_matches = highlight_matches(color, matches)
+
+    # Return matched arguments and message
+    return highlighted_matches, "Command line arguments found: " + ", ".join(highlighted_matches)
+
+def process_args(args: Sequence[str], concurrency: int) -> list:
+    """
+    Processes command line arguments with given concurrency level.
+
+    Args:
+        args: Sequence of command line arguments
+        concurrency: Number of arguments to process at the same time
+
+    Returns:
+        List of processed arguments
+    """
+    return args[: concurrency]
+
+def filter_matches(patterns: Tuple[str, ...], args: list, max_length: int) -> list:
+    """
+    Filters command line arguments based on matching patterns.
+
+    Args:
+        patterns: Tuple of patterns to match against
+        args: List of command line arguments
+        max_length: Maximum length for argument matching
+
+    Returns:
+        List of arguments that match any of the patterns
+    """
+    matches = []
+    for arg in args:
+        for pattern in patterns:
+            if matches_pattern(arg, pattern, max_length):
+                matches.append(arg)
+                break
+    return matches
+
+def matches_pattern(arg: str, pattern: str, max_length: int) -> bool:
+    """
+    Checks if an argument matches a given pattern.
+
+    Args:
+        arg: Argument to check
+        pattern: Pattern to match against
+        max_length: Maximum allowed length for matching
+
+    Returns:
+        True if argument matches pattern, False otherwise
+    """
+    if max_length != _get_platform_max_length():
+        return False
+
+    return bool(re.match(pattern, arg))
+
+def highlight_matches(color: bool, matches: list) -> list:
+    """
+    Highlights matched arguments based on color flag.
+
+    Args:
+        color: Whether to highlight matches
+        matches: List of matched arguments
+
+    Returns:
+        List of highlighted matches
+    """
+    if not color:
+        return matches
+
+    highlighted = []
+    for match in matches:
+        highlighted.append(f'\033[32m{match}\033[0m')
+    return highlighted
+
+def _get_platform_max_length() -> int:
+    """
+    Determines the maximum length for argument matching based on platform.
+
+    Returns:
+        24 for Windows, 72 for Linux
+    """
+    return 24 if 'Windows' in colorama.get SupportingTerminals() else 72

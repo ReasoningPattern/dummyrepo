@@ -1,0 +1,53 @@
+import os
+import subprocess
+
+def ansible_playbook(ir_workspace, ir_plugin, playbook_path, verbose=None,
+                     extra_vars=None, ansible_args=None):
+    """
+    Wraps the 'ansible-playbook' CLI.
+
+    :param ir_workspace: An Infrared Workspace object represents the active
+    workspace
+    :param ir_plugin: An InfraredPlugin object of the current plugin
+    :param playbook_path: the playbook to invoke
+    :param verbose: Ansible verbosity level
+    :param extra_vars: dict. Passed to Ansible as extra-vars
+    :param ansible_args: dict of ansible-playbook arguments to plumb down
+        directly to Ansible.
+    """
+    # Resolve playbook path using ir_workspace
+    playbook_abs_path = os.path.join(ir_workspace.path, playbook_path)
+    
+    command = ['ansible-playbook']
+    
+    # Handle verbose
+    if verbose is not None:
+        for _ in range(verbose):
+            command.append('-v')
+    
+    # Add playbook path
+    command.append(playbook_abs_path)
+    
+    # Handle extra_vars
+    if extra_vars is not None:
+        for key, value in extra_vars.items():
+            command.append(f'--extra-vars {key}={value}')
+    
+    # Handle ansible_args
+    if ansible_args is not None:
+        for key, value in ansible_args.items():
+            if value is None:
+                command.append(f'--{key}')
+            else:
+                command.append(f'--{key}={value}')
+    
+    # Execute the command
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False  # Don't raise exception on error
+    )
+    
+    # Return the output and return code
+    return result.stdout, result.stderr, result.returncode

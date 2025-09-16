@@ -1,0 +1,54 @@
+from argparse import _SubParsersAction
+from borgmatic.borgmatic import build_parser
+
+def bash_completion():
+    parser = build_parser()
+    subparsers_action = None
+    for action in parser._actions:
+        if isinstance(action, _SubParsersAction):
+            subparsers_action = action
+            break
+    if not subparsers_action:
+        return ''
+    
+    subcommands = subparsers_action.choices
+    completion_script = []
+    completion_script.append(' _borgmatic() {')
+    completion_script.append('    local cur prev words cword')
+    completion_script.append('    _init_completion || return')
+    completion_script.append('')
+    completion_script.append('    case "$cur" in')
+    completion_script.append('        --*=)')
+    completion_script.append('            return;;')
+    completion_script.append('        *)')
+    completion_script.append('            ;;')
+    completion_script.append('    esac')
+    completion_script.append('')
+    completion_script.append('    case "$prev" in')
+    completion_script.append('        # Handle options that take arguments here')
+    completion_script.append('        *)')
+    completion_script.append('            ;;')
+    completion_script.append('    esac')
+    completion_script.append('')
+    completion_script.append('    case "${words[cword]}" in')
+    subcommand_list = ' '.join(subcommands.keys())
+    completion_script.append(f'        borgmatic)')
+    completion_script.append(f'            COMPREPLY=($(compgen -W "{subcommand_list}" -- "$cur"))')
+    completion_script.append('            return;;')
+    for subcommand in subcommands:
+        subparser = subparsers_action.choices[subcommand]
+        options = []
+        for action in subparser._actions:
+            if hasattr(action, 'option_strings'):
+                options.extend(action.option_strings)
+        option_list = ' '.join(options)
+        completion_script.append(f'        {subcommand})')
+        completion_ = f'COMPREPLY=($(compgen -W "{option_list}" -- "$cur"))'
+        completion_script.append(f'            {completion_}')
+        completion_script.append('            return;;')
+    completion_script.append('        *)')
+    completion_script.append('            ;;')
+    completion_script.append('    esac')
+    completion_script.append('}')
+    completion_script.append('complete -F _borgmatic borgmatic')
+    return '\n'.join(completion_script)

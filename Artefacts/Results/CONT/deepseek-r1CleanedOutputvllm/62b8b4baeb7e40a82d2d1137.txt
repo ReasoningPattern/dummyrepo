@@ -1,0 +1,79 @@
+import inspect
+from sys import modules
+from __future__ import annotations
+
+def verifyObject(iface, candidate, tentative=False) -> bool:
+    """
+    Verify that *candidate* might correctly provide *iface*.
+
+    This involves:
+    
+    - Making sure the candidate claims that it provides the
+      interface using ``iface.providedBy`` (unless *tentative* is `True`,
+      in which case this step is skipped). This means that the candidate's class
+      declares that it `implements <zope.interface.implementer>` the interface,
+      or the candidate itself declares that it `provides <zope.interface.provider>`
+      the interface.
+
+    - Making sure the candidate defines all the necessary methods
+
+    - Making sure the methods have the correct signature (to the
+      extent possible)
+
+    - Making sure the candidate defines all the necessary attributes
+
+    :return: Returns a true value if everything that could be
+             checked passed.
+    :raises zope.interface.Invalid: If any of the previous
+             conditions does not hold.
+
+    .. versionchanged:: 5.0
+        If multiple methods or attributes are invalid, all such errors
+        are collected and reported. Previously, only the first error was reported.
+        As a special case, if only one such error is present, it is raised
+        alone, like before.
+    """
+    errors = []
+
+    # Check if candidate claims to provide the interface
+    if not tentative:
+        if not (inspect.isInterface(candidate.__class__) and iface in candidate.__class__.__interfaces__):
+            errors.append(f"Interface {repr(iface)} not implemented by {candidate.__class__.__name__}")
+
+    # Check if all required methods are present
+    required_methods = set(iface.__methods__)
+    candidate_methods = set(dir(candidate)) & required_methods
+    missing_methods = required_methods - candidate_methods
+    if missing_methods:
+        errors.append(f"Missing methods: {missing_methods}")
+
+    # Check if methods have correct signatures
+    for method in required_methods:
+        if not hasattr(candidate, method):
+            errors.append(f"Method {method} not found")
+            continue
+        sig = inspect.signature(method)
+        parameters = list(sig.parameters.values())
+        if not parameters:
+            errors.append(f"No parameters for method {method}")
+            continue
+        if not parameters[0].annotation:
+            errors.append(f"First parameter of {method} has no type annotation")
+        else:
+            expected_type = parameters[0].annotation
+            actual_type = getattr(getattr(candidate, method), parameters[0].name, None)
+            if actual_type is None:
+                errors.append(f"No type found for parameter {parameters[0].name} in method {method}")
+
+    # Check if all required attributes are defined
+    required_attributes = set(iface.__attributes__)
+    candidate_attributes = set(dir(candidate)) & required_attributes
+    missing_attributes = required_attributes - candidate_attributes
+    if missing_attributes:
+        errors.append(f"Missing attributes: {missing_attributes}")
+
+    if not errors:
+        return True
+
+    msg = "Invalid: " + " and ".join(errors)
+    raise modules['zope.interface'].Invalid(msg)

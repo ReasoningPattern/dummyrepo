@@ -1,0 +1,172 @@
+Okay, I need to create a Python decorator called 'cached' based on the given function signature and docstring. Let me think about how decorators with parameters work. The decorator is supposed to take 'cache', 'key', and 'lock' as arguments. The key defaults to hashkey, but I should check if that's a function or something else. Wait, the key parameter is probably a function that generates the cache key, maybe using the function's arguments.
+
+So the decorator will wrap a function so that when it's called, it first checks the cache using the generated key. If the result is present, returns it immediately. If not, computes the result, stores it in the cache, and then returns it. The lock is probably for thread safety, to prevent race conditions when multiple calls try to compute the result at the same time.
+
+Hmm, the structure would be something like this: the 'cached' function returns the actual decorator. That decorator takes the original function, and returns a wrapper function. The wrapper function will handle the cache lookup and storage.
+
+Let me outline the steps:
+
+1. The cached decorator is called with cache, key, lock. It returns the decorator function.
+2. The decorator is applied to the target function. So the next layer is the inner decorator that takes the function to wrap.
+3. The inner function returns the wrapper, which will be called when the decorated function is invoked.
+4. In the wrapper, when the function is called, generate the key using the key function. The key probably uses the args and kwargs of the function call. So the key function should take the function's arguments.
+Wait, the key parameter here is a function, right? The default is hashkey, but maybe the user can provide their own key generator. So the key function must accept the function's arguments and return a string or hashable key.
+
+So, when the wrapper is called with *args and **kwargs, it needs to compute the key by calling key(func, *args, **kwargs) or something like that? Wait, maybe the key function is supposed to take the function and its arguments. Or maybe the key function is supposed to be a function that can generate a key based on the arguments. The exact parameters of the key function might be important here.
+
+Looking at the problem statement, the parameters for the cached decorator are (cache, key=hashkey, lock=None). So the key parameter is a function that can generate the key. The default is hashkey, but I don't know what hashkey is here. Maybe it's a predefined function that takes the function and its arguments to compute a key. Assuming that the key function is supposed to take the function's arguments, perhaps like key(*args, **kwargs), but I need to make sure.
+
+Alternatively, maybe the key function is supposed to take the wrapped function, its arguments, and keyword arguments. For example, key(func, *args, **kwargs). But without knowing the exact signature of hashkey, I have to make an educated guess. Let's proceed under the assumption that the key function takes the wrapped function's arguments and returns a key.
+
+So in the wrapper function, when the decorated function is called, we first compute the key by calling key(*args, **kwargs). Then check if it's in the cache. If not, acquire the lock (if provided), check again (double-checking lock), compute the result, store it in the cache, release the lock, and return the result.
+
+Wait, the lock is optional. So if lock is provided, we need to handle the locking to prevent multiple threads from computing the same result. The standard approach here is a double-checked locking: first check the cache without the lock, then if not present, acquire the lock, check again (in case another thread already computed it while waiting for the lock), and then compute and store if necessary.
+
+So putting this together:
+
+The wrapper function would do:
+
+def wrapper(*args, **kwargs):
+    k = key(*args, **kwargs)  # Or is it key(func, *args, **kwargs)? Hmm.
+    # Wait, maybe the key function needs the actual function being wrapped. Like, the key might depend on the function's identity. So perhaps the key function is called with the function as the first argument. Because otherwise, different functions with the same arguments would have the same key. So maybe the key function is called as key(func, *args, **kwargs). That makes sense.
+
+Ah right! The key function should take the function being decorated and its arguments. Because otherwise, two different functions with the same arguments would have the same key, which is probably not desired. So the key function's first argument is the function being wrapped. So in the code, when generating the key, we need to pass the wrapped function (the func variable) along with the arguments.
+
+Therefore, the key should be generated as key(func, *args, **kwargs).
+
+So, the steps in the wrapper:
+
+1. Compute the key using key(func, *args, **kwargs).
+2. Check if the key exists in the cache. If so, return it.
+3. If not, and a lock is provided, acquire the lock.
+4. Re-check the cache inside the lock (in case another thread added it while waiting).
+5. If still not present, compute the result by calling func(*args, **kwargs).
+6. Store the result in the cache with the key.
+7. Release the lock.
+8. Return the result.
+
+Now, implementing that in code.
+
+First, the outer function 'cached' takes cache, key, lock. Then returns the decorator.
+
+The decorator takes the function (func) and returns the wrapper.
+
+So code outline:
+
+def cached(cache, key=hashkey, lock=None):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            k = key(func, *args, **kwargs)
+            if k in cache:
+                return cache[k]
+            if lock is not None:
+                lock.acquire()
+            # Double-check
+            try:
+                if k not in cache:
+                    result = func(*args, **kwargs)
+                    cache[k] = result
+            finally:
+                if lock is not None:
+                    lock.release()
+            return cache[k]
+        return wrapper
+    return decorator
+
+Wait, but the default for key is hashkey. I need to make sure that hashkey is a function that can take (func, *args, **kwargs). But since the user can pass their own key function, the code should work as long as the key function is correctly implemented.
+
+Also, need to import functools for the wraps decorator to preserve the function's name and docstring.
+
+Wait, in the code above, the 'key' variable is passed as an argument to the cached decorator, so inside the decorator, it's correctly captured.
+
+Wait, the code uses 'key' from the outer scope. But in the closure, that's okay.
+
+Wait, the code is using the key parameter as given. So that should be correct.
+
+Another thing: the lock is optional. So if it's None, we just proceed without locking. So the code for the lock is only executed when lock is not None.
+
+In the case where there's no lock, there might be a race condition where two threads check the cache, both not find the key, and both compute the result. That's a problem, but the user can choose to handle that by providing a lock if needed.
+
+The code above should handle that. Let me check the steps again.
+
+In the wrapper function:
+
+- compute k.
+- check cache. If present, return.
+- if lock exists, acquire.
+- then check again.
+- if not present, compute, store, then release.
+- return cache[k].
+
+Yes, that's correct.
+
+Wait, the 'finally' ensures that the lock is released even if an exception occurs during the computation of the function. That's important.
+
+Wait, but when storing the result, the code does:
+
+if k not in cache:
+    result = func(...)
+    cache[k] = result
+
+Then returns cache[k], which will have the value. Even if another thread added it, the check ensures that we only store if necessary. So in the case where another thread already stored it, we just proceed to return the existing value.
+
+This should handle the double-check properly.
+
+Now, the code needs to import functools for wraps. The user's code may need to have that, but the problem statement doesn't mention it, so I have to include the necessary imports in the code.
+
+Wait, the problem says to output the code generated, so I should include the import statement for functools.
+
+Wait, in the code, the @functools.wraps is necessary to preserve the function's metadata. So the code must import functools.
+
+Therefore, the code should start with:
+
+import functools
+
+Then the cached function.
+
+Putting it all together:
+
+Wait, let me write it step by step.
+
+The code:
+
+import functools
+
+def cached(cache, key=hashkey, lock=None):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            k = key(func, *args, **kwargs)
+            if k in cache:
+                return cache[k]
+            if lock is not None:
+                lock.acquire()
+            try:
+                if k not in cache:
+                    result = func(*args, **kwargs)
+                    cache[k] = result
+            finally:
+                if lock is not None:
+                    lock.release()
+            return cache[k]
+        return wrapper
+    return decorator
+
+Wait, but the 'key' parameter's default is hashkey. But where is hashkey defined? The problem statement mentions that the key parameter has a default of hashkey, but in the code, we can't use hashkey unless it's imported or defined. However, since the problem says to generate the code based on the function signature and docstring, and the user is supposed to have hashkey available, perhaps the code just uses it as is. So maybe hashkey is a function provided elsewhere. The code doesn't need to define it, just uses it as the default.
+
+Therefore, the code is okay as written, assuming that hashkey is in scope where the cached decorator is used.
+
+Therefore, the final code would look like that. Let me check for any possible errors.
+
+Wait, in the case where the lock is None, the code skips the acquire and release, which is correct. The try/finally block still runs, but the code inside if lock is not None will be skipped.
+
+Yes.
+
+Another possible edge case: if the key is not in the cache, and no lock is present, then multiple threads could compute the result. But that's the user's responsibility to provide a lock if needed.
+
+Another thing: when the lock is present, the code properly acquires and releases it. The try/finally ensures the lock is released even if an exception occurs in the function.
+
+Yes.
+
+So the code seems correct.

@@ -1,0 +1,49 @@
+import functools
+import time
+from collections import OrderedDict
+
+class TtlCache:
+    def __init__(self, maxsize, ttl, timer=time.monotonic, typed=False):
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self.timer = timer
+        self.typed = typed
+        self.cache = OrderedDict()
+    
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if self.typed:
+                try:
+                    args = tuple(args)
+                    key = (args, kwargs)
+                except TypeError:
+                    key = (args, kwargs)
+            else:
+                key = (args, kwargs)
+            
+            current_time = self.timer()
+            
+            if key in self.cache:
+                # Update the timestamp
+                self.cache[key][0] = current_time
+                return self.cache[key][1]
+            
+            # Check if we need to evict
+            if len(self.cache) > self.maxsize:
+                # Evict the LRU item
+                for k, v in list(self.cache.items()):
+                    last_access = v[0]
+                    if last_access < current_time - self.ttl:
+                        del self.cache[k]
+                        break
+            
+            # Store the new item
+            self.cache[key] = (current_time, func(*args, **kwargs))
+            return self.cache[key][1]
+        
+        return wrapper
+
+def ttl_cache(maxsize=128, ttl=600, timer=time.monotonic, typed=False):
+    decorator = TtlCache(maxsize, ttl, timer, typed)
+    return decorator

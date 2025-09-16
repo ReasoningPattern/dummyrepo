@@ -1,0 +1,39 @@
+
+
+```python
+import inspect
+from zope.interface import Invalid
+
+def verifyObject(iface, candidate, tentative=False):
+    errors = []
+    if not tentative:
+        if not iface.providedBy(candidate):
+            errors.append("Candidate does not claim to provide the interface")
+    
+    method_names = iface.methodNames()
+    for method_name in method_names:
+        if not hasattr(candidate, method_name):
+            errors.append(f"Missing method: {method_name}")
+        else:
+            interface_method = iface[method_name]
+            sig_info = interface_method.getSignatureInfo()
+            candidate_method = getattr(candidate, method_name)
+            candidate_sig = inspect.signature(candidate_method)
+            
+            interface_params = [p for p in sig_info['positional_only'] + sig_info['required']]
+            candidate_params = list(candidate_sig.parameters.keys())
+            if interface_params != candidate_params:
+                errors.append(f"Method {method_name} has incorrect signature")
+    
+    attribute_names = iface.getAttributeNames()
+    for attr_name in attribute_names:
+        if not hasattr(candidate, attr_name):
+            errors.append(f"Missing attribute: {attr_name}")
+    
+    if errors:
+        if len(errors) == 1:
+            raise Invalid(errors[0])
+        else:
+            raise Invalid("Multiple errors: " + "; ".join(errors))
+    return True
+```

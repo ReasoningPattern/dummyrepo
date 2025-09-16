@@ -1,0 +1,26 @@
+def validate_version_inventories(self, version_dirs):
+    """
+    Each version SHOULD have an inventory up to that point.
+
+    Also keep a record of any content digests different from those in the root inventory
+    so that we can also check them when validating the content.
+
+    version_dirs is an array of version directory names and is assumed to be in
+    version sequence (1, 2, 3...).
+    """
+    self.status_str("Validating version inventories")
+    prior_manifest_digests = {}
+    prior_fixity_digests = {}
+    for version_dir in version_dirs:
+        inv_file = self.obj_fs.get_inventory_path(version_dir)
+        inv_digest_file = self.inventory_digest_files.get(version_dir)
+        if not inv_file.exists():
+            self.log.error(f"Missing inventory file in version directory: {version_dir}")
+            continue
+        self.validate_inventory(inv_file, version_dir, self.spec_version)
+        current_manifest_digests, current_fixity_digests = self.read_inventory_digest(inv_digest_file)
+        self.check_additional_digests(inv_file, prior_manifest_digests, current_manifest_digests, "MANIFEST")
+        self.check_additional_digests(inv_file, prior_fixity_digests, current_fixity_digests, "FIXITY")
+        prior_manifest_digests.update(current_manifest_digests)
+        prior_fixity_digests.update(current_fixity_digests)
+    self.validate_content(self.content_directory, version_dirs, prior_manifest_digests, prior_fixity_digests)

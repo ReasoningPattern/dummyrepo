@@ -1,0 +1,65 @@
+import os
+import json
+
+def validate_version_inventories(self, version_dirs):
+    """
+    Each version SHOULD have an inventory up to that point.
+
+    Also keep a record of any content digests different from those in the root inventory
+    so that we can also check them when validating the content.
+
+    version_dirs is an array of version directory names and is assumed to be in
+    version sequence (1, 2, 3...).
+    """
+    # Check if all version directories exist
+    for version_dir in version_dirs:
+        version_path = os.path.join(self.base_path, version_dir)
+        if not os.path.exists(version_path):
+            raise FileNotFoundError(f"Version directory {version_dir} not found")
+    
+    # Read root inventory from the first version
+    root_inventory_path = os.path.join(self.base_path, version_dirs[0], 'inventory.json')
+    with open(root_inventory_path, 'r') as f:
+        root_inventory = json.load(f)
+    
+    differences = []
+    
+    for version_dir in version_dirs:
+        inventory_path = os.path.join(self.base_path, version_dir, 'inventory.json')
+        try:
+            with open(inventory_path, 'r') as f:
+                current_inventory = json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Inventory file not found in version directory {version_dir}")
+        
+        # Compare current inventory with root inventory
+        for digest, current_value in current_inventory.items():
+            if digest not in root_inventory:
+                differences.append({
+                    'version': version_dir,
+                    'digest': digest,
+                    'type': 'added',
+                    'root_value': None,
+                    'current_value': current_value
+                })
+            elif root_inventory[digest] != current_value:
+                differences.append({
+                    'version': version_dir,
+                    'digest': digest,
+                    'type': 'changed',
+                    'root_value': root_inventory[digest],
+                    'current_value': current_value
+                })
+        
+        # Check for missing digests in current inventory
+        for digest, root_value in root_inventory.items():
+            if digest not in current_inventory:
+                differences.append({
+                    'version': version_dir,
+                    'digest': digest,
+                    'type': 'removed',
+                    'root_value': root_value,
+                    'current_value': None
+                })
+    
+    return differences

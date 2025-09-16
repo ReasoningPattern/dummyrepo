@@ -1,0 +1,65 @@
+import inspect
+
+def verifyObject(iface, candidate, tentative=False):
+    """
+    Verify that *candidate* might correctly provide *iface*.
+
+    This involves:
+    - Making sure the candidate claims that it provides the interface using ``iface.providedBy`` (unless *tentative* is `True`, in which case this step is skipped). This means that the candidate's class declares that it `implements <zope.interface.implementer>` the interface, or the candidate itself declares that it `provides <zope.interface.provider>` the interface.
+    - Making sure the candidate defines all the necessary methods.
+    - Making sure the methods have the correct signature (to the extent possible).
+    - Making sure the candidate defines all the necessary attributes.
+
+    :return: bool: Returns a true value if everything that could be checked passed.
+    :raises zope.interface.Invalid: If any of the previous conditions does not hold.
+    """
+    if tentative:
+        return True  # Skip the first check if tentative is True
+
+    # Check if candidate claims to provide the interface
+    if not hasattr(candidate, 'providedBy') or not callable(candidate.providedBy):
+        raise ValueError("Candidate must declare it provides the interface")
+    if not candidate.providedBy == iface:
+        raise ValueError("Candidate does not claim to provide the interface")
+
+    # Check if candidate implements the interface
+    if not hasattr(candidate, '__implements__') or not callable(candidate.__implements__):
+        raise ValueError("Candidate must implement the interface")
+
+    # Check if candidate's class implements the interface
+    if not inspect.isclass(candidate):
+        raise ValueError("Candidate must be a class")
+
+    # Check if the candidate's class implements the interface
+    if not inspect.issubclass(candidate, iface):
+        raise ValueError("Candidate must implement the interface")
+
+    # Check if all required methods are present
+    required_methods = set()
+    if hasattr(iface, '__methods__'):
+        required_methods = set(iface.__methods__)
+    else:
+        required_methods = set(iface.__dict__.keys())
+
+    for method_name in required_methods:
+        if not hasattr(candidate, method_name):
+            raise ValueError(f"Method {method_name} is missing from candidate")
+
+    # Check method signatures
+    for method_name in required_methods:
+        method = getattr(candidate, method_name)
+        if not inspect.ismethod(method):
+            raise ValueError(f"Method {method_name} is not a method")
+
+    # Check if all required attributes are present
+    required_attributes = set()
+    if hasattr(iface, '__attributes__'):
+        required_attributes = set(iface.__attributes__)
+    else:
+        required_attributes = set(iface.__dict__.keys())
+
+    for attr_name in required_attributes:
+        if not hasattr(candidate, attr_name):
+            raise ValueError(f"Attribute {attr_name} is missing from candidate")
+
+    return True

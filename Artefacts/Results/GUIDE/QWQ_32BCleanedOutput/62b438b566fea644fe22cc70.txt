@@ -1,0 +1,61 @@
+def bash_completion():
+    """
+    Produce the borgmatic command by introspecting borgmatic's command-line argument parsers.
+    """
+    import argparse
+    from borgmatic import arguments
+
+    parser = arguments.make_parser()
+    subparsers = None
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            subparsers = action
+            break
+    if not subparsers:
+        return "No subparsers found."
+
+    subcommands = subparsers.choices.keys()
+
+    subcommand_options = {}
+    for subcmd in subcommands:
+        subparser = subparsers.choices[subcmd]
+        options = []
+        for action in subparser._actions:
+            if action.option_strings:
+                options.extend(action.option_strings)
+        subcommand_options[subcmd] = options
+
+    script = f"""\
+#!/usr/bin/env bash
+
+_borgmatic() {{
+    local cur prev words cword
+    COMPREPLY=()
+    _get_comp_words_by_ref -n = cur prev words cword
+
+    case "$COMP_CWORD" in
+        1)
+            COMPREPLY=( $(compgen -W "{ ' '.join(subcommands) }" -- "$cur") )
+            ;;
+        2)
+            case "$prev" in
+    """
+    for subcmd in subcommands:
+        options_str = ' '.join(subcommand_options[subcmd])
+        script += f"""
+                {subcmd})
+                    COMPREPLY=( $(compgen -W "{options_str}" -- "$cur") )
+                    ;;
+            """
+    script += """
+                *)
+                    ;;
+            esac
+            ;;
+        *)
+            ;;
+    esac
+}}
+complete -F _borgmatic borgmatic
+"""
+    return script

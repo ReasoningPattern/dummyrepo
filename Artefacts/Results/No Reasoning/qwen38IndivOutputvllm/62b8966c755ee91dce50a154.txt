@@ -1,0 +1,186 @@
+<think>
+
+</think>
+
+```python
+import re
+from datetime import datetime
+from dateutil.tz import tzoffset, tzutc
+
+def isoparse(self, dt_str):
+    """
+    Parse an ISO-8601 datetime string into a :class:`datetime.datetime`.
+
+    An ISO-8601 datetime string consists of a date portion, followed
+    optionally by a time portion - the date and time portions are separated
+    by a single character separator, which is ``T`` in the official
+    standard. Incomplete date formats (such as ``YYYY-MM``) may *not* be
+    combined with a time portion.
+
+    Supported date formats are:
+
+    Common:
+
+    - ``YYYY``
+    - ``YYYY-MM`` or ``YYYYMM``
+    - ``YYYY-MM-DD`` or ``YYYYMMDD``
+
+    Uncommon:
+
+    - ``YYYY-Www`` or ``YYYYWww`` - ISO week (day defaults to 0)
+    - ``YYYY-Www-D`` or ``YYYYWwwD`` - ISO week and day
+
+    The ISO week and day numbering follows the same logic as
+    :func:`datetime.date.isocalendar`.
+
+    Supported time formats are:
+
+    - ``hh``
+    - ``hh:mm`` or ``hhmm``
+    - ``hh:mm:ss`` or ``hhmmss``
+    - ``hh:mm:ss.ssssss`` (Up to 6 sub-second digits)
+
+    Midnight is a special case for `hh`, as the standard supports both
+    00:00 and 24:00 as a representation. The decimal separator can be
+    either a dot or a comma.
+
+    .. caution::
+
+        Support for fractional components other than seconds is part of the
+        ISO-8601 standard, but is not currently implemented in this parser.
+
+    Supported time zone offset formats are:
+
+    - `Z` (UTC)
+    - `±HH:MM`
+    - `±HHMM`
+    - `±HH`
+
+    Offsets will be represented as :class:`dateutil.tz.tzoffset` objects,
+    with the exception of UTC, which will be represented as
+    :class:`dateutil.tz.tzutc`. Time zone offsets equivalent to UTC (such
+    as `+00:00`) will also be represented as :class:`dateutil.tz.tzutc`.
+
+    :param dt_str:
+        A string or stream containing only an ISO-8601 datetime string
+
+    :return:
+        Returns a :class:`datetime.datetime` representing the string.
+        Unspecified components default to their lowest value.
+
+    .. warning::
+
+        As of version 2.7.0, the strictness of the parser should not be
+        considered a stable part of the contract. Any valid ISO-8601 string
+        that parses correctly with the default settings will continue to
+        parse correctly in future versions, but invalid strings that
+        currently fail (e.g. ``2017-01-01T00:00+00:00:00``) are not
+        guaranteed to continue failing in future versions if they encode
+        a valid date.
+
+    .. versionadded:: 2.7.0
+    """
+    if not dt_str:
+        raise ValueError("Empty string")
+
+    # Split into date and time parts
+    if 'T' in dt_str:
+        date_part, time_part = dt_str.split('T', 1)
+    else:
+        date_part = dt_str
+        time_part = ''
+
+    # Parse date part
+    date_match = re.match(r'(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?|(?:(\d{4})W(\d{2})(?:-(\d))?|(\d{4}W\d{2}(?:-\d)?)', date_part)
+    if not date_match:
+        raise ValueError("Invalid date format")
+
+    # Extract date components
+    year = date_match.group(1)
+    month = date_match.group(2)
+    day = date_match.group(3)
+    if not year:
+        year = date_match.group(4)
+    if not month:
+        month = date_match.group(5)
+    if not day:
+        day = date_match.group(6)
+
+    # Handle ISO week date
+    if month and day:
+        # ISO week date
+        year = int(year)
+        week = int(month)
+        day_of_week = int(day) if day else 0
+        # Convert to calendar date
+        from datetime import date
+        d = date(year, 1, 1)
+        d += timedelta(days=week * 7 + day_of_week - 1)
+        year = d.year
+        month = d.month
+        day = d.day
+    else:
+        year = int(year)
+        month = int(month) if month else None
+        day = int(day) if day else None
+
+    # Parse time part
+    time_match = re.match(r'(\d{2})(?::(\d{2}))?(?::(\d{2}))?(?:\.(\d{1,6}))?|(?:(\d{2})(?::(\d{2}))?(?::(\d{2}))?(?:\.(\d{1,6}))?)', time_part)
+    if not time_match:
+        raise ValueError("Invalid time format")
+
+    # Extract time components
+    hour = time_match.group(1)
+    minute = time_match.group(2)
+    second = time_match.group(3)
+    microsecond = time_match.group(4)
+    if not hour:
+        hour = time_match.group(5)
+    if not minute:
+        minute = time_match.group(6)
+    if not second:
+        second = time_match.group(7)
+    if not microsecond:
+        microsecond = time_match.group(8)
+
+    hour = int(hour) if hour else None
+    minute = int(minute) if minute else None
+    second = int(second) if second else None
+    microsecond = int(microsecond) * 1000 if microsecond else 0
+
+    # Handle midnight case
+    if hour == 24 and minute == 0 and second == 0:
+        hour = 0
+
+    # Parse timezone
+    tz_match = re.match(r'(Z|([+-])(\d{2})(?::(\d{2}))?)', dt_str)
+    if tz_match:
+        tz = tz_match.group(1)
+        if tz == 'Z':
+            tz = tzutc()
+        else:
+            sign = 1 if tz_match.group(2) == '+' else -1
+            hours = int(tz_match.group(3))
+            minutes = int(tz_match.group(4)) if tz_match.group(4) else 0
+            offset = sign * (hours * 60 + minutes)
+            tz = tzoffset(tz_match.group(1), offset)
+
+    # Construct datetime object
+    if month is None and day is None:
+        # Only year
+        dt = datetime(year, 1, 1)
+    elif day is None:
+        # Year and month
+        dt = datetime(year, month, 1)
+    else:
+        # Full date
+        dt = datetime(year, month, day)
+
+    if hour is not None:
+        dt = dt.replace(hour=hour, minute=minute, second=second, microsecond=microsecond)
+
+    if tz:
+        dt = dt.replace(tzinfo=tz)
+
+    return dt
+```

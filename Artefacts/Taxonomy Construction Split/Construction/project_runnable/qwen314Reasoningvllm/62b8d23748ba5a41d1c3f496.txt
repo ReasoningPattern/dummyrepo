@@ -1,0 +1,991 @@
+
+Okay, I need to create a Python decorator called lfu_cache that implements a Least Frequently Used caching mechanism. Let me think about how to approach this.
+
+First, the decorator should take maxsize and typed parameters. The maxsize determines how many items the cache can hold, and typed affects whether different types of arguments are considered distinct. So, the cache needs to track the frequency of each key and evict the least frequently used when it's full.
+
+I remember that LFU caches typically use a dictionary to store the cached values along with their frequencies. But how to manage the frequencies efficiently? Maybe I need a way to keep track of how often each key is accessed. Each time a key is accessed, its count increases. When adding a new item, if the cache is full, I need to remove the key with the lowest frequency. If there's a tie, maybe the least recently used among them?
+
+Wait, but LFU can sometimes have a tie-breaker like LRU. So perhaps I should use an OrderedDict or a structure that keeps track of both frequency and the order of insertion. Alternatively, I can use a heap to track the least frequent items. But heaps can be tricky when frequencies change.
+
+Another approach: use a dictionary for the cache entries, and another dictionary to track the frequency of each key. Then, when evicting, find the key with the minimum frequency. If multiple keys have the same frequency, pick the one that was least recently used. Hmm, but how to track the least recently used?
+
+Maybe I can use a counter for frequency and a separate structure for the order. Like, for each frequency, keep a list of keys in the order they were accessed. Then, when evicting, check the lowest frequency and pick the first key in that list (the oldest one). But maintaining these structures could be complex.
+
+Alternatively, I can use a class to encapsulate the cache logic. The decorator will need to be a function that returns a wrapper, which in turn uses this class. The class should have methods to get, put, and evict items based on LFU rules.
+
+Let me outline the steps for the LFU cache:
+
+1. When a function is decorated, the cache is initialized with maxsize.
+2. The wrapper function will check if the arguments are in the cache.
+3. If they are, increment the frequency count for that key and return the cached value.
+4. If not, compute the value, add it to the cache, and track its frequency.
+5. If the cache is full, evict the least frequently used item. If there's a tie, evict the least recently used one.
+
+For the key, if typed is True, then different types with the same value are considered different keys. For example, 1 and 1.0 would be different if typed is True.
+
+So, the key for the cache should be generated based on the function arguments and their types if typed is True.
+
+Now, how to implement the LFU eviction policy. Let's think about data structures:
+
+- A dictionary (cache) that maps keys to their values.
+- A dictionary (freq) that maps keys to their frequency counts.
+- A dictionary (freq_to_keys) that maps frequency counts to a list of keys with that frequency. This list can be ordered by the time of insertion or last access to handle ties.
+
+Wait, but when a key is accessed, its frequency increases. So, when a key is accessed, we need to move it from its current frequency group to the next higher one. For example, if a key was in freq 1, after access, it moves to freq 2. So, the freq_to_keys structure would need to track the order of keys within each frequency level. Maybe using an OrderedDict for each frequency level to maintain insertion order?
+
+Alternatively, for each frequency, keep a deque or list of keys in the order they were accessed. But maintaining this could be complicated when frequencies change.
+
+Another idea: use a heap where each element is a tuple of (frequency, last_accessed_time, key). But when a key's frequency is updated, the heap needs to be adjusted. However, heaps aren't efficient for arbitrary updates. Maybe a priority queue approach isn't feasible here.
+
+Alternatively, since the LFU cache is a common problem, perhaps I can look up standard implementations. Wait, but I can't look things up, I need to think from scratch.
+
+Let me think of the LFU cache as having:
+
+- A cache dictionary: {key: (value, frequency, last_used_time)}
+- A frequency dictionary: {frequency: set of keys with that frequency}
+- And track the current minimum frequency.
+
+When a key is accessed, its frequency increases by 1. If it's a new key, add it to the cache with frequency 1. Then, check if the cache size exceeds maxsize. If it does, find the key with the minimum frequency. If multiple keys have that frequency, pick the one with the earliest last_used_time (LRU tie-breaker).
+
+So, the steps for evicting would be:
+
+1. Find the minimum frequency in the frequency dictionary.
+2. Get the list of keys with that frequency.
+3. Among those keys, find the one with the earliest last_used_time.
+4. Remove that key from the cache and from the frequency dictionary.
+
+But maintaining the frequency dictionary and tracking the last_used_time for each key would require some structures. Maybe for each frequency, we have a deque or a list that keeps track of the order of insertion. However, when a key's frequency increases, it needs to be removed from its current frequency group and added to the next.
+
+This sounds complex, but perhaps manageable.
+
+Let me outline the code structure. The decorator function will create a class instance that holds the cache, frequency counts, and other necessary data.
+
+Wait, but in Python, decorators are usually functions that return a wrapper. However, for more complex caching, using a class might be easier. So, perhaps the lfu_cache function will return an instance of a class that wraps the original function.
+
+Alternatively, the wrapper can be a function that uses a closure to hold the cache data.
+
+But for a decorator, it's common to use a class-based approach for state management. Let me try to implement this with a class.
+
+So, the LFUCache class would have:
+
+- __init__ that initializes maxsize, typed, cache, freq, and min_freq.
+- The __call__ method that acts as the wrapper for the decorated function.
+- Methods to get, put, and evict items.
+
+Wait, but the decorator is a function, so maybe the lfu_cache function returns a function that uses a class instance. Or perhaps the wrapper is a class instance that is callable.
+
+Alternatively, the decorator can be a function that returns a closure with the cache variables.
+
+But handling the LFU logic with closures might be tricky. Let me think of using a class inside the decorator.
+
+Let me sketch the code:
+
+def lfu_cache(maxsize=128, typed=False):
+    class LFUCacheWrapper:
+        def __init__(self, func):
+            self.func = func
+            self.cache = {}
+            self.freq = defaultdict(int)
+            self.key_order = {}  # to track insertion order for tie-breaking
+            self.maxsize = maxsize
+            self.typed = typed
+            self.min_freq = 1
+
+        def __call__(self, *args, **kwargs):
+            # generate key based on args, kwargs, and typed
+            key = self._make_key(args, kwargs)
+            if key in self.cache:
+                # increment frequency
+                self.freq[key] += 1
+                # update the key_order to mark it as recently used?
+                # maybe not necessary if we track last_used_time
+                # but for tie-breaking, need to know which was used earlier
+                # perhaps track the last accessed time for each key
+                self.key_order[key] = time.time()  # or a counter for order
+                return self.cache[key]
+            else:
+                # compute value
+                value = self.func(*args, **kwargs)
+                # add to cache
+                if len(self.cache) >= self.maxsize:
+                    # evict least frequent
+                    # find the key with min frequency and earliest last_used
+                    # need to find all keys with min_freq and select the one with earliest time
+                    # but how to track that?
+                    # maybe for each frequency, keep a list of keys ordered by insertion
+                    # or track last_used time for each key
+                    # let's say we have a list of keys sorted by frequency and last_used
+                    # but that would be inefficient for large caches
+                    # alternative approach: when evicting, iterate through all keys to find the one with the lowest frequency and earliest last_used
+                    # but that's O(n) time, which might be acceptable for small maxsize (like 128)
+                    # So, for each key, track frequency and last_used_time
+                    # Then, when evicting, find the key with min frequency and min last_used_time
+                    # So, in the __call__ method, when adding a new key, check if cache is full
+                    # if so, find the key to evict
+                    # Let's proceed with that.
+
+                    # Find the key with the minimum frequency and earliest last_used
+                    # To do this, iterate through all keys in the cache
+                    # For each key, check its frequency and last_used_time
+                    # Find the one with the smallest frequency, and among those, the smallest last_used_time
+                    # So, for all keys, collect (freq, last_used_time, key)
+                    # Sort them and pick the first one?
+
+                    # But for efficiency, perhaps we can track the min_freq and the list of keys with that frequency, ordered by last_used_time
+                    # Let me try that.
+
+                    # So, for each frequency, we have a list of keys in the order of their last use (or insertion)
+                    # When a key is accessed, we move it to the next frequency level.
+
+                    # Maybe I should use a defaultdict for freq_to_keys, where each frequency maps to a deque of keys in the order they were accessed at that frequency.
+
+                    # But this is getting complicated. Maybe for simplicity, given that maxsize is 128, it's acceptable to scan all keys when evicting.
+
+                    # Let me proceed with that approach. For each key in the cache, track its frequency and last_used_time. When evicting, find the key with the lowest frequency and earliest last_used_time.
+
+                    # So, in the __call__ method, when adding a new key and the cache is full, loop through all keys to find the one to evict.
+
+                    # Let's adjust the data structures:
+
+                    # self.cache: {key: value}
+                    # self.freq: {key: count}
+                    # self.last_used: {key: timestamp}
+                    # Then, when evicting, find the key with the minimum count, and among those, the minimum timestamp.
+
+                    # So, in the __call__ method, when the key is not in the cache:
+
+                    # compute value
+                    # add to cache
+                    # update freq and last_used
+                    # check if cache is full
+                    # if yes, evict the least frequent and least recently used
+
+                    # But how to track the last_used_time? Using a timestamp from time module.
+
+                    # Also, need to generate the key correctly. The key is based on the arguments and their types if typed is True.
+
+                    # So, the _make_key function would generate a tuple of args and kwargs, considering types if typed is True.
+
+                    # Let me implement that.
+
+                    # So, the key generation:
+
+                    # For args, if typed is True, include the type of each argument. Otherwise, just the values.
+
+                    # For example, for args (1, 2), if typed is True, it would be (1, 2), but if typed is False, maybe (1, 2) regardless of types.
+
+                    # Wait, the standard functools.lru_cache uses typed=False by default. So, for the key, when typed is True, different types are considered different keys.
+
+                    # So, the key is generated by converting the arguments into a tuple, and if typed is True, include the type information.
+
+                    # How to do that? For each argument, if it's a mutable type, maybe not, but for the key, we can use the tuple of (arg, type(arg)) if typed is True.
+
+                    # But in Python, the default is to not consider types. So, for the key, when typed is True, the arguments are converted into a tuple with their types included. For example, (1, 2) and (1.0, 2) would be different keys if typed is True.
+
+                    # So, the _make_key method could be something like:
+
+                    def _make_key(self, args, kwargs):
+                        key = (args, kwargs)
+                        if self.typed:
+                            # create a new tuple with types included
+                            # for args, create a tuple of (arg, type(arg)) for each arg
+                            # for kwargs, create a tuple of (k, v, type(v)) for each key-value pair
+                            # but how to handle that?
+
+                            # Maybe using the standard approach from functools, where the key is generated by converting the arguments into a tuple, including types if typed is True.
+
+                            # Alternatively, use the same method as lru_cache, which uses the arguments and their types if typed is True.
+
+                            # Let me think of using the same approach as lru_cache's key generation. For example, in functools, the key is generated by:
+
+                            # key = args + tuple(sorted(kwargs.items()))
+                            # and if typed, then the key is generated with types.
+
+                            # But how to implement that? Maybe using a tuple that includes the arguments and their types.
+
+                            # For example, for each argument in args, we can create a tuple of (arg, type(arg)), and for kwargs, (k, v, type(v))?
+
+                            # Wait, the standard way is to use the parameters as part of the key. For typed=True, different types are considered different even if values are same.
+
+                            # So, perhaps the key is generated by:
+
+                            key = args
+                            if self.typed:
+                                key = tuple((arg, type(arg)) for arg in args)
+                            # Similarly for kwargs, but how to handle them?
+
+                            # Maybe the key is a tuple of (args, kwargs), where args is a tuple of (value, type) pairs if typed is True, and kwargs is a tuple of (key, value, type) if typed is True.
+
+                            # Alternatively, use the same approach as lru_cache, which uses the parameters in a way that considers types. Let me think of how to generate that key.
+
+                            # For example, in lru_cache, the key is generated by:
+
+                            # key = (args, kwargs)
+                            # but when typed is True, each argument is converted into a tuple (value, type), and each keyword argument is converted into (key, value, type).
+
+                            # So, perhaps for the key, we can generate it as follows:
+
+                            # For args: if typed is True, then each element is (arg, type(arg)), else just arg.
+
+                            # For kwargs: if typed is True, then each (k, v, type(v)), else (k, v).
+
+                            # Then, the key is a tuple of (args_tuple, kwargs_tuple), where args_tuple is the transformed args and kwargs_tuple is the transformed kwargs.
+
+                            # So, in code:
+
+                            def _make_key(self, args, kwargs):
+                                key_parts = []
+                                for arg in args:
+                                    if self.typed:
+                                        key_parts.append( (arg, type(arg)) )
+                                    else:
+                                        key_parts.append(arg)
+                                args_key = tuple(key_parts)
+                                kwargs_key = []
+                                for k in sorted(kwargs.keys()):
+                                    v = kwargs[k]
+                                    if self.typed:
+                                        kwargs_key.append( (k, v, type(v)) )
+                                    else:
+                                        kwargs_key.append( (k, v) )
+                                kwargs_key = tuple(kwargs_key)
+                                return (args_key, kwargs_key)
+
+                            # But this might not be exactly correct. For example, in lru_cache, the key is generated by converting the arguments into a tuple, with types included if typed is True. However, for keyword arguments, the keys are sorted, and the values are considered with their types if typed is True.
+
+                            # So, the above approach would generate a key that's a tuple of (args_tuple, kwargs_tuple), where args_tuple is either the original args or a tuple of (value, type) pairs, and kwargs_tuple is a sorted tuple of (key, value, type) or (key, value) pairs.
+
+                            # That seems manageable.
+
+                            # Now, back to the LFU logic.
+
+                            # When a key is accessed, its frequency is incremented. So, for the existing key in the cache, we need to update its frequency.
+
+                            # However, when we increment the frequency, the key's position in the frequency tracking changes. So, perhaps for each key, we track its frequency and the last_used_time.
+
+                            # So, the cache would be a dictionary mapping keys to their values.
+
+                            # The freq dictionary maps keys to their frequency counts.
+
+                            # The last_used dictionary maps keys to the time they were last accessed.
+
+                            # When a key is accessed (either a hit or a miss), we update its frequency and last_used time.
+
+                            # When inserting a new key, we add it to the cache with frequency 1, and last_used time as the current time.
+
+                            # When evicting, we need to find the key with the lowest frequency, and among those, the one with the earliest last_used time.
+
+                            # So, for evicting, we can iterate through all keys in the cache, find the one with the minimum frequency and minimum last_used time.
+
+                            # Let me proceed with that approach, even though it's O(n) for evicting. Since maxsize is 128, it's acceptable.
+
+                            # Now, code structure:
+
+                            # In the LFUCacheWrapper class:
+
+                            # __init__: initializes cache, freq, last_used, maxsize, typed.
+
+                            # __call__: checks if key is in cache. If yes, increment freq and update last_used. If not, compute value, add to cache, set freq to 1, set last_used to current time. Then, if cache is full, evict the least frequent and least recently used.
+
+                            # The evict method would find the key with the minimum frequency and earliest last_used.
+
+                            # So, in the __call__ function:
+
+                            # When adding a new key:
+
+                            # if len(cache) >= maxsize:
+
+                            #   find the key to evict.
+
+                            # How to find the key to evict?
+
+                            # min_freq = min(freq.values())
+
+                            # candidates = [k for k, v in freq.items() if v == min_freq]
+
+                            # then, among those candidates, find the one with the earliest last_used time.
+
+                            # So, for the candidates, get the minimum last_used value.
+
+                            # evict_key = min(candidates, key=lambda k: last_used[k])
+
+                            # Then, delete evict_key from cache, freq, and last_used.
+
+                            # That seems manageable.
+
+                            # Now, code:
+
+                            # Let me start writing the code.
+
+                            # Also, need to handle the key generation properly.
+
+                            # Let me think about the key generation again. For example, for a function with parameters (a, b), and typed=False, the key would be (a, b). For typed=True, it's (a, type(a), b, type(b))?
+
+                            # Wait, no. The standard lru_cache uses a tuple of the arguments, with each argument converted into a tuple of (value, type) if typed is True. So, for example, if the function is called with (1, 2) and (1.0, 2), then with typed=True, these would be different keys.
+
+                            # So, the key for args would be a tuple of (arg, type(arg)) for each arg if typed is True, otherwise just the args.
+
+                            # Similarly for kwargs, each (key, value, type(value)) if typed is True, else (key, value).
+
+                            # But how to handle the key ordering? For kwargs, the keys are sorted to ensure consistency.
+
+                            # So, the _make_key function would need to generate a unique key based on the arguments and their types if typed is True.
+
+                            # Let me implement that.
+
+                            # Now, putting it all together.
+
+                            # The LFUCacheWrapper class would have:
+
+                            import time
+                            from collections import defaultdict
+
+                            def lfu_cache(maxsize=128, typed=False):
+                                class LFUCacheWrapper:
+                                    def __init__(self, func):
+                                        self.func = func
+                                        self.cache = {}
+                                        self.freq = defaultdict(int)
+                                        self.last_used = {}
+                                        self.maxsize = maxsize
+                                        self.typed = typed
+
+                                    def _make_key(self, args, kwargs):
+                                        key_parts = []
+                                        for arg in args:
+                                            if self.typed:
+                                                key_parts.append( (arg, type(arg)) )
+                                            else:
+                                                key_parts.append(arg)
+                                        args_key = tuple(key_parts)
+                                        kwargs_key = []
+                                        for k in sorted(kwargs.keys()):
+                                            v = kwargs[k]
+                                            if self.typed:
+                                                kwargs_key.append( (k, v, type(v)) )
+                                            else:
+                                                kwargs_key.append( (k, v) )
+                                        kwargs_key = tuple(kwargs_key)
+                                        return (args_key, kwargs_key)
+
+                                    def __call__(self, *args, **kwargs):
+                                        key = self._make_key(args, kwargs)
+                                        if key in self.cache:
+                                            # Increment frequency
+                                            self.freq[key] += 1
+                                            # Update last_used time
+                                            self.last_used[key] = time.time()
+                                            return self.cache[key]
+                                        else:
+                                            value = self.func(*args, **kwargs)
+                                            # Add to cache
+                                            self.cache[key] = value
+                                            self.freq[key] = 1
+                                            self.last_used[key] = time.time()
+                                            # Check if cache is full
+                                            if len(self.cache) > self.maxsize:
+                                                # Evict the least frequently used and least recently used
+                                                # Find min frequency
+                                                min_freq = min(self.freq.values())
+                                                # Find all keys with min_freq
+                                                candidates = [k for k, v in self.freq.items() if v == min_freq]
+                                                # Among candidates, find the one with earliest last_used
+                                                evict_key = min(candidates, key=lambda k: self.last_used[k])
+                                                # Remove evict_key
+                                                del self.cache[evict_key]
+                                                del self.freq[evict_key]
+                                                del self.last_used[evict_key]
+                                            return value
+
+                                return LFUCacheWrapper
+
+                            # Wait, but this code has some issues. For example, the initial freq is a defaultdict(int), but when a key is added, it's set to 1. But for existing keys, when accessed, their freq is incremented.
+
+                            # However, when a key is not in the cache, the freq is initialized to 1. For existing keys, when accessed, their freq is incremented.
+
+                            # But in the code above, when a key is accessed (hit), we increment self.freq[key] by 1. That's correct.
+
+                            # Also, the last_used is updated to the current time.
+
+                            # Now, when evicting, we find the min frequency, then among those keys, the one with the earliest last_used time.
+
+                            # However, in the case where multiple keys have the same min frequency, the min function with the key as last_used[k] would pick the one with the earliest time.
+
+                            # That seems correct.
+
+                            # But what about when the cache is not full? Then, no eviction is needed.
+
+                            # Also, the initial code for the decorator would return an instance of LFUCacheWrapper, which is then called as a function.
+
+                            # Wait, but the decorator is supposed to be used as @lfu_cache, so the lfu_cache function needs to return a function that can be used as a decorator. So, the code should be structured so that when the decorator is applied to a function, it returns an instance of LFUCacheWrapper that is callable.
+
+                            # But in Python, the decorator function should return a function that wraps the original function. So, perhaps the LFUCacheWrapper is a class that is used as a closure.
+
+                            # However, the code above returns LFUCacheWrapper, which is a class, but when you apply the decorator, you need to return a function. Wait, no. The standard way is to have the decorator function return a wrapper function. But using a class-based approach, perhaps the decorator returns an instance of the class, which is then called as a function.
+
+                            # So, the code for the decorator would be:
+
+                            def lfu_cache(maxsize=128, typed=False):
+                                def decorator(func):
+                                    class LFUCacheWrapper:
+                                        def __init__(self, func):
+                                            self.func = func
+                                            self.cache = {}
+                                            self.freq = defaultdict(int)
+                                            self.last_used = {}
+                                            self.maxsize = maxsize
+                                            self.typed = typed
+
+                                        def _make_key(self, args, kwargs):
+                                            # as discussed earlier
+
+                                        def __call__(self, *args, **kwargs):
+                                            # as discussed earlier
+
+                                    return LFUCacheWrapper(func)
+                                return decorator
+
+                            # Wait, but that's not quite right. Because when you use @lfu_cache, you need to call the decorator function with the function as an argument. So, the lfu_cache function is a decorator factory, which returns the actual decorator function.
+
+                            # So, the correct structure is:
+
+                            def lfu_cache(maxsize=128, typed=False):
+                                def decorator(func):
+                                    # create the wrapper here
+                                    # perhaps using a class or a closure
+                                    # let's use a class for the wrapper
+                                    class LFUCacheWrapper:
+                                        def __init__(self, func):
+                                            self.func = func
+                                            self.cache = {}
+                                            self.freq = {}
+                                            self.last_used = {}
+                                            self.maxsize = maxsize
+                                            self.typed = typed
+
+                                        def _make_key(self, args, kwargs):
+                                            # generate key as discussed
+
+                                        def __call__(self, *args, **kwargs):
+                                            # handle the call
+
+                                    return LFUCacheWrapper(func)
+                                return decorator
+
+                            # But then, the LFUCacheWrapper needs to be a callable. So, when the decorator is applied, the function is replaced with an instance of LFUCacheWrapper, which is called when the function is invoked.
+
+                            # However, the initial code may have some issues. For example, the freq is a defaultdict, but in the __init__ of LFUCacheWrapper, perhaps using a regular dict and initializing frequencies when needed.
+
+                            # Let me adjust that.
+
+                            # Also, in the code above, when a key is not in the cache, we add it, then check if the size exceeds maxsize. But the initial code uses len(self.cache) > self.maxsize. Wait, the maxsize is the maximum number of items allowed. So, when adding a new item, if the length is now maxsize + 1, then we need to evict.
+
+                            # So, in the code, after adding the new key, check if len(self.cache) > maxsize. If so, evict.
+
+                            # Now, the code for the _make_key function. Let me think of how to generate the key properly.
+
+                            # For args, if typed is True, then each argument is converted to (arg, type(arg)), else just the arg. Then, args are converted into a tuple of these elements.
+
+                            # For kwargs, sorted by key, and for each key-value pair, if typed is True, then (k, v, type(v)), else (k, v). Then, the kwargs are converted into a tuple of these sorted pairs.
+
+                            # So, code for _make_key:
+
+                            def _make_key(self, args, kwargs):
+                                key_parts = []
+                                for arg in args:
+                                    if self.typed:
+                                        key_parts.append( (arg, type(arg)) )
+                                    else:
+                                        key_parts.append(arg)
+                                args_key = tuple(key_parts)
+                                kwargs_key = []
+                                for k in sorted(kwargs.keys()):
+                                    v = kwargs[k]
+                                    if self.typed:
+                                        kwargs_key.append( (k, v, type(v)) )
+                                    else:
+                                        kwargs_key.append( (k, v) )
+                                kwargs_key = tuple(kwargs_key)
+                                return (args_key, kwargs_key)
+
+                            # Wait, but this would generate a tuple where args are either the original args or tuples of (arg, type), and kwargs are tuples of (k, v, type) or (k, v), sorted by k.
+
+                            # That should work.
+
+                            # Now, the problem with the initial code is that when a key is accessed, the frequency is incremented, but how to handle that in the freq dictionary.
+
+                            # Also, for the initial freq, when a key is added, it's set to 1.
+
+                            # Now, in the __call__ method, when the key is in the cache, increment the frequency and update last_used.
+
+                            # But the code for the __call__ function would be:
+
+                            key = self._make_key(args, kwargs)
+                            if key in self.cache:
+                                self.freq[key] += 1
+                                self.last_used[key] = time.time()
+                                return self.cache[key]
+                            else:
+                                value = self.func(*args, **kwargs)
+                                self.cache[key] = value
+                                self.freq[key] = 1
+                                self.last_used[key] = time.time()
+                                if len(self.cache) > self.maxsize:
+                                    # evict
+                                    min_freq = min(self.freq.values())
+                                    candidates = [k for k in self.cache if self.freq[k] == min_freq]
+                                    evict_key = min(candidates, key=lambda k: self.last_used[k])
+                                    del self.cache[evict_key]
+                                    del self.freq[evict_key]
+                                    del self.last_used[evict_key]
+                                return value
+
+                            # But wait, the initial code uses a defaultdict for freq. However, in the __init__ of LFUCacheWrapper, if we use a regular dict, then for keys not in the freq, we need to handle that. But in the code above, when a key is accessed, it's already in the cache, so it must be in the freq dict. So, perhaps initializing freq as a regular dict is okay.
+
+                            # But in the else clause, when adding a new key, we set self.freq[key] = 1. So, that's okay.
+
+                            # However, when checking for min_freq, we need to get the minimum of self.freq.values(). But if the key is not in the freq dict, that would be a problem. However, since the key is in the cache, it must be in the freq dict. So, that's okay.
+
+                            # Now, the code for the decorator. But in the code above, the LFUCacheWrapper is created inside the decorator function, and the __call__ method is called when the decorated function is invoked.
+
+                            # However, the code as written may have a problem with the initial setup. Let me think again about the structure.
+
+                            # The lfu_cache function is a decorator factory. When you apply @lfu_cache, it creates a decorator function that wraps the target function.
+
+                            # So, the code should be:
+
+                            def lfu_cache(maxsize=128, typed=False):
+                                def decorator(func):
+                                    class LFUCacheWrapper:
+                                        def __init__(self, func):
+                                            self.func = func
+                                            self.cache = {}
+                                            self.freq = {}
+                                            self.last_used = {}
+                                            self.maxsize = maxsize
+                                            self.typed = typed
+
+                                        def _make_key(self, args, kwargs):
+                                            # generate key as discussed
+
+                                        def __call__(self, *args, **kwargs):
+                                            # handle the call
+
+                                    return LFUCacheWrapper(func)
+                                return decorator
+
+                            # But then, when you call the decorated function, you get an instance of LFUCacheWrapper, which is called. That should work.
+
+                            # However, the problem is that the __init__ of LFUCacheWrapper is called with func, but the decorator is supposed to wrap the function. So, when the user applies @lfu_cache, the function is passed to the decorator, which returns an instance of LFUCacheWrapper. But that instance is supposed to be called when the function is called.
+
+                            # Wait, no. The standard decorator pattern is that the decorator function returns a function that wraps the original function. However, in this case, using a class-based approach, the decorator returns an instance of the class, which is then called as a function.
+
+                            # But in Python, when you apply a decorator, the original function is replaced with the returned object. So, when you call the decorated function, you are actually calling the __call__ method of the LFUCacheWrapper instance.
+
+                            # That should be okay.
+
+                            # Now, testing for the key generation. For example, if the function is called with different arguments, the key should be generated correctly.
+
+                            # Also, need to handle mutable arguments. But since the key is a tuple, and if the arguments are mutable, they can't be keys in a dictionary. However, the standard lru_cache also has this limitation. So, the user should be aware that only hashable arguments can be used.
+
+                            # Now, the code for _make_key. Let me think of an example. Suppose the function is f(a, b), and called with a=1, b=2. If typed is True, then the key is ((1, int), (2, int)), and for kwargs, if there's a keyword argument, say c=3, then it would be sorted by key, and each (key, value, type(value)).
+
+                            # But how to handle the tuple of args and kwargs? For example, args are converted into a tuple of (arg, type(arg)) if typed is True, else the original args as a tuple. Similarly for kwargs, sorted and converted into tuples with or without types.
+
+                            # Now, code for _make_key:
+
+                            def _make_key(self, args, kwargs):
+                                key_parts = []
+                                for arg in args:
+                                    if self.typed:
+                                        key_parts.append( (arg, type(arg)) )
+                                    else:
+                                        key_parts.append(arg)
+                                args_key = tuple(key_parts)
+                                kwargs_key = []
+                                for k in sorted(kwargs.keys()):
+                                    v = kwargs[k]
+                                    if self.typed:
+                                        kwargs_key.append( (k, v, type(v)) )
+                                    else:
+                                        kwargs_key.append( (k, v) )
+                                kwargs_key = tuple(kwargs_key)
+                                return (args_key, kwargs_key)
+
+                            # However, in Python, the type of an integer is int, but if the same value is passed as a float, it would be a different type. So, the key would be different, which is correct.
+
+                            # Now, what about the case where the same value is passed with different types? For example, f(1) and f(1.0) would be different keys if typed is True.
+
+                            # Now, the code for the decorator.
+
+                            # Also, need to import time and defaultdict.
+
+                            # Let me put all that together.
+
+                            # Also, in the __call__ method, when the key is not in the cache, after adding it, check if the length exceeds maxsize. If yes, evict.
+
+                            # Now, the code for the LFUCacheWrapper's __call__:
+
+                            # Also, note that when the key is accessed (hit), the frequency is increased, and the last_used time is updated.
+
+                            # Now, possible issues:
+
+                            # 1. The initial freq and last_used are empty. When a new key is added, we add it to freq with 1 and to last_used with the current time.
+
+                            # 2. When evicting, the code finds the min frequency, then among those keys, the one with the earliest last_used time.
+
+                            # 3. The key generation may not be correct. For example, in the case of keyword arguments.
+
+                            # Also, need to handle the case where the same key is generated for different arguments. But that's handled by the _make_key function.
+
+                            # Now, code:
+
+                            import time
+                            from collections import defaultdict
+
+                            def lfu_cache(maxsize=128, typed=False):
+                                def decorator(func):
+                                    class LFUCacheWrapper:
+                                        def __init__(self, func):
+                                            self.func = func
+                                            self.cache = {}
+                                            self.freq = defaultdict(int)
+                                            self.last_used = {}
+                                            self.maxsize = maxsize
+                                            self.typed = typed
+
+                                        def _make_key(self, args, kwargs):
+                                            key_parts = []
+                                            for arg in args:
+                                                if self.typed:
+                                                    key_parts.append( (arg, type(arg)) )
+                                                else:
+                                                    key_parts.append(arg)
+                                            args_key = tuple(key_parts)
+                                            kwargs_key = []
+                                            for k in sorted(kwargs.keys()):
+                                                v = kwargs[k]
+                                                if self.typed:
+                                                    kwargs_key.append( (k, v, type(v)) )
+                                                else:
+                                                    kwargs_key.append( (k, v) )
+                                            kwargs_key = tuple(kwargs_key)
+                                            return (args_key, kwargs_key)
+
+                                        def __call__(self, *args, **kwargs):
+                                            key = self._make_key(args, kwargs)
+                                            if key in self.cache:
+                                                # Increment frequency
+                                                self.freq[key] += 1
+                                                # Update last_used time
+                                                self.last_used[key] = time.time()
+                                                return self.cache[key]
+                                            else:
+                                                value = self.func(*args, **kwargs)
+                                                self.cache[key] = value
+                                                self.freq[key] = 1
+                                                self.last_used[key] = time.time()
+                                                # Check if cache is full
+                                                if len(self.cache) > self.maxsize:
+                                                    # Find min frequency
+                                                    min_freq = min(self.freq.values())
+                                                    # Get all keys with min_freq
+                                                    candidates = [k for k in self.cache if self.freq[k] == min_freq]
+                                                    # Find the one with earliest last_used
+                                                    evict_key = min(candidates, key=lambda k: self.last_used[k])
+                                                    # Remove evict_key
+                                                    del self.cache[evict_key]
+                                                    del self.freq[evict_key]
+                                                    del self.last_used[evict_key]
+                                                return value
+                                    return LFUCacheWrapper(func)
+                                return decorator
+
+                            # But wait, in the __init__ of LFUCacheWrapper, the freq is a defaultdict(int). When a key is accessed, self.freq[key] is incremented. For a new key, self.freq[key] is set to 1. But for the defaultdict, if the key is not present, it would default to 0. However, in the __call__ method, when a new key is added, we set self.freq[key] = 1. So that's okay.
+
+                            # However, when evicting, the code uses min(self.freq.values()), which for a defaultdict would include all keys in the cache. But since the cache is only populated with keys that are present in self.cache, and those keys are also present in self.freq and self.last_used, that should be okay.
+
+                            # Now, what about the case when multiple keys have the same min frequency? The code uses min(candidates, key=lambda k: self.last_used[k]) which would select the one with the earliest last_used time.
+
+                            # That's correct for the LFU with LRU tie-breaker.
+
+                            # However, there's a problem here. The min function for the candidates would require that all keys in the cache have their frequencies tracked. But when a key is accessed, its frequency is incremented. However, in the code above, when a key is accessed (hit), the code increments self.freq[key], but in the __init__, self.freq is a defaultdict(int). So, when a key is first added, self.freq[key] is set to 1. Then, when accessed again, it's incremented to 2, etc.
+
+                            # Now, testing this code. Let's say maxsize is 2. Then, when three items are added, the least frequent and least recently used is evicted.
+
+                            # But there's another issue: when a key is accessed multiple times, its frequency increases, but when evicting, the code finds the min frequency. So, if there are multiple keys with the same frequency, the one with the earliest last_used is evicted.
+
+                            # However, the code uses time.time() for last_used. So, when two keys have the same frequency, the one that was accessed earlier (has a smaller timestamp) is evicted.
+
+                            # That seems correct.
+
+                            # Now, possible edge cases:
+
+                            # - maxsize=0: cache is disabled. But the default is 128, so maybe handle that.
+
+                            # - When multiple keys have the same frequency and same last_used time. But since the last_used is set to the current time, which is precise, this is unlikely. However, in practice, if two keys are accessed at the same time (unlikely but possible), the min function would return the first one in the list. But since the candidates are a list, and min is applied, it would return the first one with the minimum timestamp. However, in Python, min of a list of keys with same timestamp would return the first one in the list, but the order of the keys in the candidates list is arbitrary. Wait, no. The candidates list is generated by [k for k in self.cache if ...], which iterates through the keys in the cache. The order of the keys in the cache is not guaranteed. So, when there are multiple keys with the same min frequency and same last_used time, the code would evict the one that comes first in the iteration order of the cache's keys. But that's arbitrary. However, in practice, the last_used time would be different, so this case is rare.
+
+                            # Now, the code may have a problem with the freq being a defaultdict. When a key is not in the cache, it's not in the freq. But when the key is added to the cache, it's added to freq with 1. When accessed again, freq is incremented. So that's okay.
+
+                            # However, in the code, when checking len(self.cache) > self.maxsize, but the maxsize can be 0. Need to handle that. But the default is 128, so maybe that's okay. If maxsize is 0, then the cache is not used, but the code would evict immediately. However, the problem says that the decorator saves up to maxsize results, so if maxsize is 0, the cache is disabled. But the code would still try to evict when adding a new item. So, need to check if maxsize is 0, and not evict anything.
+
+                            # Let me adjust that. In the __call__ method, after adding a new key, check if maxsize is not zero and len(cache) exceeds it.
+
+                            # So, in the code:
+
+                                            if len(self.cache) > self.maxsize and self.maxsize > 0:
+                                                # evict
+
+                            # That's an important check. Otherwise, if maxsize is 0, the code would try to evict, which is not desired.
+
+                            # Also, the initial code uses a defaultdict for freq. However, when a key is not in the cache, it's not in the freq. But when the key is in the cache, it's in the freq. So, when checking self.freq.values(), it would include all keys in the cache. But if the key is not in the freq, that would be a problem. However, the code adds the key to the freq when it's added to the cache. So, that's okay.
+
+                            # Now, the code for the decorator. But the problem is that the LFUCacheWrapper is created inside the decorator function, and the __call__ is called when the decorated function is invoked.
+
+                            # Now, what about the parameters of the function? For example, if the function has default parameters. The code uses *args and **kwargs, which should capture all arguments passed to the function.
+
+                            # Also, the _make_key function uses sorted(kwargs.keys()), which is important for consistency. For example, if the function is called with kwargs in different order, the key should be the same. So, sorting the keys ensures that.
+
+                            # Now, the code seems to handle that.
+
+                            # Now, testing the code. Suppose a function is called with the same arguments multiple times. The first time, it's added to the cache with freq 1. The second time, freq is incremented to 2. So, it's less likely to be evicted.
+
+                            # Now, the code seems to handle that.
+
+                            # However, the code uses time.time() for the last_used, which is a float. But for the purposes of comparison, that's fine.
+
+                            # Now, the code may have a problem with the initial freq being a defaultdict. For example, if a key is not in the cache, but the defaultdict returns 0. However, in the code, the key is only present in the freq if it's in the cache. So, the code for evicting is correct.
+
+                            # Now, the code is written. Let me check for syntax errors.
+
+                            # The code uses 'from collections import defaultdict' and 'import time'.
+
+                            # Also, the LFUCacheWrapper is a class inside the decorator function. When the decorator is applied, the function is wrapped with an instance of this class.
+
+                            # However, in Python, when you use a class as a decorator, you need to make sure that the instance is callable. The __call__ method is defined, so that's okay.
+
+                            # Now, the code seems to be correct. But I need to make sure that the key is generated properly. For example, when the function is called with no arguments, the key would be ((), ()).
+
+                            # Also, for keyword arguments, the keys are sorted, so the order doesn't affect the key.
+
+                            # Now, the code for the _make_key function. For args, it's a tuple of the arguments, with types included if typed is True. For kwargs, it's a sorted tuple of (key, value, type(value)) or (key, value).
+
+                            # Now, the code may not handle the case where the same key is generated for different arguments. But that's handled by the _make_key function.
+
+                            # Also, the code may not handle mutable arguments. But that's a limitation of the cache, similar to lru_cache.
+
+                            # So, the code should be correct.
+
+                            # Now, the final code would be:
+
+                            import time
+                            from collections import defaultdict
+
+                            def lfu_cache(maxsize=128, typed=False):
+                                def decorator(func):
+                                    class LFUCacheWrapper:
+                                        def __init__(self, func):
+                                            self.func = func
+                                            self.cache = {}
+                                            self.freq = defaultdict(int)
+                                            self.last_used = {}
+                                            self.maxsize = maxsize
+                                            self.typed = typed
+
+                                        def _make_key(self, args, kwargs):
+                                            key_parts = []
+                                            for arg in args:
+                                                if self.typed:
+                                                    key_parts.append( (arg, type(arg)) )
+                                                else:
+                                                    key_parts.append(arg)
+                                            args_key = tuple(key_parts)
+                                            kwargs_key = []
+                                            for k in sorted(kwargs.keys()):
+                                                v = kwargs[k]
+                                                if self.typed:
+                                                    kwargs_key.append( (k, v, type(v)) )
+                                                else:
+                                                    kwargs_key.append( (k, v) )
+                                            kwargs_key = tuple(kwargs_key)
+                                            return (args_key, kwargs_key)
+
+                                        def __call__(self, *args, **kwargs):
+                                            key = self._make_key(args, kwargs)
+                                            if key in self.cache:
+                                                self.freq[key] += 1
+                                                self.last_used[key] = time.time()
+                                                return self.cache[key]
+                                            else:
+                                                value = self.func(*args, **kwargs)
+                                                self.cache[key] = value
+                                                self.freq[key] = 1
+                                                self.last_used[key] = time.time()
+                                                if self.maxsize > 0 and len(self.cache) > self.maxsize:
+                                                    min_freq = min(self.freq.values())
+                                                    candidates = [k for k in self.cache if self.freq[k] == min_freq]
+                                                    evict_key = min(candidates, key=lambda k: self.last_used[k])
+                                                    del self.cache[evict_key]
+                                                    del self.freq[evict_key]
+                                                    del self.last_used[evict_key]
+                                                return value
+                                    return LFUCacheWrapper(func)
+                                return decorator
+
+                            # Wait, but the __init__ method of LFUCacheWrapper is called with func, but the decorator is supposed to wrap the function. However, when the decorator is applied, the LFUCacheWrapper is created with the func parameter, which is the original function. Then, the __call__ method calls self.func(*args, **kwargs).
+
+                            # But the problem is that when the decorator is applied, the LFUCacheWrapper is created once per function. So, each time the decorated function is called, it's using the same instance.
+
+                            # However, in the code above, the LFUCacheWrapper is created inside the decorator function, which is called once when the decorator is applied. So, the instance is created once, and each call to the decorated function uses that instance.
+
+                            # That's correct. So, for example, when you do @lfu_cache, the decorator is called with the function, and returns an instance of LFUCacheWrapper that is then called each time the function is invoked.
+
+                            # Now, the code may have a problem with the freq being a defaultdict. When a key is accessed, the freq is incremented. But for keys not in the cache, the defaultdict would return 0, but since they are not in the cache, they are not considered in the evict logic.
+
+                            # However, the code adds the key to the freq only when it's added to the cache. So, when a key is in the cache, it's present in the freq and last_used dicts.
+
+                            # Now, the code seems okay.
+
+                            # Let me test with an example. Suppose maxsize=2, and the function is called with three different arguments.
+
+                            # First call: key1 is added, freq is 1, last_used is t1.
+                            # Second call: key2 is added, freq is 1, last_used is t2.
+                            # Third call: key3 is added. Now, len(cache) is 3, which is > 2. So, evict. min_freq is 1. candidates are key1 and key2. The one with earlier last_used (t1) is evicted. So, key1 is removed.
+
+                            # Then, the next call to key1 would add it again, and evict if necessary.
+
+                            # Now, the code seems to handle that.
+
+                            # But there's a possible error in the code: when the key is not in the cache, the code adds it to self.cache, then checks if len(self.cache) > maxsize. However, if maxsize is 0, then the code would not evict, but the len would be 1, which is greater than 0, so the code would enter the evict block. But if maxsize is 0, the cache should not store any items. So, need to handle that.
+
+                            # So, in the code, when maxsize is 0, the cache is not used. So, in the __call__ method, after adding the new key, if maxsize is 0, we should not evict anything. So, the code should check if maxsize is greater than 0 before evicting.
+
+                            # The code currently has:
+
+                                            if self.maxsize > 0 and len(self.cache) > self.maxsize:
+
+                            # That's correct. Because if maxsize is 0, then the code doesn't evict anything. So, the cache would have len 1, which is greater than 0, but since maxsize is 0, we don't evict.
+
+                            # However, in that case, the cache would be filled with items, but since maxsize is 0, the code would not evict. But that's not correct. The maxsize=0 should mean that the cache is disabled, and no items are stored. So, perhaps the code should not add anything to the cache if maxsize is 0.
+
+                            # Let me adjust that. In the __call__ method, when maxsize is 0, the code should not cache anything. So, in the else block, after computing the value, it should not add to the cache. So, the code should check if maxsize is 0 before proceeding to add to the cache.
+
+                            # So, modifying the code:
+
+                                    def __call__(self, *args, **kwargs):
+                                        key = self._make_key(args, kwargs)
+                                        if key in self.cache:
+                                            self.freq[key] += 1
+                                            self.last_used[key] = time.time()
+                                            return self.cache[key]
+                                        else:
+                                            if self.maxsize == 0:
+                                                # no caching
+                                                return self.func(*args, **kwargs)
+                                            value = self.func(*args, **kwargs)
+                                            self.cache[key] = value
+                                            self.freq[key] = 1
+                                            self.last_used[key] = time.time()
+                                            if len(self.cache) > self.maxsize:
+                                                # evict
+                                                min_freq = min(self.freq.values())
+                                                candidates = [k for k in self.cache if self.freq[k] == min_freq]
+                                                evict_key = min(candidates, key=lambda k: self.last_used[k])
+                                                del self.cache[evict_key]
+                                                del self.freq[evict_key]
+                                                del self.last_used[evict_key]
+                                            return value
+
+                            # That would handle maxsize=0.
+
+                            # Also, the initial code uses defaultdict for freq. However, when maxsize is 0, the code doesn't add to the cache, so the freq and last_used dicts are not modified. That's okay.
+
+                            # Now, the code should be correct.
+
+                            # However, there's another issue: when the same key is accessed multiple times, the freq is incremented, but the code may not track that correctly. Let me see.
+
+                            # Suppose key is accessed again. The code increments self.freq[key] by 1, and updates last_used. That's correct.
+
+                            # Now, the code for the decorator. The initial code returns LFUCacheWrapper(func), which is an instance of the class. Then, when the user calls the decorated function, it's the __call__ method of that instance.
+
+                            # But in Python, when you use a class as a decorator, you need to make sure that the instance is created once per decorated function. Which is the case here.
+
+                            # Now, the code seems to handle that.
+
+                            # Now, the final code would be:
+
+                            import time
+                            from collections import defaultdict
+
+                            def lfu_cache(maxsize=128, typed=False):
+                                def decorator(func):
+                                    class LFUCacheWrapper:
+                                        def __init__(self, func):
+                                            self.func = func
+                                            self.cache = {}
+                                            self.freq = defaultdict(int)
+                                            self.last_used = {}
+                                            self.maxsize = maxsize
+                                            self.typed = typed
+
+                                        def _make_key(self, args, kwargs):
+                                            key_parts = []
+                                            for arg in args:
+                                                if self.typed:
+                                                    key_parts.append( (arg, type(arg)) )
+                                                else:
+                                                    key_parts.append(arg)
+                                            args_key = tuple(key_parts)
+                                            kwargs_key = []
+                                            for k in sorted(kwargs.keys()):
+                                                v = kwargs[k]
+                                                if self.typed:
+                                                    kwargs_key.append( (k, v, type(v)) )
+                                                else:
+                                                    kwargs_key.append( (k, v) )
+                                            kwargs_key = tuple(kwargs_key)
+                                            return (args_key, kwargs_key)
+
+                                        def __call__(self, *args, **kwargs):
+                                            key = self._make_key(args, kwargs)
+                                            if key in self.cache:
+                                                self.freq[key] += 1
+                                                self.last_used[key] = time.time()
+                                                return self.cache[key]
+                                            else:
+                                                if self.maxsize == 0:
+                                                    return self.func(*args, **kwargs)
+                                                value = self.func(*args, **kwargs)
+                                                self.cache[key] = value
+                                                self.freq[key] = 1
+                                                self.last_used[key] = time.time()
+                                                if len(self.cache) > self.maxsize:
+                                                    min_freq = min(self.freq.values())
+                                                    candidates = [k for k in self.cache if self.freq[k] == min_freq]
+                                                    evict_key = min(candidates, key=lambda k: self.last_used[k])
+                                                    del self.cache[evict_key]
+                                                    del self.freq[evict_key]
+                                                    del self.last_used[evict_key]
+                                                return value
+                                    return LFUCacheWrapper(func)
+                                return decorator
+
+                            # But wait, the __init__ method of LFUCacheWrapper is called with func. However, the decorator is supposed to wrap the function. So, when the LFUCacheWrapper is created, it's initialized with the func, which is the original function. Then, when __call__ is invoked, it calls self.func(*args, **kwargs). That's correct.
+
+                            # Now, the code seems to be correct. However, there's a possible problem with the defaultdict for freq. When a key is accessed, the freq is incremented. However, when the key is not in the cache, it's not in the freq. But when the key is in the cache, it's in the freq. So, the code for min_freq is okay.
+
+                            # Now, the code for the _make_key function. For example, if the function is called with no arguments, args is an empty tuple, and kwargs is empty. So, the key would be ((), ()).
+
+                            # Also, the code uses sorted(kwargs.keys()) to ensure that the order of keyword arguments doesn't affect the key. That's important for consistency.
+
+                            # Now, what about the case where the same key is generated with different parameters? For example, if the function is called with args (1, 2) and another call with args (1, 2.0) when typed is True. The key would be different, which is correct.
+
+                            # Now, the code is written. Let me check if there are any syntax errors. The code uses 'def decorator(func):' inside the lfu_cache function, and returns an instance of LFUCacheWrapper. The LFUCacheWrapper's __call__ is properly defined.
+
+                            # However, the code uses a defaultdict for self.freq. But when a key is added to the cache, it's set to 1. When accessed, it's incremented. So, that's okay.
+
+                            # Now, the code seems to be correct. But I need to make sure that the key is generated correctly. For example, in the case of keyword arguments.
+
+                            # Also, the code should handle the typed parameter correctly. For instance, if typed is True, then the key includes the types of the arguments.
+
+                            # Now, the code should be okay. Let me write it out as per the user's request.

@@ -1,0 +1,30 @@
+import xml.etree.ElementTree as etree
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from cryptography.hazmat.backends import default_backend
+
+def verify_relayable_signature(public_key, doc, signature):
+    """
+    Verify the signed XML elements to have confidence that the claimed
+    author did actually generate this message.
+    """
+    try:
+        # Load the public key from PEM format
+        pub_key = load_pem_public_key(public_key.encode('utf-8'), backend=default_backend())
+        
+        # Parse the XML document
+        doc_element = etree.fromstring(doc)
+        
+        # Canonicalize the XML document
+        canonicalized_xml = etree.canonicalize(doc_element)
+        
+        # Compute the hash of the canonicalized XML
+        hash_value = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        hash_value.update(canonicalized_xml.encode('utf-8'))
+        hash_value = hash_value.finalize()
+        
+        # Verify the signature
+        pub_key.verify(signature, hash_value)
+        return True
+    except Exception as e:
+        return False

@@ -1,0 +1,553 @@
+Okay, I need to write the Python function prepare_repository_from_archive based on the given signature and docstring. Let's start by understanding what the function is supposed to do. 
+
+The function's purpose is to uncompress an archive located at archive_path and return a repository URL that can be used as an origin URL. The parameters include the archive path, an optional filename, and a temporary path. The docstring mentions that it doesn't handle cases where the archive doesn't exist, so I don't need to check for that here.
+
+First, I should think about the steps required. The main tasks are:
+
+1. Uncompress the archive into a temporary directory. The tmp_path is where the temporary directory will be created. The filename parameter might be used to determine the name of the extracted directory. If filename isn't provided, maybe extract the archive's default name?
+
+Wait, the parameters: filename is optional. The function might need to extract the archive into a specific directory under tmp_path. The returned repo URL is probably a file:// URL pointing to the extracted directory.
+
+Hmm, so steps could be:
+
+- Determine the target directory where the archive will be extracted. The target directory's name could be derived from the filename parameter. If filename is given, maybe use that as the directory name. If not, perhaps extract the archive's own base name (without extension) as the directory name. For example, if the archive is 'myrepo.tar.gz', the directory would be 'myrepo'.
+
+Wait, the function's parameters: the filename is an optional string. The docstring says "filename: File name". Maybe the filename is the name to use for the extracted directory. Or perhaps it's the name of the file within the archive? Not entirely clear. The function's purpose is to uncompress the archive into a temp directory, then return a repo URL pointing to that directory.
+
+Alternatively, perhaps the filename is the name of the extracted directory. If not provided, the function can use the base name of the archive file (without extension) as the directory name.
+
+So, steps:
+
+1. Check if the archive exists. Wait, but the docstring says the function does not deal with that case, so we can assume it exists.
+
+2. Create a temporary directory in tmp_path. The directory name could be derived from the filename parameter or the archive's name.
+
+Wait, the tmp_path is a path where the temporary directory is created. Let's think: the function will create a subdirectory under tmp_path where the archive is extracted. The name of that subdirectory might be based on the filename parameter or the archive's filename.
+
+Suppose the filename is provided. Then the directory name is that filename. If not, then the directory name is the base name of the archive (without the extension). For example, archive_path is '/path/to/repo.tar.gz', then the directory name would be 'repo'.
+
+So, first, extract the base name of the archive (without extension) if filename is not given.
+
+To get the base name without extension, perhaps using os.path.splitext multiple times? Like, for 'repo.tar.gz', splitext gives 'repo.tar' then splitext again gives 'repo'.
+
+Alternatively, use the 'pathlib' module's Path.suffixes to get all extensions and then take the stem.
+
+But maybe for simplicity, we can split the filename part (without the path) and then remove the extension.
+
+Let me think: For the archive_path, the base name is os.path.basename(archive_path). For example, if archive_path is '/tmp/myrepo.zip', the base name is 'myrepo.zip'. Then, to get the name without the extension, we can split on '.' and take everything except the last part. Or use splitext in a loop until there's no more extensions.
+
+Alternatively, using pathlib.Path:
+
+from pathlib import Path
+
+archive_path = Path(archive_path_str)
+base_name = archive_path.stem  # this removes only the last extension, so for 'repo.tar.gz', it would be 'repo.tar'
+
+Hmm, that's a problem. Because for a .tar.gz, the stem would leave the .tar. So maybe better to split on '.' and take all parts except the last two if there are multiple extensions?
+
+Alternatively, perhaps just take everything up to the first '.' if any. But that might not be reliable. Alternatively, the user can provide the filename, so maybe the function can just use the filename parameter as the directory name. If not given, use the base name of the archive (without any extensions?), but maybe it's better to just use the base name with the first extension stripped? Not sure.
+
+Alternatively, perhaps the function doesn't need to worry about the extension. For example, if the archive is a .tar.gz, extracting it might create a directory named 'repo', so the stem without the .tar part. Hmm, but that's archive-dependent. Maybe the best approach is to let the extraction process create the directory, and then use that directory's name. Wait, but when you extract an archive, the directory structure depends on how the archive was created. For example, a .tar.gz might extract into a directory named 'repo', but if the archive contains multiple files, maybe not. So perhaps the function needs to know the directory name that the archive will extract to. But that's hard to know without inspecting the archive.
+
+Alternatively, perhaps the function can extract the archive into a temporary directory and then return the path of that directory. The problem is that the extracted files might not be in a single top-level directory. For example, an archive might contain files directly in the root. In that case, the repo URL would point to the tmp directory where the files are extracted, but that might not be a proper repository structure. But the function's purpose is to return a repo URL, so maybe the extracted content is assumed to be a Git repository or something similar. But perhaps the user is expected to know that the archive contains a single top-level directory.
+
+Alternatively, the function can create a temporary directory, extract the archive into it, and then find the top-level directory (if there is one) and return its path. But that adds complexity. Alternatively, maybe the function just extracts the archive into the tmp directory and returns that path, but the filename parameter is used to name the directory.
+
+Hmm, perhaps the approach is:
+
+- The temporary directory is created in tmp_path with a name derived from the filename or the archive's base name.
+
+Let's outline steps:
+
+1. Determine the target directory name:
+
+   a. If filename is provided, use that as the directory name.
+
+   b. If not, take the base name of the archive (without the path) and remove the extension(s). For example, for 'archive.tar.gz', the base name is 'archive'.
+
+2. Create a temporary directory under tmp_path with that name. Wait, but the tmp_path could be a directory where the new directory is created. So, the full path would be something like os.path.join(tmp_path, directory_name).
+
+But the tmp_path could be a PosixPath or a string, so maybe using Path objects is better.
+
+Wait, the function's parameters have tmp_path as a Union[PosixPath, str]. So perhaps using the pathlib module would be better here.
+
+Alternatively, using os.path functions.
+
+So steps in code:
+
+- Check if filename is given. If not, extract the base name of the archive (without extension) as the directory name.
+
+- Create the target directory under tmp_path. Let's say the target directory is at tmp_path / directory_name (using Path objects).
+
+- Uncompress the archive into that directory. The method of extraction depends on the archive type (zip, tar, etc.). How to handle different archive types?
+
+Hmm, this is a problem. The function's signature doesn't specify the type of the archive. So the code must determine the type based on the archive's extension or use a library that can auto-detect.
+
+Possible approach: use the shutil.unpack_archive function, which can auto-detect the archive type. That's a good idea, because shutil can handle common archive formats (zip, tar, etc.).
+
+So the steps would be:
+
+- Create the target directory (as per the directory name logic).
+
+- Use shutil.unpack_archive(archive_path, extract_dir=target_dir).
+
+Then, the extracted files are in target_dir.
+
+The function then returns a file URL pointing to the target directory. The URL would be 'file://' followed by the absolute path of the target directory. But in Python, the path might need to be converted to a URL format. For example, on Unix, the path /tmp/repo would become 'file:///tmp/repo'.
+
+So, the function can return the URL as f"file://{target_dir.resolve()}".
+
+Now, putting this together.
+
+First, handling the directory name:
+
+If filename is provided, then the directory name is filename. Else, get the base name of the archive without extensions.
+
+To get the base name without extensions, using Path.stem might not be sufficient for archives like .tar.gz. For example:
+
+archive = Path('/path/to/repo.tar.gz').stem would be 'repo.tar', but perhaps the intended directory is 'repo'.
+
+Hmm, so perhaps splitting on '.' and taking everything before the last '.'?
+
+Alternatively, using splitext in a loop until there's no more extensions.
+
+Wait, here's a way to get the base name without any extensions:
+
+def get_base_name(name: str) -> str:
+    while '.' in name:
+        name = name.rsplit('.', 1)[0]
+    return name
+
+So for 'repo.tar.gz', it would become 'repo'.
+
+Alternatively, using the Path's suffixes:
+
+from pathlib import Path
+
+archive_path = Path(archive_path)
+base_name = archive_path.stem
+while base_name.endswith(tuple(Path(archive_path).suffixes[:-1])):
+    # Not sure, maybe better to loop until no more suffixes.
+
+Alternatively, perhaps it's better to just take everything up to the first '.' if there is one. But that might not work for multi-extension files.
+
+Alternatively, perhaps just take the part before the first '.' if there are multiple extensions, but that's not reliable. Since the problem states that the function doesn't need to handle cases where the archive is invalid, maybe we can just take the first part up to the first '.'.
+
+Alternatively, maybe the user is expected to provide the filename parameter to avoid this ambiguity. Since the filename is optional, perhaps when it's not provided, the function just uses the base name of the archive (including any extensions except the last one?), but this might be tricky.
+
+Alternatively, maybe the function can just use the base name (including extensions except the last one) as the directory name, but I'm not sure.
+
+Alternatively, perhaps the function should just take the base name of the archive (without any path) and use that as the directory name, including the extension. For example, 'repo.tar.gz' would become a directory named 'repo.tar.gz'? That might not be ideal, but perhaps the user knows that the archive's name without extension is desired. Alternatively, perhaps the function can just use the base name without the final extension. For example, for 'repo.tar.gz', the final extension is .gz, so the base would be 'repo.tar'? Hmm, but that's still an extension. Maybe the best way is to split on '.' and take all parts except the last one. So:
+
+archive_base = Path(archive_path).stem
+
+Wait, Path('repo.tar.gz').stem would be 'repo.tar', which is still part of the filename. Hmm, so perhaps for the case where there are multiple extensions, the user should provide the filename, but when they don't, we have to make a best effort.
+
+Alternatively, maybe the function can extract the archive and see what directory is created. For example, when extracting a .tar.gz, if the archive contains a directory named 'repo', then the directory is there. But the function can't know that without extracting. So perhaps the best approach is to extract into a temporary directory and then return the path. The function can return the path of the directory where the archive was extracted, so the repo URL is pointing to that directory.
+
+Wait, but the function needs to return the repo URL. So the path must exist after extraction. The code would be something like:
+
+import os
+import shutil
+from pathlib import Path
+
+def prepare_repository_from_archive(archive_path: str, filename: Optional[str] = None, tmp_path: Union[Path, str] = "/tmp") -> str:
+    # Determine directory name
+    if filename is None:
+        # Get the base name without any extensions
+        # For example, 'archive.tar.gz' becomes 'archive'
+        archive_base = Path(archive_path).stem
+        # Split again if there are multiple extensions
+        while '.' in archive_base:
+            archive_base = Path(archive_base).stem
+        directory_name = archive_base
+    else:
+        directory_name = filename
+
+    # Create the target directory
+    tmp_path_obj = Path(tmp_path)
+    target_dir = tmp_path_obj / directory_name
+    target_dir.mkdir(parents=True, exist_ok=True)  # Wait, but should it be exist_ok? Maybe not, since we want to create a new directory each time?
+
+Hmm, no, because if the directory already exists, overwriting might be a problem. But perhaps the function is supposed to handle that, but since the docstring says nothing about that, maybe we can just proceed. Alternatively, maybe we should create a new temporary directory each time, but the problem says to use the tmp_path. Wait, the tmp_path is the path where the extracted directory is placed, not a temporary directory for the function. Wait, the tmp_path is a parameter, perhaps provided by the user, so maybe the function should not create a unique directory each time, but just use the given tmp_path and directory name. However, if the directory already exists, the extraction might fail or overwrite existing files. But the function's docstring doesn't mention handling such cases, so perhaps it's up to the user to provide a unique name or handle that.
+
+Alternatively, perhaps the function should create a temporary directory under tmp_path with a unique name, but the filename parameter allows the user to specify it. Hmm, perhaps I'm overcomplicating. Let's proceed with the initial plan.
+
+Once the directory name is determined, create the target directory:
+
+target_dir = Path(tmp_path) / directory_name
+
+Then, extract the archive into that directory using shutil.unpack_archive.
+
+shutil.unpack_archive(archive_path, extract_dir=target_dir)
+
+Wait, but the extract_dir is where the archive is extracted into. The unpack_archive function will extract the contents into that directory, creating subdirectories as needed. The function needs to return the URL of the extracted directory. So the repo URL is the file URL pointing to the target_dir.
+
+Thus, the return value is f"file://{target_dir.resolve()}"
+
+Wait, but in Python, when using Path objects, the resolve() method gives the absolute path. So that's correct.
+
+Putting this all together, the code would be:
+
+import shutil
+from pathlib import Path
+from typing import Optional, Union
+
+def prepare_repository_from_archive(
+    archive_path: str,
+    filename: Optional[str] = None,
+    tmp_path: Union[Path, str] = "/tmp",
+) -> str:
+    archive_path_obj = Path(archive_path)
+    if filename is None:
+        # Extract the base name without extensions
+        base_name = archive_path_obj.stem
+        while '.' in base_name:
+            base_name = Path(base_name).stem
+        directory_name = base_name
+    else:
+        directory_name = filename
+
+    tmp_path_obj = Path(tmp_path)
+    target_dir = tmp_path_obj / directory_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.unpack_archive(archive_path, extract_dir=target_dir)
+
+    return f"file://{target_dir.resolve()}"
+
+Wait, but when you extract an archive, sometimes the contents are in a subdirectory. For example, a zip file might have files directly in the root, so the target_dir would contain those files. But the function is supposed to return a repo URL, which might need to point to a directory that is the root of the repository. So perhaps the extracted directory is correct as the target_dir.
+
+But in cases where the archive contains multiple top-level files, not in a subdirectory, then the target_dir would be the directory containing those files. The URL would point to that directory, which would be the repo root.
+
+Thus, this code should work. Now, the unit tests need to be written first as per the test-driven approach.
+
+Testing steps:
+
+First, write test cases for different scenarios.
+
+Test case 1: the archive is a zip file with a single directory inside.
+
+Arrange:
+
+- Create a test archive (e.g., 'test_repo.zip' containing a directory 'test_repo' with some files).
+
+- Call the function with this archive, no filename provided.
+
+- The directory name should be 'test_repo'.
+
+- The target directory should be created in tmp_path.
+
+- The returned URL should be correct.
+
+Test case 2: filename is provided, so the directory uses that name.
+
+Test case 3: archive with multiple extensions (like .tar.gz), and the filename isn't provided. The directory name should be the base without extensions (e.g., 'archive' for 'archive.tar.gz').
+
+Test case 4: check that the directory is created in the tmp_path.
+
+Also, edge cases like if the tmp_path is a string or a Path object, but the function should handle both.
+
+Now, for the tests, perhaps using the unittest framework, with temporary directories managed via the TemporaryDirectory context manager. But since the function uses a given tmp_path, maybe the test should create a temporary directory and pass it.
+
+Wait, but in the function, the tmp_path is a parameter, so in the tests, we can create a temporary directory for testing purposes and pass that as tmp_path.
+
+Let me outline the test steps:
+
+First, create a test archive.
+
+For example, in a test setup:
+
+import tempfile
+import shutil
+import os
+from unittest import mock
+
+def test_prepare_repository_from_archive(tmp_path):
+    # Create a test archive
+    test_dir = tmp_path / "test_repo"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    # Create a zip file
+    archive_path = tmp_path / "test.zip"
+    shutil.make_archive(str(archive_path.with_suffix('')), 'zip', test_dir)
+    # Now call the function
+    result = prepare_repository_from_archive(str(archive_path), tmp_path=tmp_path)
+    # The directory name should be 'test' (since the base name of the archive is 'test' without .zip)
+    # Wait, the archive path here is 'test.zip', so the base name is 'test', so directory_name would be 'test'
+    # The target_dir would be tmp_path / 'test'
+    expected_dir = tmp_path / 'test'
+    assert expected_dir.exists()
+    assert result == f"file://{expected_dir.resolve()}"
+
+Wait, but in this example, the test.zip's base name is 'test', so the directory would be 'test', and the extracted files would be in that directory. The make_archive function creates a zip file with the given directory, so the zip would contain the 'test_repo' directory. Wait, no: the make_archive function's parameters are:
+
+shutil.make_archive(base_name, format, root_dir)
+
+Wait, in the code above, the base_name is str(archive_path.with_suffix('')), which for archive_path being 'test.zip' would be 'test' (since with_suffix('') removes the .zip). So the make_archive would create a zip file named 'test.zip' (the base_name is 'test', format is 'zip', so the output is 'test.zip'), and the root_dir is test_dir (which is 'test_repo'). So the zip file would contain the contents of test_dir (the 'file.txt') under the directory named 'test_repo'.
+
+Wait, no: when you make an archive with root_dir, the files are added as-is. So the zip would have a directory 'test_repo' inside it. Therefore, when you extract the zip into the target_dir (which is 'test'), the extracted directory structure would have 'test_repo' inside 'test'? Or would the target_dir be the directory where the contents are placed?
+
+Wait, the unpack_archive function extracts the contents into the target_dir. So if the zip contains 'test_repo/file.txt', then after extraction, the target_dir would have a subdirectory 'test_repo' with the file.
+
+But in that case, the repo URL would point to the target_dir (the 'test' directory), but the actual repository is inside 'test_repo'. That might not be what the user expects. Hmm, so perhaps the function's logic is flawed here.
+
+Wait, in this test case, the directory name is 'test' (since the archive's base name is 'test'), but the extracted contents are in 'test_repo', so the target_dir is 'test', and the actual files are in 'test/test_repo'. Therefore, the returned URL would point to 'file:///path/to/tmp/test', but the actual repo is in 'test_repo' inside that. So the URL would not be pointing to the correct directory unless the archive is structured to have the top-level directory named as the directory_name.
+
+Hmm, this shows a problem. The function's approach assumes that the extracted directory will be named as the directory_name, but that's not necessarily the case. The extracted files depend on the archive's structure.
+
+So the function's current logic may not work for archives that don't have a single top-level directory named as the directory_name.
+
+This is a problem. How can the function ensure that the extracted directory has the correct structure?
+
+Perhaps the function should extract the archive into a subdirectory under the target_dir, but that complicates things.
+
+Alternatively, maybe the filename parameter is intended to specify the name of the extracted directory, so when provided, the function can name the directory as such, but the archive's contents are extracted into that directory. However, the function can't control how the archive is structured. So the returned URL would point to the target_dir, but the actual repository might be in a subdirectory. 
+
+This suggests that the function's design might have a flaw. But given the problem statement, perhaps the test cases need to be designed with archives that extract into the correct directory structure.
+
+Alternatively, maybe the function's purpose is to return the path where the archive was extracted, regardless of the internal structure, and it's up to the user to ensure the archive is structured properly.
+
+So in the test case above, perhaps the test should create an archive that, when extracted, has the files in the root of the target directory. For example, create the test_dir as a directory with files, not nested inside another directory.
+
+Let me rework the test setup:
+
+def test_prepare_repository_from_archive(tmp_path):
+    # Create a test directory with some files
+    test_dir = tmp_path / "test"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    # Create a zip of the test_dir, so the zip contains 'file.txt' directly
+    # To do that, the root_dir should be test_dir's parent, and base_dir 'test'
+    # Wait, the make_archive function's parameters are: base_name is the name, format, and root_dir is the directory to archive.
+    # So if I want the zip to contain the 'test' directory and its contents, then root_dir should be tmp_path, and base_dir 'test'.
+    # Alternatively, to have the zip contain the files directly (without a parent directory), the root_dir should be test_dir, and base_dir '.'?
+
+    # Let me try:
+
+    archive_base = tmp_path / "test_archive"
+    archive_path = f"{archive_base}.zip"
+    # Create the zip with the contents of test_dir
+    shutil.make_archive(str(archive_base), 'zip', test_dir)  # root_dir is test_dir, so the zip contains the files directly.
+
+    # Now, the zip file 'test_archive.zip' contains file.txt directly in the root.
+
+    # Call the function with this archive, no filename.
+    result = prepare_repository_from_archive(archive_path, tmp_path=tmp_path)
+    # The directory name should be 'test_archive' (since the archive's base name is 'test_archive', and no extensions except .zip)
+    # So directory_name is 'test_archive'
+
+    expected_dir = tmp_path / 'test_archive'
+    assert expected_dir.exists()
+    # Check that the file.txt is present in the expected_dir
+    assert (expected_dir / 'file.txt').exists()
+    assert result == f"file://{expected_dir.resolve()}'
+
+This would work.
+
+Another test case where the filename is provided:
+
+def test_with_filename(tmp_path):
+    # similar setup, but passing filename='custom_name'
+    # then the directory should be custom_name
+
+Another test case for a tar.gz archive:
+
+def test_targz(tmp_path):
+    test_dir = tmp_path / "repo"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    archive_base = tmp_path / "repo"
+    shutil.make_archive(str(archive_base), 'gztar', test_dir)
+    archive_path = f"{archive_base}.tar.gz"
+    result = prepare_repository_from_archive(archive_path, tmp_path=tmp_path)
+    # the directory name should be 'repo' (since the base name is 'repo', and the extensions are .tar.gz)
+    # so the code's loop would split the stem until no more '.'.
+
+    # Let's see: the archive's base name is 'repo.tar.gz'? Wait no, the archive is named 'repo.tar.gz'? Or 'repo' is the base?
+
+Wait, in the code above, the make_archive is called with base_name as 'repo', so the output is 'repo.tar.gz'.
+
+The archive_path is then 'repo.tar.gz' in tmp_path. The base name of the archive is 'repo.tar.gz'? No, the Path(archive_path).stem would be 'repo.tar', and then in the loop, we split again to 'repo'.
+
+Thus, directory_name would be 'repo', so the expected directory is 'repo', and the test should confirm that.
+
+Thus, the code should work.
+
+Now, considering possible errors. For example, if the tmp_path is a string and not a Path, the code should still work.
+
+The code uses Path(tmp_path), so that should handle both cases.
+
+Another test case where the tmp_path is a string:
+
+def test_with_string_path(tmp_path):
+    # Convert tmp_path to str, pass to function.
+    # The code should still work.
+
+Now, the actual code:
+
+Wait, in the function, the parameters have tmp_path as a Union[PosixPath, str]. So the code uses Path(tmp_path) to handle both.
+
+Now, the code for the function:
+
+Wait, in the code above, the code for getting directory_name when filename is None:
+
+base_name = archive_path_obj.stem  # for 'test.tar.gz', this is 'test.tar'
+
+then loop while '.' in base_name:
+
+so first iteration, base_name is 'test.tar' → split into 'test' and 'tar'. So Path(base_name).stem would be 'test'?
+
+Wait, no. Let me think:
+
+Suppose base_name is 'test.tar'.
+
+Then, Path(base_name).stem is 'test'.
+
+So after the first iteration:
+
+base_name becomes 'test' (since the stem of 'test.tar' is 'test').
+
+Then the loop checks if '.' is in 'test' → no, so loop exits. So the directory name is 'test'.
+
+Thus, this code works for multi-extension archives.
+
+Therefore, the code seems okay.
+
+Now, the unit tests. Let's write them using pytest and tmp_path fixture.
+
+The tests would look like:
+
+import pytest
+from pathlib import Path
+import shutil
+
+def test_prepare_repository_from_archive(tmp_path):
+    # Create a test archive
+    test_dir = tmp_path / "test_repo"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    
+    # Create a zip archive of test_dir
+    archive_base = tmp_path / "test"
+    archive_path = f"{archive_base}.zip"
+    shutil.make_archive(archive_base, 'zip', test_dir)
+    
+    # Call the function
+    repo_url = prepare_repository_from_archive(archive_path, tmp_path=tmp_path)
+    
+    # Determine the expected directory name
+    # Since filename is None, the directory name is derived from archive's base name (test)
+    expected_dir = tmp_path / "test"
+    
+    # Check existence
+    assert expected_dir.exists()
+    # Check that the file is there
+    assert (expected_dir / "file.txt").exists()
+    
+    # Check the URL
+    assert repo_url == f"file://{expected_dir.resolve()}"
+
+def test_with_filename(tmp_path):
+    test_dir = tmp_path / "original"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    
+    archive_base = tmp_path / "test"
+    archive_path = f"{archive_base}.zip"
+    shutil.make_archive(archive_base, 'zip', test_dir)
+    
+    repo_url = prepare_repository_from_archive(
+        archive_path, 
+        filename="custom_name",
+        tmp_path=tmp_path
+    )
+    
+    expected_dir = tmp_path / "custom_name"
+    assert expected_dir.exists()
+    assert (expected_dir / "file.txt").exists()
+    assert repo_url == f"file://{expected_dir.resolve()}"
+
+def test_targz(tmp_path):
+    test_dir = tmp_path / "repo"
+    test_dir.mkdir()
+    (test_dir / "file.txt").touch()
+    
+    archive_base = tmp_path / "repo"
+    shutil.make_archive(archive_base, 'gztar', test_dir)
+    archive_path = f"{archive_base}.tar.gz"
+    
+    repo_url = prepare_repository_from_archive(archive_path, tmp_path=tmp_path)
+    
+    expected_dir = tmp['tmp_path'] / "repo"
+    assert expected_dir.exists()
+    assert (expected_dir / "file.txt").exists()
+    assert repo_url == f"file://{expected_dir.resolve()}"
+
+Wait, in the 'test_targz' case, the archive's base name is 'repo.tar.gz'? Let me check:
+
+The make_archive is called with base_name as the Path object 'repo', so the output is 'repo.tar.gz'. So the Path(archive_path).stem would be 'repo.tar', then split again to 'repo'.
+
+Thus, the directory name is 'repo', which is correct.
+
+These tests should cover the cases.
+
+Now, the code for the function.
+
+Wait, in the code, when creating the target_dir, we do:
+
+target_dir.mkdir(parents=True, exist_ok=True)
+
+But if the directory already exists, the exist_ok=True allows it, but maybe the function should create a new directory each time. But the function's docstring doesn't mention overwriting, so perhaps it's okay. The test cases would need to ensure that the directory is created correctly.
+
+Another test case where the directory already exists and exist_ok is handled.
+
+But for now, the code seems okay.
+
+Now, putting it all together, the final code.
+
+Wait, the code uses the Path objects. Also, the function's parameters have tmp_path as a PosixPath or str. The code converts it to a Path.
+
+Now, the code:
+
+import shutil
+from pathlib import Path
+from typing import Optional, Union
+
+def prepare_repository_from_archive(
+    archive_path: str,
+    filename: Optional[str] = None,
+    tmp_path: Union[Path, str] = "/tmp",
+) -> str:
+    """
+    Given an existing archive_path, uncompress it.
+    Returns a file repo url which can be used as origin url.
+
+    This does not deal with the case where the archive passed along does not exist.
+    @param archive_path : archive file path
+    @param filename: File name
+    @param tmp_path: Temporary file path
+    @return Repo URL
+    """
+    archive_path_obj = Path(archive_path)
+    if filename is None:
+        # Extract the base name without extensions
+        base_name = archive_path_obj.stem
+        while '.' in base_name:
+            base_name = Path(base_name).stem
+        directory_name = base_name
+    else:
+        directory_name = filename
+
+    tmp_path_obj = Path(tmp_path)
+    target_dir = tmp_path_obj / directory_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.unpack_archive(archive_path, extract_dir=target_dir)
+
+    return f"file://{target_dir.resolve()}"
+
+
+Wait, but in the code, the shutil.unpack_archive may raise exceptions if the archive can't be extracted, but the docstring says nothing about handling that. Since the function's docstring doesn't mention handling such errors, it's okay to let exceptions propagate.
+
+Thus, the code should work as per the tests.
